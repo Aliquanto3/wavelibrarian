@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 01:37 |
-| Story en cours | 3.7 (voie A) ; 4.3 (voie B) |
-| Stories livrées | 27 / 56 |
+| Mis à jour | 2026-10-18 01:49 |
+| Story en cours | 4.3 (voie B, revue) ; voie A : epic 5 ou 6 |
+| Stories livrées | 28 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -100,6 +100,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **4.2 (Baselines)** : passer `tokenizer=` à `build_arch_answer` depuis chaque Baseline et tester la troncature au-delà de 8 000 tokens depuis une Architecture (story 4.1).
 - **Runner (epic 4), Jeu gelé** : appeler `verify_frozen` et `select_questions` ; le Rapport exclut des scores principaux les Questions contaminées pour le modèle concerné (FR-12, contracts §4.5) (story 3.6).
 - **Runner des Conditions (epic 4)** : la Condition contexte parfait de `long_context` passe par `answer_with_context`, donc sans cache du system (story 4.2).
+- **4.14 (conformité)** : `CONFORMANCE_QUESTION_ID = "q-001"` s'importe par `from conftest import` ; casse avec `--import-mode=importlib` (story 3.7).
 
 ## Journal de surveillance
 
@@ -135,6 +136,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 01:20 | 16 tronq. (qwen3.5:4b) : think_on writing/writing-fr 16 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 15 % | 11.8 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (4.2) |
 | 01:29 | 11 tronq. (qwen3.5:4b) : think_on writing/writing-fr 6 tronq., 35 s/tronq. vs 35 (+0 %) ; think_on abstention/oneruler-fr-none 2 tronq., 38 s/tronq. (pas de réf.) ; think_on extraction/jsonschemabench 2 tronq., 36 s/tronq. vs 35 (-3 %) ; pire -3 % | 11 % | 14.9 Go | 1 s, 86 Mo, 101 thr (20 proc) | Sous les seuils : on continue (3.7) |
 | 01:37 | 7 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 7 tronq., 71 s/tronq. (pas de réf.) ; pire +0 % | 16 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (4.3) |
+| 01:49 | 7 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 7 tronq., 71 s/tronq. vs 72 (+0 %) ; pire +0 % | 17 % | 11.6 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue |
 
 ## Journal des stories
 
@@ -167,3 +169,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 4.1 | 01:07 | 01:20 | 3c1a6174a90e9c49ff3bc53f6097442373e17074 | 0 $ | Revue : étiquettes [S1]/S1 strictes, tests d'abstention et de registre renforcés ; titre accolé au corps dans Passage.text consigné. 568 tests verts. |
 | 3.6 | 01:16 | 01:29 | b9366cfd44f049b2a93fb33bfa092209b4d3c556 | 0 $ | Revue : re-Gel qui change une partie refusé sauf --forcer, règle d'arrondi et exclusion des contaminées au Rapport documentées (§4.5), ids en double et horloge naïve refusés. 589 tests verts. |
 | 4.2 | 01:20 | 01:37 | f21a1ea9a06584740dc6424011d9b84e080b6e85 | 0 $ | Revue : 1 high corrigé (long_context forçait mal cache_system avec un Generator explicite ; validateur qui force true et refuse false), fenêtre = entrée + max_tokens, BM25 sans mot → [], œ/æ décomposés, k après filtre. 607 tests verts. |
+| 3.7 | 01:30 | 01:49 | 16461c0819e5e1fd0294838dff69be8ca81d333a | 0 $ | 47 Questions écrites à la main et gelées (graine 42, ratio 0,4). Revue : q-008, q-018, q-039 fausses après Scénario corrigées, q-021 rendue vraiment multi-hop, tests réponse⊂Ancrage et Documents modifiés. Fin de l'epic 3. |

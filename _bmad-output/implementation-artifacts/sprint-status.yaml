@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-18-2026 01:37
+last_updated: 10-18-2026 01:49
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -60,14 +60,14 @@ development_status:
   2-7-paliers-de-volume-et-commande-wl-corpus-paliers: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-format-des-questions-et-commande-wl-questions-controler: done
   3-2-contexte-d-exécution-concret: done
   3-3-génération-de-questions-candidates: done
   3-4-juge-llm-et-correspondance-exacte-normalisée: done
   3-5-filtre-closed-book-et-commande-wl-questions-closed-book: done
   3-6-gel-et-séparation-développement-test: done
-  3-7-jeu-d-évaluation-de-référence-du-mini-corpus: backlog
+  3-7-jeu-d-évaluation-de-référence-du-mini-corpus: done
   epic-3-retrospective: optional
 
   epic-4: in-progress
