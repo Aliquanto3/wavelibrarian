@@ -6,14 +6,14 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 23:26 |
-| Story en cours | 1.12 (voie A) ; 2.1 (voie B, revue) |
-| Stories livrées | 11 / 56 |
+| Mis à jour | 2026-10-17 23:29 |
+| Story en cours | 1.12 (voie A) ; 2.2 (voie B) |
+| Stories livrées | 12 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
 | Blocages | aucun |
-| À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. |
+| À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. Story 2.1 : « licence restrictive » non définie au contrat ; retenu = toute licence hors `LICENCES_OUVERTES` (CC0, CC-BY*, MIT, Apache, BSD, ODbL, PDDL, Etalab, LO) ; deux Documents de contenu identique sont refusés (Ancrages ambigus). |
 
 ## Consignes du run
 
@@ -63,7 +63,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 
 À transmettre au dev-story de la story cible.
 
-- **2.1 / 2.2** : formats du Corpus et parsers du registre, nécessaires pour remplacer `parser: auto` (story 1.5).
+- **2.2** : table format → parser enregistré à partir de `DeclaredCorpus.formats` (2.1), pour remplacer `parser: auto` (stories 1.5 et 2.1).
 - **4.3 / 4.4** : le runner remplace `parser: auto` par le parser concret avant `write_resolved` et `RunContext.parser` (stories 1.2 et 1.5) ; vérifier que `experiment.resolved.yaml` ne contient plus `auto`.
 - **Epic 3 (`wl calibrer`)** : écrire `calibration.json` au format §4.6 retenu en 1.6 (par Juge, `excluded` booléen strict, `criteria`).
 - **1.9 (Passerelle)** : câbler `RunContext.tokenizer_for(model_id, catalog, reference)`, `make_tokenizer(profil.tokenizer)` et le `Tracer` ; appliquer `token_factor` (1,5 pour Haiku) à l'estimation avant appel ; poser `wl.energy_*` via `FakeEstimator` / `EcoLogitsEstimator` (story 1.7).
@@ -98,6 +98,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 22:46 | 9 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 9 tronq., 41 s/tronq. vs 41 (+1 %) ; pire +0 % | 11 % | 12.6 Go | 1 s, 87 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.10) |
 | 23:01 | 5 tronq. (gemma4:e2b-it-qat) : think_on rag/oneruler-fr-cwe 4 tronq., 24 s/tronq. (pas de réf.) ; think_on reasoning/bbeh-mini 1 tronq., 42 s/tronq. (pas de réf.) ; pire +0 % | 34 % | 12.4 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.11) |
 | 23:26 | 2 tronq. (qwen3.5:4b) : think_off instructions/mifeval-fr 1 tronq., 35 s/tronq. (pas de réf.) ; think_off reasoning/bbeh-mini 1 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 20 % | 10.4 Go | 1 s, 86 Mo, 81 thr (12 proc) | Sous les seuils : on continue (1.12) |
+| 23:29 | 6 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 6 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 32 % | 10.1 Go | 7 s, 547 Mo, 119 thr (19 proc) | Sous les seuils : on continue (2.2) |
 
 ## Journal des stories
 
@@ -114,3 +115,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.9 | 22:33 | 22:46 | 69482b99395300b7d6ec471f97a4d891c803bd25 | 0 $ | Revue : sortie invalide en cache remplacée (replace=True), appel payé toujours tracé avec son coût (réel ou estimé), span écrit avant le cache. 180 tests verts. |
 | 1.10 | 22:47 | 23:02 | 585760d4c83041b407f927b4a350a36a302437ca | 0 $ | Revue : step dans cache_key pour fake (sorties scénarisées), latence 0 du Faux LLM réelle (ProviderResponse.latency_s), tests sans contournement. 227 tests verts. |
 | 1.11 | 23:02 | 23:26 | 42d79297090758716ac153b644a14e9a0dcb2c79 | 0 $ | Revue : httpx2 déclaré, output_schema dans cache_key, pas de relance d'un essai envoyé, num_ctx Ollama = fenêtre du Catalogue, build_providers branché, test ANTHROPIC_LOG en sous-processus. real_* écrits, non exécutés. 274 tests verts. |
+| 2.1 | 23:16 | 23:29 | acde7b2d0a006ee4d8e950d077f0f24e06565fe8 | 0 $ | Revue : AD-19 fail-closed (dépôt repéré sans git, erreur git = refus), licence restrictive gardée, fichiers cachés et liens exclus, double barrière git ls-files. 253 tests verts (avant rebase). |
