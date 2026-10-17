@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 23:29 |
-| Story en cours | 1.12 (voie A) ; 2.2 (voie B) |
-| Stories livrées | 12 / 56 |
+| Mis à jour | 2026-10-17 23:45 |
+| Story en cours | 1.12 (voie A, revue) ; 2.3 (voie B) |
+| Stories livrées | 13 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -79,6 +79,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Runner (epic 4)** : prendre `run.lock` puis ouvrir le `Ledger` avec `recover_orphans=True` ; tester qu'un second `wl run` ne règle pas les réservations du premier (story 1.8).
 - **Gateway (1.9)** : `cache_write_1h` n'est pas facturé, `Usage` n'a pas de poste 1 h (story 1.4).
 - **Story outillage / CI** : lancer `test_socket_tcp_bloque` sous Linux (story 1.1).
+- **2.3** : `pdf_text` déclare `version` et s'enregistre, pour que `auto` accepte un Corpus avec PDF (story 2.2).
+- **2.5** : un `html_block` Markdown reste brut dans un Block `text` ; un HTML non UTF-8 ignore `<meta charset>` (repli cp1252 seulement) (story 2.2).
 
 ## Journal de surveillance
 
@@ -99,6 +101,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 23:01 | 5 tronq. (gemma4:e2b-it-qat) : think_on rag/oneruler-fr-cwe 4 tronq., 24 s/tronq. (pas de réf.) ; think_on reasoning/bbeh-mini 1 tronq., 42 s/tronq. (pas de réf.) ; pire +0 % | 34 % | 12.4 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.11) |
 | 23:26 | 2 tronq. (qwen3.5:4b) : think_off instructions/mifeval-fr 1 tronq., 35 s/tronq. (pas de réf.) ; think_off reasoning/bbeh-mini 1 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 20 % | 10.4 Go | 1 s, 86 Mo, 81 thr (12 proc) | Sous les seuils : on continue (1.12) |
 | 23:29 | 6 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 6 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 32 % | 10.1 Go | 7 s, 547 Mo, 119 thr (19 proc) | Sous les seuils : on continue (2.2) |
+| 23:45 | 12 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 12 tronq., 36 s/tronq. vs 36 (+1 %) ; pire +0 % | 20 % | 10.1 Go | 1 s, 88 Mo, 116 thr (19 proc) | Sous les seuils : on continue (2.3) |
 
 ## Journal des stories
 
@@ -116,3 +119,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.10 | 22:47 | 23:02 | 585760d4c83041b407f927b4a350a36a302437ca | 0 $ | Revue : step dans cache_key pour fake (sorties scénarisées), latence 0 du Faux LLM réelle (ProviderResponse.latency_s), tests sans contournement. 227 tests verts. |
 | 1.11 | 23:02 | 23:26 | 42d79297090758716ac153b644a14e9a0dcb2c79 | 0 $ | Revue : httpx2 déclaré, output_schema dans cache_key, pas de relance d'un essai envoyé, num_ctx Ollama = fenêtre du Catalogue, build_providers branché, test ANTHROPIC_LOG en sous-processus. real_* écrits, non exécutés. 274 tests verts. |
 | 2.1 | 23:16 | 23:29 | acde7b2d0a006ee4d8e950d077f0f24e06565fe8 | 0 $ | Revue : AD-19 fail-closed (dépôt repéré sans git, erreur git = refus), licence restrictive gardée, fichiers cachés et liens exclus, double barrière git ls-files. 253 tests verts (avant rebase). |
+| 2.2 | 23:30 | 23:45 | 68ec21ecb4c2818112485e0f323a5080060a6861 | 0 $ | Revue : 1 high corrigé (resolve sur titres frères renvoyait une ancre fausse), décodage UTF-8 strict + repli cp1252, titres imbriqués, cache versionné par Parser. 316 tests verts (avant rebase). |
