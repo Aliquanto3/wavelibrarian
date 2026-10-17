@@ -1,7 +1,7 @@
 ---
 story: "3.3"
 title: Génération de Questions candidates
-status: review
+status: done
 ---
 
 # Story 3.3 : Génération de Questions candidates
@@ -37,3 +37,17 @@ status: review
 
 - Statut : review. 21 tests ciblés verts ; suite complète 446 verts ; pyright 0 erreur ; ruff propre ; contrôle rapide sans erreur.
 - Reports : (1) `closed_book_models` à contrôler au Catalogue dans `closed-book` (story 3.5) ; (2) pas d'option de plafond sur la commande (contrat §8) : le plafond est celui par défaut de `Budget()`, à relier à une configuration si Anaël le demande ; (3) la qualité du tri de types (`multi_hop` exige-t-il deux Ancrages ?) n'est pas imposée, le contrat ne le dit pas ; (4) l'échantillon d'Ancrages est uniforme, sans équilibre par Document.
+
+## Revue
+
+Rebasée sur `main` (a5cfc2e, Mini-corpus de la 2.5). Commande lancée deux fois sur `corpora/minicorpus` en profil `test` : 3 `factual` ajoutées, `{doc, headings}` corrects, second appel servi par le Cache à coût nul ; les 88 Ancrages du Mini-corpus se résolvent tous par `_ref`.
+
+- medium, second avis 1 : corrigé. La seconde génération ajoutait des doublons exacts (constaté sur le Mini-corpus). Une Question au même texte (casse et espaces normalisés) et aux mêmes Ancrages qu'une Question du fichier ou de la même sortie est rejetée avec le motif « doublon de q-NNN » (`test_doublons_ecartes_dans_la_sortie_et_face_au_fichier`).
+- low, second avis 2 : corrigé. Un `anchor_id` du Corpus absent de l'échantillon présenté est rejeté (« Ancrage hors de l'échantillon présenté ») ; un id hors Corpus garde le motif de l'AC 2 (`test_ancrage_reel_hors_echantillon_ecarte`).
+- low, second avis 3 : reporté. Un `multi_hop` à un seul Ancrage est accepté, car le contrat n'impose pas de minimum (déjà en report n° 3).
+- low, second avis 4 : corrigé. Le coût s'affiche en virgule fixe (`f"{cost:f}"`), et non plus en `1E-7`.
+- low, second avis 5 : corrigé. `--cible 0` (ou une valeur négative) sort avec le code 2 (`test_cible_nulle_refusee`). `--cible` reste sans effet sur un fichier existant, dont le `target_count` est conservé.
+- low, second avis 6 : rejeté. Le contrat (« stable, jamais réutilisé ») ne prévoit aucun registre des id retirés. L'id suit le plus grand numéro présent : seul le retrait manuel du dernier id permet de le réémettre. Pour l'empêcher, il faudrait un registre au format du fichier, à décider en story 3.x si le besoin se confirme.
+- low, second avis 8 : consigné. Avec le Faux LLM, l'AC 1 ne produit que des `factual` (multi_hop et unanswerable sont signalés manquants) : le cas complet est prouvé par une sortie scénarisée, ce qui est conforme au contrat du faux.
+- low, second avis 10 : consigné. Le Plafond ne borne que les providers payants (contrat §8). Une génération sur un modèle local n'a de borne que `max_tokens`.
+- Report : vérifier sur `claude-haiku-5-5` réel (`question_gen_model`) la qualité de la répartition par Type et le taux de rejets, ce qui exige une clé API et un appel payant.

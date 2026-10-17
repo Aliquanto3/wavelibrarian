@@ -9,7 +9,7 @@ donc un plafond atteint ne laisse aucune écriture partielle.
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Protocol, get_args
@@ -161,6 +161,8 @@ def generer(
     langue = _langue(corpus, ancrages)
     ids = {q.id for q in existant.questions}
     numero = _prochain_numero(ids)
+    presentes = set(ancrages)
+    vues = {_cle(q.text, q.reference_anchors): q.id for q in existant.questions}
     restant = dict(repartition)
     ajoutees: list[Question] = []
     rejetees: list[Rejet] = []
@@ -174,7 +176,14 @@ def generer(
                 if ref is None:
                     motif = f"Ancrage inconnu du Corpus : {aid!r}"
                     break
+                if aid not in presentes:
+                    motif = f"Ancrage hors de l'échantillon présenté : {aid!r}"
+                    break
                 refs.append(ref)
+        cle = _cle(brute.text, refs)
+        if motif is None:
+            if cle in vues:
+                motif = f"doublon de {vues[cle]}"
         if motif is not None:
             rejetees.append(Rejet(brute.type, motif))
             continue
@@ -186,6 +195,7 @@ def generer(
             numero += 1
         ident = f"q-{numero:03d}"
         ids.add(ident)
+        vues[cle] = ident
         ajoutees.append(
             Question(
                 id=ident,
@@ -207,7 +217,7 @@ def generer(
         rejetees=tuple(rejetees),
         en_trop=en_trop,
         manquantes={t: n for t, n in restant.items() if n > 0},
-        cout=str(res.cost),
+        cout=f"{res.cost:f}",
         depuis_cache=res.from_cache,
         ancrages=tuple(ancrages),
     )
@@ -221,6 +231,14 @@ def _motif_rejet(type_: str, texte: str, anchor_ids: list[str]) -> str | None:
     if type_ != "unanswerable" and not anchor_ids:
         return "aucun Ancrage cité"
     return None  # une `unanswerable` n'a pas d'Ancrage : ceux que le modèle cite sont ignorés
+
+
+def _cle(texte: str, refs: Iterable[AnchorRef]) -> tuple[str, frozenset[str]]:
+    """Même texte (casse et espaces normalisés) et mêmes Ancrages : même Question."""
+    return (
+        " ".join(texte.split()).casefold(),
+        frozenset(r.model_dump_json() for r in refs),
+    )
 
 
 def _passages(corpus: ParsedCorpus, ancrages: list[str]) -> list[dict[str, str]]:

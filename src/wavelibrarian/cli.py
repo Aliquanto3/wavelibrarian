@@ -213,6 +213,8 @@ def questions_generer(
     fichier = questions or corpus_yaml.parent / "questions.yaml"
     try:
         demande = generate.parse_repartition(repartition)
+        if cible is not None and cible < 1:
+            raise ConfigError("--cible", "un entier au moins égal à 1 est attendu")
         reglages = load_profile(profil)
         nom_modele = modele or reglages.defaults.question_gen_model
         load_catalog().get(nom_modele)  # modèle inconnu du Catalogue : code 2, avant tout appel
@@ -222,7 +224,7 @@ def questions_generer(
         else:
             existant = io.QuestionsFile(
                 corpus_id=parsed.corpus_id,
-                target_count=cible or sum(demande.values()),
+                target_count=sum(demande.values()) if cible is None else cible,
                 questions=(),
             )
         if existant.corpus_id != parsed.corpus_id:

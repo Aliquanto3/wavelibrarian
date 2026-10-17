@@ -417,3 +417,54 @@ def test_repartition_valide() -> None:
 def test_repartition_invalide_par_la_commande(corpus: Path, env: Env) -> None:
     res = _generer(corpus, repartition="inconnu=2")
     assert res.exit_code == 2 and "Type inconnu" in res.output
+
+
+# --- Revue : doublons, échantillon, --cible, coût ---------------------------------------------
+
+
+def test_doublons_ecartes_dans_la_sortie_et_face_au_fichier(corpus: Path, env: Env) -> None:
+    def sortie(req: LLMRequest) -> str:
+        ids = [a["anchor_id"] for a in req.inputs["anchors"]]
+        bon = {"type": "factual", "reference_answer": "x", "answer_form": "free"}
+        qs = [
+            {**bon, "text": "Quelle est la capitale ?", "anchor_ids": [ids[0]]},
+            {**bon, "text": "  quelle est  la Capitale ? ", "anchor_ids": [ids[0]]},
+            {**bon, "text": "Quelle est la capitale ?", "anchor_ids": [ids[1]]},  # autre Ancrage
+        ]
+        return json.dumps({"questions": qs})
+
+    env.script(sortie)
+    res = _generer(corpus, repartition="factual=3")
+    assert res.exit_code == 0, res.output
+    assert "Rejetées à la génération : 1" in res.output and "doublon de q-001" in res.output
+    assert len(io.load(corpus.parent / "questions.yaml").questions) == 2
+    # seconde génération identique (servie par le Cache) : rien de neuf n'est ajouté
+    res = _generer(corpus, repartition="factual=3")
+    assert res.exit_code == 0, res.output
+    assert "Questions ajoutées : 0" in res.output and "Rejetées à la génération : 3" in res.output
+    assert len(io.load(corpus.parent / "questions.yaml").questions) == 2
+
+
+def test_ancrage_reel_hors_echantillon_ecarte(corpus: Path, env: Env) -> None:
+    def sortie(req: LLMRequest) -> str:
+        presentes = {a["anchor_id"] for a in req.inputs["anchors"]}
+        from wavelibrarian.corpus.declare import declare
+        from wavelibrarian.corpus.ingest import ingest
+
+        parsed = ingest(declare(corpus))
+        tous = sorted(a for d in parsed.documents for a in d.anchors)
+        hors = next(a for a in tous if a not in presentes)
+        q = {"type": "factual", "text": "Hors", "reference_answer": "x", "answer_form": "free"}
+        return json.dumps({"questions": [{**q, "anchor_ids": [hors]}]})
+
+    env.script(sortie)
+    res = _generer(corpus, repartition="factual=1")
+    assert res.exit_code == 0, res.output
+    assert "Ancrage hors de l'échantillon présenté" in res.output
+    assert "Questions ajoutées : 0" in res.output
+
+
+def test_cible_nulle_refusee(corpus: Path, env: Env) -> None:
+    res = _generer(corpus, "--cible", "0")
+    assert res.exit_code == 2 and "--cible" in res.output
+    assert not (corpus.parent / "questions.yaml").exists()
