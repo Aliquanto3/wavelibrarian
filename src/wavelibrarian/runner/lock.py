@@ -63,9 +63,16 @@ class RunLock:
             finally:
                 f.close()
             raise WlError(f"Exécution {detenteur} en cours")
-        f.seek(_DECALAGE)
-        f.truncate(_DECALAGE)
-        f.write(self.run_id.encode("utf-8"))
+        try:
+            f.seek(_DECALAGE)
+            f.truncate(_DECALAGE)
+            f.write(self.run_id.encode("utf-8"))
+        except BaseException:
+            try:
+                _deverrouiller(f)
+            finally:
+                f.close()
+            raise
         self._f = f
 
     def release(self) -> None:

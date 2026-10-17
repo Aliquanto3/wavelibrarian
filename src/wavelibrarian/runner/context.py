@@ -6,6 +6,7 @@ de réponses depuis un profil et un Catalogue. Seul un contexte d'Exécution pre
 """
 
 import random
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ from wavelibrarian.config.catalog import ModelCatalog, load_catalog
 from wavelibrarian.config.defaults import load_profile
 from wavelibrarian.config.experiment import Budget, ResolvedExperiment, RetrySettings
 from wavelibrarian.config.schemas import ProfileSettings, valider
+from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import sha16
 from wavelibrarian.core.types import Condition, CostPost, Phase
 from wavelibrarian.llm.budget import Ledger
@@ -25,13 +27,36 @@ from wavelibrarian.llm.gateway import Providers
 from wavelibrarian.measure.tokenizers import make_tokenizer, tokenizer_for
 from wavelibrarian.measure.tracing import Tracer
 from wavelibrarian.ports.components import ComponentSpec
-from wavelibrarian.ports.gateway import ModelGateway
+from wavelibrarian.ports.gateway import LLMRequest, LLMResult, ModelGateway, T
 from wavelibrarian.ports.measure import Tokenizer
 from wavelibrarian.ports.measure import Tracer as PortTracer
 from wavelibrarian.runner.lock import RunLock
 from wavelibrarian.runner.wiring import build_gateway
 
 _GARDER: Any = object()  # `scope` : « ne pas toucher » (distinct de None pour `question_id`)
+# `run_id` sert de nom de dossier : ni séparateur ni `..` (format d'Exécution, contracts §1).
+_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+
+
+class _PasserelleSousPoste:
+    """Refuse tout appel hors `ctx.scope(post=...)`, avant de payer (AD-8 : pas de Poste par
+    défaut, qui compterait un appel oublié dans le coût de la Configuration)."""
+
+    def __init__(self, ctx: "Context", interne: ModelGateway) -> None:
+        self._ctx = ctx
+        self._interne = interne
+
+    def _verifier(self) -> None:
+        if self._ctx._post is None:  # pyright: ignore[reportPrivateUsage]
+            raise WlError("Poste de coût non fixé : appeler la passerelle dans ctx.scope(post=…)")
+
+    def complete(self, request: LLMRequest) -> LLMResult:
+        self._verifier()
+        return self._interne.complete(request)
+
+    def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]:
+        self._verifier()
+        return self._interne.complete_structured(request, schema)
 
 
 class Context:
@@ -55,12 +80,14 @@ class Context:
         tier: int | None = None,
         phase: Phase = "base",
         parser: str = "auto",
-        post: CostPost = "query",
+        post: CostPost | None = None,
         budget: Budget | None = None,
         retries: RetrySettings | None = None,
         providers: Providers | None = None,
         execution: bool = False,
     ) -> None:
+        if not _RUN_ID.fullmatch(run_id):
+            raise ValueError(f"run_id invalide : {run_id!r} (lettres, chiffres, - et _)")
         self.run_id = run_id
         self.config_id = config_id
         self.seed = seed
@@ -71,8 +98,10 @@ class Context:
         self.catalog = catalog
         self.profile = profile
         self.wl_home = wl_home
-        self.run_dir = wl_home / "runs" / run_id
-        self._post: CostPost = post
+        # Les traces d'une commande hors Exécution ne vont pas dans `runs/` (AD-9 : la somme des
+        # spans d'une Exécution égale sa dépense ; un `run_id` réutilisé la fausserait).
+        self.run_dir = wl_home / ("runs" if execution else "hors-execution") / run_id
+        self._post: CostPost | None = post
         self._question_id: str | None = None
         self._lock: RunLock | None = None
         self._ledger: Ledger | None = None
@@ -86,11 +115,12 @@ class Context:
                 run_id,
                 wl_home,
                 recover_orphans=execution,  # seulement sous `run.lock` (AD-11)
+                hors_execution=not execution,
             )
             self._cache = ResponseCache(wl_home)
             self.tracer: PortTracer = Tracer(self, self.run_dir / "traces.jsonl")
             self.tokenizer: Tokenizer = make_tokenizer(profile.tokenizer)
-            self.gateway: ModelGateway = build_gateway(
+            mesuree = build_gateway(
                 catalog=catalog,
                 profile=profile,
                 providers=providers,
@@ -99,6 +129,7 @@ class Context:
                 tracer=self.tracer,
                 retries=retries,
             )
+            self.gateway: ModelGateway = _PasserelleSousPoste(self, mesuree)
         except BaseException:
             self.close()
             raise
@@ -160,6 +191,8 @@ class Context:
 
     @property
     def post(self) -> CostPost:
+        if self._post is None:
+            raise WlError("Poste de coût non fixé : utiliser ctx.scope(post=…)")
         return self._post
 
     @property
@@ -197,13 +230,18 @@ class Context:
 
     def close(self) -> None:
         """Ferme registre, cache et verrou ; idempotent."""
-        for ressource in (self._ledger, self._cache):
-            if ressource is not None:
-                ressource.close()
-        self._ledger = self._cache = None
-        if self._lock is not None:
-            self._lock.release()
-            self._lock = None
+        ledger, cache, lock = self._ledger, self._cache, self._lock
+        self._ledger = self._cache = self._lock = None
+        try:
+            try:
+                if ledger is not None:
+                    ledger.close()
+            finally:
+                if cache is not None:
+                    cache.close()
+        finally:
+            if lock is not None:  # libéré même si une fermeture échoue
+                lock.release()
 
     def __enter__(self) -> "Context":
         return self

@@ -1,7 +1,10 @@
 """Story 3.2 : `RunContext` concret (scope, build, rng, verrou), profil `test` et Faux LLM."""
 
 import json
+import subprocess
+import sys
 from collections.abc import Iterator
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -16,11 +19,13 @@ from wavelibrarian.config.experiment import (
     RetrySettings,
 )
 from wavelibrarian.core.errors import ConfigError, WlError
+from wavelibrarian.llm.budget import Ledger
 from wavelibrarian.ports.components import ComponentSpec, Embedder
 from wavelibrarian.ports.context import RunContext
 from wavelibrarian.ports.gateway import LLMRequest, Message
 from wavelibrarian.ports.measure import Tokenizer
 from wavelibrarian.runner.context import Context
+from wavelibrarian.runner.lock import RunLock
 
 
 @pytest.fixture
@@ -58,16 +63,34 @@ def test_expose_les_attributs_et_satisfait_le_protocol(ctx: Context) -> None:
     tok: Tokenizer = contexte.tokenizer
     assert tok.count("un deux trois") > 0
     assert contexte.tokenizer_for("fake-llm-a").count("un deux") > 0
-    assert contexte.gateway.complete(_req()).text
+    with ctx.scope(post="evalset"):
+        assert contexte.gateway.complete(_req()).text
     assert contexte.tracer is not None
 
 
 def test_passerelle_mesuree_avec_le_provider_du_catalogue(ctx: Context) -> None:
-    ctx.gateway.complete(_req())
+    with ctx.scope(post="evalset"):
+        ctx.gateway.complete(_req())
     (span,) = _spans(ctx)
     assert span["gen_ai.request.model"] == "fake-llm-a"
     assert span["gen_ai.provider.name"] == "fake"
     assert span["wl.run_id"] == "run-a"
+    # hors Exécution : traces à part, jamais mêlées à celles d'une Exécution de `runs/`
+    assert ctx.run_dir == ctx.wl_home / "hors-execution" / "run-a"
+
+
+def test_appel_hors_scope_refuse_avant_de_payer(ctx: Context) -> None:
+    with pytest.raises(WlError, match="Poste de coût non fixé"):
+        ctx.gateway.complete(_req())
+    with pytest.raises(WlError, match="Poste de coût non fixé"):
+        _ = ctx.post
+    assert not (ctx.run_dir / "traces.jsonl").exists()  # aucun span : l'appel n'a pas eu lieu
+
+
+@pytest.mark.parametrize("run_id", ["../evade", "a/b", "a\\b", "", ".."])
+def test_run_id_invalide_refuse(wl_home: Path, run_id: str) -> None:
+    with pytest.raises(ValueError, match="run_id invalide"):
+        Context.from_profile("test", wl_home=wl_home, run_id=run_id)
 
 
 def test_contexte_d_experience_reprend_graine_plafonds_et_parser(wl_home: Path) -> None:
@@ -91,6 +114,7 @@ def test_contexte_d_experience_reprend_graine_plafonds_et_parser(wl_home: Path) 
     )
     with Context.from_experiment(experience, wl_home=wl_home, run_id="run-e") as c:
         assert (c.seed, c.config_id, c.parser) == (7, "cfg-1", "markdown")
+        assert c.run_dir == wl_home / "runs" / "run-e"
         assert (wl_home / "run.lock").exists()
         with pytest.raises(ValueError):
             Context.from_experiment(experience, wl_home=wl_home, run_id="r", config_id="zzz")
@@ -100,14 +124,15 @@ def test_contexte_d_experience_reprend_graine_plafonds_et_parser(wl_home: Path) 
 
 
 def test_scope_pose_les_valeurs_dans_le_span_puis_les_restaure(ctx: Context) -> None:
-    avant = (ctx.post, ctx.question_id)
     with ctx.scope(post="evalset", question_id="q-001"):
         assert (ctx.post, ctx.question_id) == ("evalset", "q-001")
         ctx.gateway.complete(_req())
         with ctx.scope(post="judging"):  # imbriqué : question_id conservé
             assert (ctx.post, ctx.question_id) == ("judging", "q-001")
         assert (ctx.post, ctx.question_id) == ("evalset", "q-001")
-    assert (ctx.post, ctx.question_id) == avant
+    assert ctx.question_id is None
+    with pytest.raises(WlError):  # Poste initial : aucun
+        _ = ctx.post
     (span,) = _spans(ctx)
     assert span["wl.post"] == "evalset" and span["wl.question_id"] == "q-001"
 
@@ -115,7 +140,9 @@ def test_scope_pose_les_valeurs_dans_le_span_puis_les_restaure(ctx: Context) -> 
 def test_scope_restaure_meme_sur_exception(ctx: Context) -> None:
     with pytest.raises(RuntimeError), ctx.scope(post="judging", question_id="q-2"):
         raise RuntimeError("boum")
-    assert ctx.question_id is None and ctx.post == "query"
+    assert ctx.question_id is None
+    with ctx.scope(post="indexing"), ctx.scope(question_id="q-3"):
+        assert (ctx.post, ctx.question_id) == ("indexing", "q-3")
 
 
 def test_post_et_question_id_en_lecture_seule(ctx: Context) -> None:
@@ -136,8 +163,8 @@ def test_build_construit_par_cls_params_ctx(ctx: Context) -> None:
 
 def test_build_refuse_un_parametre_inconnu(ctx: Context) -> None:
     with pytest.raises(ConfigError) as exc:
-        ctx.build("embedder", ComponentSpec(name="fake", params={"inconnu": 1}))
-    assert "inconnu" in str(exc.value)
+        ctx.build("embedder", ComponentSpec(name="fake", params={"zzz_absent": 1}))
+    assert "embedder.fake.params.zzz_absent" in str(exc.value)
 
 
 def test_build_refuse_un_composant_inconnu(ctx: Context) -> None:
@@ -181,7 +208,8 @@ def test_second_contexte_d_execution_echoue(wl_home: Path) -> None:
             )  # fmt: skip
         # une commande hors Exécution ne prend pas le verrou et n'est pas gênée
         with Context.from_profile("test", wl_home=wl_home, run_id="hors-2") as c:
-            assert c.gateway.complete(_req()).text
+            with c.scope(post="evalset"):
+                assert c.gateway.complete(_req()).text
     finally:
         prem.close()
     # verrou libéré : une nouvelle Exécution peut démarrer
@@ -196,3 +224,66 @@ def _catalogue() -> Any:
     from wavelibrarian.config.catalog import load_catalog
 
     return load_catalog()
+
+
+def test_verrou_detenu_par_un_autre_processus(wl_home: Path) -> None:
+    code = (
+        "import sys; from pathlib import Path; from wavelibrarian.runner.lock import RunLock\n"
+        "verrou = RunLock(Path(sys.argv[1]), 'run-fils'); verrou.acquire()\n"
+        "print('pris', flush=True); sys.stdin.read()\n"
+    )
+    fils = subprocess.Popen(
+        [sys.executable, "-c", code, str(wl_home)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+    )  # fmt: skip
+    try:
+        assert fils.stdout is not None and fils.stdout.readline().strip() == "pris"
+        with pytest.raises(WlError, match="Exécution run-fils en cours"):
+            RunLock(wl_home, "run-pere").acquire()
+    finally:
+        fils.communicate(input="", timeout=30)  # le fils sort : l'OS libère le verrou
+    verrou = RunLock(wl_home, "run-pere")
+    verrou.acquire()
+    verrou.release()
+
+
+def test_une_execution_ne_recupere_pas_la_reservation_d_une_commande_en_cours(
+    wl_home: Path,
+) -> None:
+    with Context.from_profile("test", wl_home=wl_home, run_id="hors-3"):
+        commande = Ledger(Budget(), "hors-3", wl_home, hors_execution=True)
+        orpheline = Ledger(Budget(), "run-mort", wl_home)
+        try:
+            en_cours = commande.reserve("anthropic", Decimal("0.10"), "USD")
+            morte = orpheline.reserve("anthropic", Decimal("0.20"), "USD")
+            with Context(
+                profile=load_profile("test"), catalog=_catalogue(), wl_home=wl_home,
+                run_id="run-4", execution=True,
+            ):  # fmt: skip
+                pass
+            commande.settle(en_cours, Decimal("0.12"))  # toujours ouverte : pas « déjà close »
+            with pytest.raises(WlError, match="déjà close"):
+                orpheline.settle(morte, Decimal("0.20"))  # réglée par la récupération
+        finally:
+            commande.close()
+            orpheline.close()
+
+
+def test_close_libere_le_verrou_meme_si_une_fermeture_echoue(
+    wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c = Context(
+        profile=load_profile("test"), catalog=_catalogue(), wl_home=wl_home, run_id="run-5",
+        execution=True,
+    )  # fmt: skip
+
+    def boum() -> None:
+        raise OSError("disque")
+
+    monkeypatch.setattr(c._ledger, "close", boum)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(OSError):
+        c.close()
+    Context(
+        profile=load_profile("test"), catalog=_catalogue(), wl_home=wl_home, run_id="run-6",
+        execution=True,
+    ).close()  # fmt: skip

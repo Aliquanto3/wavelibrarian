@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS reservations (
     period TEXT NOT NULL,
     estimated TEXT NOT NULL,
     actual TEXT,
-    status TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'released'))
+    status TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'released')),
+    hors_execution INTEGER NOT NULL DEFAULT 0
 )
 """
 # Montant compté : estimé si encore réservé, réel si réglé, rien si libéré.
@@ -63,8 +64,12 @@ class Ledger:
         clock: Callable[[], datetime] = _maintenant,
         *,
         recover_orphans: bool = False,
+        hors_execution: bool = False,
     ) -> None:
         """`recover_orphans=True` seulement par le runner, après avoir pris `run.lock` (AD-11).
+
+        `hors_execution=True` (commande sans `run.lock`) : ses réservations ne sont jamais
+        récupérées par une Exécution, qui ne peut savoir si la commande tourne encore.
 
         Sinon, un second `Ledger` ouvert pendant une Exécution réglerait ses réservations en
         cours, et le `settle` qui suit perdrait le coût réel. Une réservation laissée ouverte
@@ -73,14 +78,29 @@ class Ledger:
         self._budget = budget
         self._run_id = run_id
         self._clock = clock
+        self._hors_execution = hors_execution
         self._conn = connect(resolve_wl_home(wl_home) / "ledger.sqlite")
         try:
             self._conn.execute(_SCHEMA)
+            self._migrer()
             if recover_orphans:
                 self.recover_orphans()
         except BaseException:
             self._conn.close()
             raise
+
+    def _migrer(self) -> None:
+        """Ajoute `hors_execution` à un registre créé avant la colonne."""
+        colonnes = {r[1] for r in self._conn.execute("PRAGMA table_info(reservations)")}
+        if "hors_execution" in colonnes:
+            return
+        try:
+            self._conn.execute(
+                "ALTER TABLE reservations ADD COLUMN hors_execution INTEGER NOT NULL DEFAULT 0"
+            )
+        except sqlite3.OperationalError as exc:  # autre processus plus rapide
+            if "duplicate column" not in str(exc):
+                raise
 
     def close(self) -> None:
         self._conn.close()
@@ -100,11 +120,14 @@ class Ledger:
     def recover_orphans(self) -> int:
         """Règle au montant estimé toute réservation laissée ouverte (arrêt brutal, AD-11).
 
-        Valable seulement si l'appelant tient `run.lock` (une seule Exécution à la fois).
+        Valable seulement si l'appelant tient `run.lock` (une seule Exécution à la fois). Les
+        réservations des commandes hors Exécution restent ouvertes : elles comptent au montant
+        estimé, ce qui ne fait jamais dépasser un plafond.
         """
         with transaction(self._conn) as c:
             return c.execute(
-                "UPDATE reservations SET status='settled', actual=estimated WHERE status='reserved'"
+                "UPDATE reservations SET status='settled', actual=estimated "
+                "WHERE status='reserved' AND hors_execution=0"
             ).rowcount
 
     def _plafonds(self, provider: str) -> tuple[Amount | None, Amount | None]:
@@ -168,9 +191,10 @@ class Ledger:
                     f"({per} + {amount}, mois {periode})"
                 )
             cur = c.execute(
-                "INSERT INTO reservations (run_id, provider, currency, period, estimated, status) "
-                "VALUES (?, ?, ?, ?, ?, 'reserved')",
-                (self._run_id, provider, currency, periode, str(amount)),
+                "INSERT INTO reservations "
+                "(run_id, provider, currency, period, estimated, status, hors_execution) "
+                "VALUES (?, ?, ?, ?, ?, 'reserved', ?)",
+                (self._run_id, provider, currency, periode, str(amount), int(self._hors_execution)),
             )
             return int(cur.lastrowid or 0)
 
