@@ -683,7 +683,7 @@ Ordre de priorité (AD-12) : valeurs par défaut du code, puis profil, puis Exp�
 ```yaml
 corpus_id: minicorpus
 target_count: 150                      # D1 (le Mini-corpus : 40)
-freeze: null                           # écrit par `wl questions freeze`, jamais à la main
+freeze: null                           # écrit par `wl questions geler`, jamais à la main
 #  freeze: {sha256: "...", at: "2026-10-17T22:10:00Z", seed: 42, dev_ratio: 0.4}
 questions:
   - id: q-001                          # stable, jamais réutilisé
@@ -706,6 +706,7 @@ questions:
 ```
 
 L'empreinte du Gel est `sha256(canonical_json(document sans "freeze" ni "contaminated_by"))` (AD-15). Seules les questions `validated` et `corrected` participent à une Exécution.
+Au Gel, chaque Type reçoit `round_half_up(n × dev_ratio)` Questions dev (10 × 0,4 = 4 ; 1 × 0,4 = 0, donc une Question seule de son Type va en test). Un re-Gel qui ferait changer de partie une Question déjà répartie est refusé sans `--forcer`. Les Questions contaminées restent dans leur partie : le Rapport les exclut des scores principaux (FR-12).
 
 ### 4.6 Annotations humaines — `annotations/<annotateur>.yaml`
 

@@ -322,11 +322,14 @@ def questions_geler(
         float, typer.Option("--dev-ratio", help="Part de Questions dev dans chaque Type.")
     ] = freeze.DEV_RATIO_DEFAUT,
     graine: Annotated[int, typer.Option("--graine", help="Graine de la répartition.")] = 42,
+    forcer: Annotated[
+        bool, typer.Option("--forcer", help="Accepter qu'un re-Gel change la partie de Questions.")
+    ] = False,
 ) -> None:
     """Répartit les Questions en dev / test (stratifié par Type) et écrit l'empreinte du Gel."""
     try:
         jeu = io.load_agrege(questions)
-        gele = freeze.geler(jeu, dev_ratio, graine)
+        gele = freeze.geler(jeu, dev_ratio, graine, forcer=forcer)
     except ValidationFailed as erreur:
         for e in erreur.errors:
             typer.echo(f"Erreur : {e}", err=True)

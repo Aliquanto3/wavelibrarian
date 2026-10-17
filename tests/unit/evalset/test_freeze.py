@@ -214,3 +214,42 @@ def test_cli_geler_agrege_les_erreurs_du_fichier(tmp_path: Path) -> None:
     assert res.exit_code == 2
     assert "questions[1].type" in res.output and "questions[2].status" in res.output
     assert "2 erreur(s)" in res.output
+
+
+def test_verify_frozen_refuse_un_ancrage_ou_une_reponse_modifies() -> None:
+    gele = freeze.geler(_doc(_cinquante()), 0.4, 42)
+    q0 = gele.questions[0]
+    ancre = q0.reference_anchors[0].model_copy(update={"headings": ("Guide", "Beta")})
+    for maj in ({"reference_anchors": (ancre,)}, {"reference_answer": "Autre"}):
+        qs = (q0.model_copy(update=maj), *gele.questions[1:])
+        with pytest.raises(ConfigError, match="empreinte différente"):
+            freeze.verify_frozen(gele.model_copy(update={"questions": qs}))
+
+
+def test_regel_qui_change_la_partie_refuse_sans_forcer(tmp_path: Path) -> None:
+    gele = freeze.geler(_doc(_cinquante()), 0.4, 42)
+    with pytest.raises(ConfigError, match="forcer"):
+        freeze.geler(gele, 0.4, 7)
+    with pytest.raises(ConfigError, match="forcer"):
+        freeze.geler(gele, 0.6, 42)
+    regele = freeze.geler(gele, 0.4, 7, forcer=True)
+    assert regele.freeze is not None and regele.freeze.seed == 7
+    chemin = tmp_path / "q.yaml"
+    io.save(chemin, gele)
+    avant = chemin.read_text(encoding="utf-8")
+    r = CliRunner()
+    res = r.invoke(app, ["questions", "geler", str(chemin), "--graine", "7"])
+    assert res.exit_code == 2 and "--forcer" in res.output
+    assert chemin.read_text(encoding="utf-8") == avant
+    res = r.invoke(app, ["questions", "geler", str(chemin), "--graine", "7", "--forcer"])
+    assert res.exit_code == 0, res.output
+    assert io.load(chemin).freeze.seed == 7  # type: ignore[union-attr]
+
+
+def test_gel_refuse_les_ids_en_double_et_l_instant_naif() -> None:
+    from datetime import datetime
+
+    with pytest.raises(ConfigError, match="double.*q-000"):
+        freeze.geler(_doc([_q(0), _q(0, text="b ?")]))
+    with pytest.raises(ConfigError, match="fuseau"):
+        freeze.geler(_doc([_q(0)]), at=datetime(2026, 10, 18, 12, 0))
