@@ -200,3 +200,122 @@ def test_commande_controler_scenario_de_bout_en_bout(tmp_path, monkeypatch):
     assert avec.exit_code == 0, avec.output
     assert "introuvable" not in avec.output and "non vérifiables" not in avec.output
     assert "Contrôle réussi" in avec.output
+
+
+def test_equivaut_a_une_ingestion_directe_de_l_etat_apres(tmp_path, minicorpus):
+    """Oracle indépendant : le Corpus « après » vaut l'ingestion du dossier mis à jour."""
+    import shutil
+
+    from wavelibrarian.corpus.declare import declare
+    from wavelibrarian.corpus.ingest import ingest
+
+    copie = tmp_path / "mini"
+    shutil.copytree(MINI / "docs", copie / "docs")
+    shutil.copy(MINI / "corpus.yaml", copie / "corpus.yaml")
+    scen = yaml.safe_load(SCENARIO.read_text(encoding="utf-8"))
+    for op in scen["operations"]:
+        cible = copie / "docs" / op["target"]
+        if op["op"] == "delete":
+            cible.unlink()
+        else:
+            shutil.copy(SCENARIO.parent / op["source"], cible)
+    direct = ingest(declare(copie / "corpus.yaml"), wl_home=tmp_path / ".wl")
+    _, apres = sc.appliquer_fichier(minicorpus, SCENARIO, lang="fr")
+    assert apres == direct
+
+
+def test_document_ajoute_prend_la_langue_par_defaut_declaree(minicorpus):
+    # Majorité anglaise, langue par défaut déclarée « fr » : l'ajout suit la déclaration.
+    anglais = minicorpus.model_copy(
+        update={
+            "documents": tuple(d.model_copy(update={"lang": "en"}) for d in minicorpus.documents)
+        }
+    )
+    _, apres = sc.appliquer_fichier(anglais, SCENARIO, lang="fr")
+    assert _doc(apres, "chronique-1415.md").lang == "fr"
+    assert _doc(apres, "bulletin-maree.md").lang == "en"  # le Document modifié garde la sienne
+    _, sans = sc.appliquer_fichier(anglais, SCENARIO)
+    assert _doc(sans, "chronique-1415.md").lang == "en"  # repli : langue majoritaire
+
+
+def test_suppression_puis_ajout_garde_les_metadonnees_declarees(tmp_path, minicorpus):
+    ancien = _doc(minicorpus, "journal-torvane.md")
+    assert ancien.meta.rights_profiles  # le Mini-corpus le déclare
+    ops = [
+        {"id": "a", "op": "delete", "target": "journal-torvane.md"},
+        {"id": "b", "op": "add", "source": "up/x.md", "target": "journal-torvane.md"},
+    ]
+    _, apres = sc.appliquer_fichier(minicorpus, _ecrire(tmp_path, ops), lang="en")
+    nouveau = _doc(apres, "journal-torvane.md")
+    assert (nouveau.lang, nouveau.meta) == (ancien.lang, ancien.meta)
+
+
+@pytest.mark.parametrize(
+    ("operation", "chemin"),
+    [
+        (
+            {"id": "a", "op": "add", "source": "../up/x.md", "target": "z.md"},
+            "operations[0].source",
+        ),
+        (
+            {"id": "a", "op": "add", "source": "up/../up/x.md", "target": "z.md"},
+            "operations[0].source",
+        ),
+        ({"id": "a", "op": "add", "source": "/etc/x.md", "target": "z.md"}, "operations[0].source"),
+        (
+            {"id": "a", "op": "add", "source": "up/x.md", "target": "../z.md"},
+            "operations[0].target",
+        ),
+        ({"id": "a", "op": "add", "source": "up/x.md", "target": "/z.md"}, "operations[0].target"),
+    ],
+)
+def test_chemins_hors_dossier_refuses(tmp_path, minicorpus, operation, chemin):
+    with pytest.raises(ConfigError) as e:
+        sc.charger(_ecrire(tmp_path, [operation]), minicorpus)
+    assert e.value.path == chemin
+
+
+def test_source_illisible_leve_config_error(tmp_path, minicorpus, monkeypatch):
+    charge = sc.charger(
+        _ecrire(tmp_path, [{"id": "a", "op": "add", "source": "up/x.md", "target": "z.md"}]),
+        minicorpus,
+    )
+
+    def refuse(self, *a, **k):
+        raise PermissionError("accès refusé")
+
+    monkeypatch.setattr(Path, "read_bytes", refuse)
+    with pytest.raises(ConfigError) as e:
+        sc.appliquer(minicorpus, charge)
+    assert e.value.path == "operations[0].source"
+
+
+def test_commande_controler_document_supprime_introuvable_apres(tmp_path, monkeypatch):
+    monkeypatch.setenv("WL_HOME", str(tmp_path / ".wl"))
+    question = {
+        "id": "q-001",
+        "type": "factual",
+        "follow_up": False,
+        "cross_lingual": False,
+        "text": "Que dit la note ?",
+        "lang": "fr",
+        "reference_answer": "Rien",
+        "answer_form": "short",
+        "reference_anchors": [{"doc": "note-obsolete.md", "headings": []}],
+        "status": "validated",
+        "split": None,
+        "contaminated_by": [],
+        "history": [],
+        "origin": {"kind": "human", "name": "test"},
+        "scenario_target": {"operation": "op-3", "state": "after"},
+    }
+    modele = tmp_path / "q.yaml"
+    modele.write_text(
+        yaml.safe_dump({"corpus_id": "minicorpus", "target_count": 1, "questions": [question]}),
+        encoding="utf-8",
+    )
+    cmd = ["questions", "controler", str(modele), "--corpus", str(MINI / "corpus.yaml")]
+    res = CliRunner().invoke(app, [*cmd, "--scenario", str(SCENARIO)])
+    assert res.exit_code == 2, res.output
+    assert "q-001" in res.output and "introuvable" in res.output
+    assert "Contrôle échoué" in res.output

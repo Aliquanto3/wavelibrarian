@@ -5,7 +5,7 @@ dans les `source` du Scénario et parsés en mémoire (sans cache de parsing).
 """
 
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -58,11 +58,18 @@ def _format(chemin: str) -> str | None:
     return EXTENSIONS.get(Path(chemin).suffix.lower())
 
 
+def _hors_dossier(chemin: str) -> bool:
+    """Chemin absolu ou qui remonte (`..`) : il sortirait du dossier de référence."""
+    posix = PurePosixPath(chemin.replace("\\", "/"))
+    return posix.is_absolute() or Path(chemin).is_absolute() or ".." in posix.parts
+
+
 def charger(chemin: Path, parsed: ParsedCorpus) -> ScenarioCharge:
     """Lit le Scénario et le valide contre `parsed` (opérations simulées dans l'ordre).
 
     `ConfigError` au chemin `operations[i]` : `add` sur un `target` présent, `modify` ou `delete`
-    sur un `target` absent, `source` introuvable ou d'un autre format que le `target`.
+    sur un `target` absent, `source` introuvable ou d'un autre format que le `target`, `source`
+    ou `target` absolu ou qui remonte hors de son dossier (`..`).
     """
     scenario = valider(Scenario, charger_yaml(chemin), str(chemin))
     if scenario.corpus_id != parsed.corpus_id:
@@ -78,11 +85,17 @@ def charger(chemin: Path, parsed: ParsedCorpus) -> ScenarioCharge:
         if op.id in vus:
             raise ConfigError(f"{pos}.id", f"identifiant {op.id!r} en double")
         vus.add(op.id)
+        if _hors_dossier(op.target):
+            raise ConfigError(f"{pos}.target", f"{op.target!r} doit être relatif au Corpus")
         if op.op == "add" and op.target in presents:
             raise ConfigError(f"{pos}.target", f"{op.target!r} est déjà dans le Corpus")
         if op.op != "add" and op.target not in presents:
             raise ConfigError(f"{pos}.target", f"{op.target!r} n'est pas dans le Corpus")
         if op.source is not None:
+            if _hors_dossier(op.source):
+                raise ConfigError(
+                    f"{pos}.source", f"{op.source!r} doit être relatif au dossier du Scénario"
+                )
             if not (dossier / op.source).is_file():
                 raise ConfigError(f"{pos}.source", f"{op.source!r} introuvable")
             if _format(op.source) is None or _format(op.source) != _format(op.target):
@@ -96,9 +109,9 @@ def charger(chemin: Path, parsed: ParsedCorpus) -> ScenarioCharge:
     return ScenarioCharge(scenario=scenario, dossier=dossier)
 
 
-def _parser(fmt: str, cache: dict[str, Any]) -> Any:
+def _parser(fmt: str, parser: str, cache: dict[str, Any]) -> Any:
     if fmt not in cache:
-        cls = registry.get("parser", parsers_par_format([fmt])[fmt])
+        cls = registry.get("parser", parsers_par_format([fmt], parser)[fmt])
         cache[fmt] = cls(cls.Params(), None)
     return cache[fmt]
 
@@ -108,16 +121,25 @@ def _langue_majoritaire(parsed: ParsedCorpus) -> str:
     return min(comptes, key=lambda lang: (-comptes[lang], lang)) if comptes else "en"
 
 
-def appliquer(parsed: ParsedCorpus, charge: ScenarioCharge) -> tuple[CorpusChange, ParsedCorpus]:
+def appliquer(
+    parsed: ParsedCorpus,
+    charge: ScenarioCharge,
+    *,
+    lang: str | None = None,
+    parser: str = "auto",
+) -> tuple[CorpusChange, ParsedCorpus]:
     """Applique les opérations dans l'ordre ; `parsed` n'est pas modifié.
 
-    `CorpusChange` est le changement net, trié par `source_path`. Un Document ajouté prend la
-    langue majoritaire du Corpus ; un Document modifié garde sa langue et ses métadonnées.
+    `CorpusChange` est le changement net, trié par `source_path`. Comme à l'ingestion directe,
+    un Document nouveau prend `lang` (langue par défaut du `corpus.yaml` ; à défaut, la langue
+    majoritaire du Corpus) ; un Document modifié, ou supprimé puis réajouté au même
+    `source_path`, garde sa langue et ses métadonnées déclarées. `parser` : comme `ingest`
+    (le runner de l'epic 4 passe le Parser de la base).
     """
     avant = {d.source_path: d for d in parsed.documents}
     courant = dict(avant)
     parsers: dict[str, Any] = {}
-    langue = _langue_majoritaire(parsed)
+    langue = lang or _langue_majoritaire(parsed)
     for i, op in enumerate(charge.scenario.operations):
         if op.op == "delete":
             del courant[op.target]
@@ -125,12 +147,13 @@ def appliquer(parsed: ParsedCorpus, charge: ScenarioCharge) -> tuple[CorpusChang
         assert op.source is not None  # garanti par le schéma
         fmt = _format(op.target)
         assert fmt is not None  # vérifié par `charger`
-        brut = (charge.dossier / op.source).read_bytes()
-        ancien = courant.get(op.target)
-        lang = ancien.lang if ancien else langue
+        ancien = courant.get(op.target) or avant.get(op.target)
+        lang_doc = ancien.lang if ancien else langue
         meta = ancien.meta if ancien else DocMeta()
+        instance = _parser(fmt, parser, parsers)
         try:
-            doc = _parser(fmt, parsers).parse(op.target, brut, lang, meta)
+            brut = (charge.dossier / op.source).read_bytes()
+            doc = instance.parse(op.target, brut, lang_doc, meta)
         except (OSError, ValueError) as exc:
             raise ConfigError(
                 f"operations[{i}].source", f"{op.source!r} illisible : {exc}"
@@ -156,11 +179,15 @@ def appliquer(parsed: ParsedCorpus, charge: ScenarioCharge) -> tuple[CorpusChang
     return changement, apres
 
 
-def appliquer_fichier(parsed: ParsedCorpus, chemin: Path) -> tuple[CorpusChange, ParsedCorpus]:
+def appliquer_fichier(
+    parsed: ParsedCorpus, chemin: Path, *, lang: str | None = None, parser: str = "auto"
+) -> tuple[CorpusChange, ParsedCorpus]:
     """`charger` puis `appliquer`."""
-    return appliquer(parsed, charger(chemin, parsed))
+    return appliquer(parsed, charger(chemin, parsed), lang=lang, parser=parser)
 
 
-def corpus_apres(parsed: ParsedCorpus, chemin: Path) -> ParsedCorpus:
+def corpus_apres(
+    parsed: ParsedCorpus, chemin: Path, *, lang: str | None = None, parser: str = "auto"
+) -> ParsedCorpus:
     """Corpus après application du Scénario `chemin` (utilisé par `wl questions controler`)."""
-    return appliquer_fichier(parsed, chemin)[1]
+    return appliquer_fichier(parsed, chemin, lang=lang, parser=parser)[1]

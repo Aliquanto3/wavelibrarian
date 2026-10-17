@@ -128,11 +128,11 @@ def installer(
     raise typer.Exit(4)
 
 
-def _corpus_apres(parsed: ParsedCorpus, scenario: Path) -> ParsedCorpus:
-    """Corpus après application du Scénario (story 2.6 ; `ConfigError` tant qu'elle manque)."""
+def _corpus_apres(parsed: ParsedCorpus, scenario: Path, lang: str) -> ParsedCorpus:
+    """Corpus après application du Scénario (story 2.6) ; `lang` : langue par défaut du Corpus."""
     if not scenario.is_file():
         raise ConfigError(str(scenario), "fichier de Scénario introuvable")
-    return scenario_corpus_apres(parsed, scenario)
+    return scenario_corpus_apres(parsed, scenario, lang=lang)
 
 
 @questions_app.command("controler")
@@ -147,8 +147,9 @@ def questions_controler(
     """Compte les Questions, signale les Ancrages introuvables (code 2 si Question validée)."""
     try:
         jeu = io.load(questions)
-        parsed = ingest(declare(corpus))
-        apres = _corpus_apres(parsed, scenario) if scenario else None
+        declare_corpus = declare(corpus)
+        parsed = ingest(declare_corpus)
+        apres = _corpus_apres(parsed, scenario, declare_corpus.spec.lang) if scenario else None
     except ConfigError as erreur:
         typer.echo(f"Erreur : {erreur}", err=True)
         raise typer.Exit(2) from erreur
