@@ -1,0 +1,1 @@
+"""Paquet du germe structurel."""

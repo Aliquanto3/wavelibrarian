@@ -1,2 +1,1 @@
-def hello() -> str:
-    return "Hello from wavelibrarian!"
+"""WaveLibrarian : banc de comparaison des architectures de recherche documentaire IA."""

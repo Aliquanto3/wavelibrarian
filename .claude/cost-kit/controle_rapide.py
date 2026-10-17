@@ -27,6 +27,8 @@ from pathlib import Path
 COMMANDES: list[list[str]] = [
     ["uv", "run", "ruff", "check", "."],
     ["uv", "run", "ruff", "format", "--check", "."],
+    ["uv", "run", "pyright"],
+    ["uv", "run", "lint-imports"],
 ]
 MAX_LIGNES_PAR_COMMANDE = 40
 

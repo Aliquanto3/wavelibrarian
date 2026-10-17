@@ -16,3 +16,6 @@ wheels/
 .claude/cost-kit/.blocages
 .env
 
+
+.wl/
+results/

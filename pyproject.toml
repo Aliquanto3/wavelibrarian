@@ -8,7 +8,40 @@ authors = [
     { name = "Aliquanto3", email = "anael.yahi@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.14,<3",
+    "pyyaml>=6.0,<7",
+    "typer>=0.19,<1",
+    "anthropic>=1.15,<2",
+    "httpx>=0.28,<1",
+    "python-dotenv>=1.2,<2",
+    "tenacity>=9.2,<10",
+    "numpy>=2.5,<3",
+    "scipy>=1.18,<2",
+    "bm25s>=0.3,<1",
+    "networkx>=3.7,<4",
+    "markdown-it-py>=4.2,<5",
+    "beautifulsoup4>=4.15,<5",
+    "pypdfium2>=5.14,<6",
+    "opentelemetry-sdk>=1.45,<2",
+    "tiktoken>=0.14,<1",
+]
+
+[project.optional-dependencies]
+local = [
+    "sentence-transformers>=6.1,<7",
+    "torch>=2.14,<3",
+]
+energy = [
+    "codecarbon>=3.3,<4",
+    "ecologits>=0.11,<1",
+]
+docling = [
+    "docling>=2.140,<3",
+]
+
+[project.scripts]
+wl = "wavelibrarian.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]
@@ -16,20 +49,102 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "pyright>=1.1.414",
-    "pytest>=9.1.1",
-    "ruff>=0.17.1",
+    "pyright>=1.1.414,<2",
+    "pytest>=9.1,<10",
+    "pytest-socket>=0.8,<1",
+    "ruff>=0.17.1,<1",
+    "import-linter>=2.15,<3",
+    "fpdf2>=2.8,<3",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 100
-extend-exclude = [".claude"]
+extend-exclude = [".claude", "_bmad", "_bmad-output"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--disable-socket --allow-unix-socket -m 'not real_api and not real_local'"
+markers = [
+    "real_api: appelle une API payante (jamais par défaut)",
+    "real_local: appelle un service local, par exemple Ollama (jamais par défaut)",
+    "slow: test lent",
+]
 
 [tool.pyright]
 include = ["src", "tests"]
+
+[tool.importlinter]
+root_package = "wavelibrarian"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Couches (AD-1)"
+type = "layers"
+layers = [
+    "wavelibrarian.cli",
+    "wavelibrarian.runner | wavelibrarian.report",
+    "wavelibrarian.architectures",
+    "wavelibrarian.components",
+    "wavelibrarian.evalset",
+    "wavelibrarian.scoring",
+    "wavelibrarian.corpus",
+    "wavelibrarian.llm | wavelibrarian.measure | wavelibrarian.stats",
+    "wavelibrarian.config",
+    "wavelibrarian.registry",
+    "wavelibrarian.ports",
+    "wavelibrarian.core",
+]
+
+[[tool.importlinter.contracts]]
+name = "anthropic et httpx confinés à llm.providers"
+type = "forbidden"
+source_modules = ["wavelibrarian"]
+forbidden_modules = ["anthropic", "httpx"]
+unmatched_ignore_imports_alerting = "none"
+ignore_imports = [
+    "wavelibrarian.llm.providers.** -> anthropic",
+    "wavelibrarian.llm.providers.** -> httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "sentence_transformers confiné aux embedders"
+type = "forbidden"
+source_modules = ["wavelibrarian"]
+forbidden_modules = ["sentence_transformers"]
+unmatched_ignore_imports_alerting = "none"
+ignore_imports = ["wavelibrarian.components.embedders.** -> sentence_transformers"]
+
+[[tool.importlinter.contracts]]
+name = "Mesure confinée à measure (ecologits aussi pour le provider anthropic)"
+type = "forbidden"
+source_modules = ["wavelibrarian"]
+forbidden_modules = ["opentelemetry", "codecarbon", "ecologits"]
+unmatched_ignore_imports_alerting = "none"
+ignore_imports = [
+    "wavelibrarian.measure.** -> opentelemetry",
+    "wavelibrarian.measure.** -> codecarbon",
+    "wavelibrarian.measure.** -> ecologits",
+    "wavelibrarian.llm.providers.anthropic -> ecologits",
+]
+
+[[tool.importlinter.contracts]]
+name = "Providers atteints par la seule passerelle (AD-3)"
+type = "forbidden"
+source_modules = ["wavelibrarian"]
+forbidden_modules = ["wavelibrarian.llm.providers"]
+unmatched_ignore_imports_alerting = "none"
+ignore_imports = [
+    "wavelibrarian.llm.gateway -> wavelibrarian.llm.providers",
+    "wavelibrarian.llm.preflight -> wavelibrarian.llm.providers",
+]
