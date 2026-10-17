@@ -6,14 +6,14 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 23:58 |
-| Story en cours | 3.1 (voie A, second avis) ; 2.4 (voie B) |
-| Stories livrées | 15 / 56 |
+| Mis à jour | 2026-10-18 00:07 |
+| Story en cours | 2.4 (voie B, second avis) ; 3.2 (voie A) |
+| Stories livrées | 16 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
 | Blocages | aucun |
-| À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. Story 2.1 : « licence restrictive » non définie au contrat ; retenu = toute licence hors `LICENCES_OUVERTES` (CC0, CC-BY*, MIT, Apache, BSD, ODbL, PDDL, Etalab, LO) ; deux Documents de contenu identique sont refusés (Ancrages ambigus). |
+| À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. Story 2.1 : « licence restrictive » non définie au contrat ; retenu = toute licence hors `LICENCES_OUVERTES` (CC0, CC-BY*, MIT, Apache, BSD, ODbL, PDDL, Etalab, LO) ; deux Documents de contenu identique sont refusés (Ancrages ambigus). Story 3.1 : l'AC dit « signalée » pour une `unanswerable` avec Ancrages ou une autre Question sans Ancrage ; retenu = bloquant (code 2) si `validated`/`corrected`, simple signalement sinon. |
 
 ## Consignes du run
 
@@ -86,6 +86,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **2.6** : fournir `wavelibrarian.corpus.scenario.corpus_apres(parsed, chemin)`, importé par `wl questions controler --scenario` (story 3.1), ou adapter `_corpus_apres` dans `cli.py`.
 - **3.4** : `exact_match` va dans `scoring/answer.py`, qui contient déjà `is_short_form` (story 3.1).
 - **3.3 / 3.5** : contrôler `question_gen_model` et `closed_book_models` au Catalogue dans `wl questions generer` et `closed-book` (stories 1.12 et 3.1).
+- **Transverse CLI** : les erreurs d'usage click/typer (« Usage: », « Missing argument ») sont en anglais (story 3.1).
+- **3.6 (`geler`)** : agréger toutes les erreurs du fichier de Questions (aujourd'hui une seule `ConfigError`) (story 3.1).
 
 ## Journal de surveillance
 
@@ -109,6 +111,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 23:45 | 12 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 12 tronq., 36 s/tronq. vs 36 (+1 %) ; pire +0 % | 20 % | 10.1 Go | 1 s, 88 Mo, 116 thr (19 proc) | Sous les seuils : on continue (2.3) |
 | 23:49 | 10 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 10 tronq., 36 s/tronq. vs 36 (+0 %) ; pire +0 % | 19 % | 11.8 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue |
 | 23:58 | 0 tronq. (?) :  ; pire +0 % | 62 % | 14.0 Go | 1 s, 86 Mo, 74 thr (13 proc) | Sous les seuils : on continue (2.4) |
+| 00:07 | 5 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 5 tronq., 37 s/tronq. vs 36 (-4 %) ; pire -4 % | 21 % | 12.1 Go | 1 s, 86 Mo, 75 thr (13 proc) | Sous les seuils : on continue (3.2) |
 
 ## Journal des stories
 
@@ -129,3 +132,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 2.2 | 23:30 | 23:45 | 68ec21ecb4c2818112485e0f323a5080060a6861 | 0 $ | Revue : 1 high corrigé (resolve sur titres frères renvoyait une ancre fausse), décodage UTF-8 strict + repli cp1252, titres imbriqués, cache versionné par Parser. 316 tests verts (avant rebase). |
 | 1.12 | 23:27 | 23:49 | 1ed4338c07d5bd1e60f7d5533378af05900e9599 | 0 $ | Revue : embedder installé = config + poids + tokenizer, extra cassé → WlError, calibration_judge au préflight, ollama list en échec → code 4, client httpx fermé. real_local écrits, non exécutés. Fin de l'epic 1. |
 | 2.3 | 23:46 | 23:58 | 5cda356e04d9253f6e3338dd252d67be3298d60f | 0 $ | Revue : césure PDFium (U+0002) recollée, NFKC et caractères de contrôle supprimés, PdfiumError → ValueError, tests chiffré et fermeture. 327 tests verts (avant rebase). |
+| 3.1 | 23:53 | 00:07 | aceba11c9b85330dd934cc47fe9e9ea570a3d329 | 0 $ | Revue : Ancrage page+titres ambigu signalé, repli par slug restreint, messages pydantic traduits en français (transverse), faux signalement scenario corrigé. 394 tests verts. |
