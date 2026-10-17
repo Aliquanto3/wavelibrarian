@@ -1,0 +1,71 @@
+"""Cache de réponses LLM `llm_cache.sqlite` (FR-34) : pas de paiement en double."""
+
+import hashlib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from wavelibrarian.core.ids import canonical_json
+from wavelibrarian.core.types import Usage
+from wavelibrarian.llm._db import connect, resolve_wl_home, transaction
+from wavelibrarian.ports.gateway import LLMRequest
+
+_SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS responses "
+    "(key TEXT PRIMARY KEY, text TEXT NOT NULL, usage TEXT NOT NULL)"
+)
+
+
+def cache_key(request: LLMRequest, provider: str) -> str:
+    """`sha256(canonical_json(model, params, system, messages, pass_id))`.
+
+    `step`, `role`, `cache_system`, `Message.cache` et `timeout_s` n'y entrent pas (ils ne
+    changent pas la réponse). `inputs` n'y entre que pour un provider `fake`, qui ne lit que lui
+    (AD-4, contracts.md §2.2). `system` est pris tel quel : la passerelle y a déjà posé le
+    marqueur de rôle.
+    """
+    contenu: dict[str, Any] = {
+        "model": request.model_id,
+        "params": {
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "seed": request.seed,
+        },
+        "system": request.system,
+        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+        "pass_id": request.pass_id,
+    }
+    if provider == "fake":
+        contenu["inputs"] = request.inputs
+    return hashlib.sha256(canonical_json(contenu).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class CachedResponse:
+    text: str
+    usage: Usage
+
+
+class ResponseCache:
+    """Cache persistant des réponses déjà payées."""
+
+    def __init__(self, wl_home: Path | None = None) -> None:
+        self._conn = connect(resolve_wl_home(wl_home) / "llm_cache.sqlite")
+        self._conn.execute(_SCHEMA)
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def get(self, key: str) -> CachedResponse | None:
+        row = self._conn.execute("SELECT text, usage FROM responses WHERE key=?", (key,)).fetchone()
+        if row is None:
+            return None
+        return CachedResponse(text=row[0], usage=Usage.model_validate_json(row[1]))
+
+    def put(self, key: str, text: str, usage: Usage) -> None:
+        """Première réponse gardée : une clé déjà présente n'est pas réécrite."""
+        with transaction(self._conn) as c:
+            c.execute(
+                "INSERT OR IGNORE INTO responses (key, text, usage) VALUES (?, ?, ?)",
+                (key, text, usage.model_dump_json()),
+            )
