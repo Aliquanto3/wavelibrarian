@@ -16,12 +16,15 @@ from wavelibrarian.registry import register
 
 _MOT = re.compile(r"\w+")
 _FICHIER = "lexical.json"
+_LIGATURES = str.maketrans({"œ": "oe", "æ": "ae"})  # comme `exact_match` (story 3.4)
 
 
 def tokeniser(texte: str) -> list[str]:
     """Minuscules, sans accents, mots alphanumériques ; même règle pour l'index et la requête."""
     sans_accents = "".join(
-        c for c in unicodedata.normalize("NFKD", texte.casefold()) if not unicodedata.combining(c)
+        c
+        for c in unicodedata.normalize("NFKD", texte.casefold().translate(_LIGATURES))
+        if not unicodedata.combining(c)
     )
     return _MOT.findall(sans_accents)
 
@@ -52,8 +55,8 @@ class Bm25Index:
     def search(self, text: str, k: int) -> list[tuple[str, float]]:
         """Au plus `k` couples (id, score > 0), score décroissant, ex æquo par id."""
         requete = tokeniser(text)
-        if k <= 0 or not requete or not self._mots:
-            return []
+        if k <= 0 or not requete or not any(self._mots.values()):
+            return []  # bm25s refuse un index sans aucun mot
         if self._moteur is None:
             self._ids = list(self._mots)
             self._moteur = bm25s.BM25()

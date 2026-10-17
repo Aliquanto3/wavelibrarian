@@ -39,6 +39,7 @@ class LLMGenerator:
     def __init__(self, params: "LLMGenerator.Params", ctx: Any) -> None:
         self._ctx = ctx
         self._max_tokens = params.max_tokens
+        self.max_tokens: int = params.max_tokens  # lu par `long_context.check` (fenêtre)
         self._cache_system = params.cache_system
         self.model_id: str = params.model or ctx.profile.defaults.generator_models[0]
 

@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from wavelibrarian.architectures._passages import ecrire_passages, lire_passages
 from wavelibrarian.components.context import build_arch_answer
@@ -58,6 +58,18 @@ class LongContext(ArchitectureBase):
             default_factory=lambda: ComponentSpec(name="labeled")
         )
 
+        @field_validator("generator")
+        @classmethod
+        def _system_en_cache(cls, spec: ComponentSpec) -> ComponentSpec:
+            """Le Generator `llm` met toujours le system (le Corpus) en cache (FR-16)."""
+            if spec.name != "llm":
+                return spec
+            if spec.params.get("cache_system", True) is not True:
+                raise ValueError(
+                    "`long_context` exige `cache_system: true` pour le Generator `llm`"
+                )
+            return ComponentSpec(name=spec.name, params={**spec.params, "cache_system": True})
+
     def __init__(self, params: Any, ctx: Any) -> None:
         super().__init__(params, ctx)
         self.generator = ctx.build("generator", params.generator)
@@ -75,12 +87,15 @@ class LongContext(ArchitectureBase):
             # Catalogue, comme l'estimation avant appel de la passerelle (contracts §4.2).
             tokens = math.ceil(Decimal(tokens) * entree.token_factor)
         fenetre = entree.context_window
-        if fenetre is not None and tokens > fenetre:
+        # La fenêtre doit tenir l'entrée et la sortie réservée, comme la passerelle (entrée +
+        # `max_tokens`) ; le palier tarifaire ne porte que sur le prompt.
+        sortie = getattr(self.generator, "max_tokens", 0)
+        if fenetre is not None and tokens + sortie > fenetre:
             return Applicability(
                 applicable=False,
                 reason=(
-                    f"le Corpus (environ {tokens} tokens pour {modele}) dépasse la fenêtre "
-                    f"de {fenetre} tokens"
+                    f"le Corpus (environ {tokens} tokens pour {modele}, plus {sortie} tokens de "
+                    f"sortie) dépasse la fenêtre de {fenetre} tokens"
                 ),
             )
         if entree.pricing is not None:
@@ -109,10 +124,13 @@ class LongContext(ArchitectureBase):
         if contexte is None:
             raise RuntimeError("`load` doit précéder `answer`")
         resultat = self.generator.generate(question, contexte)
+        # Un ScoredPassage par Ancrage cité, sans doublon ni trou de rang.
+        ancrages = dict.fromkeys(
+            c.anchor_id for c in resultat.citations if c.anchor_id in self._par_ancrage
+        )
         cites = [
-            ScoredPassage(passage=self._par_ancrage[c.anchor_id], score=1.0, rank=rang)
-            for rang, c in enumerate(resultat.citations, start=1)
-            if c.anchor_id in self._par_ancrage
+            ScoredPassage(passage=self._par_ancrage[a], score=1.0, rank=rang)
+            for rang, a in enumerate(ancrages, start=1)
         ]
         return build_arch_answer(
             contexte,

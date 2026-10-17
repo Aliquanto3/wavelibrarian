@@ -1,7 +1,7 @@
 ---
 story: "4.2"
 title: Baselines sans contexte, contexte long et BM25 seul
-status: review
+status: done
 ---
 
 # Story 4.2 : Baselines sans contexte, contexte long et BM25 seul
@@ -43,3 +43,15 @@ status: review
 - Reports de l'epic 4 traités : « 4.2 (Baselines) : passer `tokenizer=` et tester la troncature ».
 - Écart : le critère parle d'un prompt « estimé (`tokens_for`) » ; `tokens_for` ignore `token_factor` pour un modèle `reference`, on applique donc le facteur (voir Design Notes).
 - Reports : le Generator `llm` gagne `cache_system` (hors périmètre 4.1, nécessaire au critère) ; `long_context` ne compte pas la sortie dans la fenêtre ; la Condition contexte parfait de `long_context` passe par `answer_with_context` (défaut du port), sans cache de system.
+
+## Revue
+
+- high, second avis 1 : corrigé. `long_context` ne posait `cache_system` qu'avec le Generator par défaut ; un validateur force désormais `cache_system: true` sur tout Generator `llm` et refuse `false` (ConfigError).
+- medium, second avis 2 : corrigé. `test_long_context_generator_explicite_force_le_cache`, `test_long_context_refuse_cache_system_false`.
+- low, second avis 3 : gardé. `check` applique `token_factor` (×1,5 Haiku) au compte `tokens_for`, conforme au spine (l. 343) et aux stories 1.7/1.9 ; écart avec la lettre de l'AC consigné ci-dessus.
+- low, second avis 5 : corrigé. La fenêtre compte l'entrée et `max_tokens` (attribut public `LLMGenerator.max_tokens`), comme la réserve de la passerelle ; le palier ne porte que sur le prompt. `test_long_context_fenetre_compte_la_sortie`.
+- low, second avis 6 : corrigé. Un index sans aucun mot rend `[]` au lieu de la `ValueError` de bm25s. `test_bm25_index_sans_mot_et_ligatures`.
+- low, second avis 7 : corrigé. La tokenisation BM25 décompose œ et æ comme `exact_match` (story 3.4).
+- low, second avis 8 : corrigé. Le retriever `lexical` applique `k` après le filtre des Passages connus, en élargissant la recherche. `test_retriever_lexical_applique_k_apres_le_filtre`.
+- low, second avis 9 : corrigé. Les citations de `long_context` sont dédoublonnées et filtrées avant le rang, plus de trou ni de doublon possible.
+- low, revue : reporté. La Condition contexte parfait de `long_context` passe par `answer_with_context` sans cache de system ; à revoir avec le Runner des Conditions (epic 4).

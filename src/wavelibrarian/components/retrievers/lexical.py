@@ -31,7 +31,15 @@ class LexicalRetriever:
     ) -> list[ScoredPassage]:
         if index.lexical is None:
             raise WlError("le retriever `lexical` exige un index lexical")
-        trouves = [(i, s) for i, s in index.lexical.search(query, k) if i in index.passages]
+        # `k` s'applique après le filtre : on élargit la recherche tant que des ids inconnus
+        # des Passages réduisent la liste sous `k`.
+        demande = k
+        while True:
+            bruts = index.lexical.search(query, demande)
+            trouves = [(i, s) for i, s in bruts if i in index.passages][:k]
+            if len(trouves) >= k or len(bruts) < demande:
+                break
+            demande *= 2
         return [
             ScoredPassage(passage=index.passages[i], score=s, rank=r)
             for r, (i, s) in enumerate(trouves, start=1)

@@ -373,3 +373,70 @@ def test_bm25_only_tronque_au_dela_de_8000_tokens(ctx: RunCtx, tmp_path: Path) -
     assert rep.context_truncated is True
     assert len(rep.context_texts) == 1
     assert len(rep.context_anchor_ids) == 2
+
+
+# --- revue ------------------------------------------------------------------------------------
+
+
+def test_long_context_generator_explicite_force_le_cache(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    vues = _espionner(ctx)
+    arch = _arch(ctx, "long_context", generator={"name": "llm", "params": {"model": "fake-llm-a"}})
+    arch.index(minicorpus, tmp_path / "idx")
+    arch.load(tmp_path / "idx")
+    _repondre(arch, ctx)
+    assert vues[0].cache_system is True
+    assert "[S1]" in vues[0].system
+
+
+def test_long_context_refuse_cache_system_false(ctx: RunCtx) -> None:
+    with pytest.raises(ConfigError):
+        _arch(
+            ctx,
+            "long_context",
+            generator={"name": "llm", "params": {"model": "fake-llm-a", "cache_system": False}},
+        )
+
+
+def test_long_context_fenetre_compte_la_sortie(ctx: RunCtx) -> None:
+    gen = {"name": "llm", "params": {"model": "fake-llm-a", "max_tokens": 1024}}
+    arch = _arch(ctx, "long_context", generator=gen)
+    # facteur 1,2 de fake-llm-a : 82 500 -> 99 000, + 1 024 de sortie > 100 000
+    assert arch.check(_profil(82_500)).applicable is False
+    assert arch.check(_profil(81_000)).applicable is True
+
+
+def test_bm25_index_sans_mot_et_ligatures(ctx: RunCtx) -> None:
+    from wavelibrarian.core.types import Passage
+
+    vide = Bm25Index(Bm25Index.Params(), ctx)
+    vide.add([Passage(passage_id="a", doc_id="d", text="!!! ...", anchor_ids=("d#x",))])
+    assert vide.search("mot", 5) == []
+    idx = Bm25Index(Bm25Index.Params(), ctx)
+    idx.add(
+        [
+            Passage(passage_id="a", doc_id="d", text="Le cœur de la ville", anchor_ids=("d#x",)),
+            Passage(passage_id="b", doc_id="d", text="Une autre phrase", anchor_ids=("d#y",)),
+        ]
+    )
+    assert [i for i, _ in idx.search("coeur", 5)] == ["a"]
+
+
+def test_retriever_lexical_applique_k_apres_le_filtre(ctx: RunCtx) -> None:
+    from wavelibrarian.core.types import Passage
+    from wavelibrarian.ports.components import SearchIndex
+
+    passages = [
+        Passage(passage_id=f"p{n}", doc_id="d", text=f"orvane {'mot ' * n}", anchor_ids=("d#x",))
+        for n in range(6)
+    ]
+    idx = Bm25Index(Bm25Index.Params(), ctx)
+    idx.add(passages)
+    # les deux mieux classés sont absents des Passages connus
+    connus = {p.passage_id: p for p in passages[2:]}
+    trouves = LexicalRetriever(LexicalRetriever.Params(), ctx).retrieve(
+        "orvane", 3, SearchIndex(passages=connus, lexical=idx)
+    )
+    assert [s.passage.passage_id for s in trouves] == ["p2", "p3", "p4"]
+    assert [s.rank for s in trouves] == [1, 2, 3]
