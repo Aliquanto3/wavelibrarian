@@ -5,6 +5,7 @@ au premier usage (extra `energy`).
 """
 
 import importlib
+import logging
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -12,6 +13,8 @@ from wavelibrarian.config.schemas import EnergySettings
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.types import Usage
 from wavelibrarian.ports.measure import EnergyEstimator, EnergyMeter
+
+_log = logging.getLogger(__name__)
 
 EnergyMethod = Literal["measured", "estimated", "unknown"]
 
@@ -104,24 +107,42 @@ class CodecarbonMeter:
 
 
 class EcoLogitsEstimator:
-    """Énergie estimée d'un appel d'API (EcoLogits) ; `None` si le modèle est inconnu."""
+    """Énergie estimée d'un appel d'API (EcoLogits) ; `None` si le modèle est inconnu.
+
+    `ecologits.tracers.utils.llm_impacts` n'est pas documentée (review-versions.md, point 5) :
+    son absence ou une signature changée lèvent un `WlError`, et tout autre échec est journalisé.
+    La voie documentée (`EcoLogits.init` puis `response.impacts`) revient à l'adaptateur Anthropic.
+    """
 
     def __init__(self, provider: str = "anthropic") -> None:
-        self._utils: Any = _importer("ecologits.tracers.utils")
+        utils: Any = _importer("ecologits.tracers.utils")
+        self._llm_impacts: Any = getattr(utils, "llm_impacts", None)
+        if not callable(self._llm_impacts):
+            raise WlError(
+                "ecologits installé sans `ecologits.tracers.utils.llm_impacts` : "
+                "version incompatible (attendu 0.11.x, extra energy)"
+            )
         self._provider = provider
 
     def estimate(self, model_id: str, usage: Usage, latency_s: float) -> float | None:
         try:
-            impacts = self._utils.llm_impacts(
+            impacts = self._llm_impacts(
                 provider=self._provider,
                 model_name=model_id,
                 output_token_count=usage.output_tokens,
                 request_latency=latency_s,
             )
-            valeur = impacts.energy.value
-        except Exception:
+        except TypeError as exc:  # signature changée : défaut d'intégration, pas un modèle inconnu
+            raise WlError(f"API EcoLogits `llm_impacts` incompatible : {exc}") from exc
+        except Exception as exc:
+            _log.warning("EcoLogits : estimation impossible pour %s (%s)", model_id, exc)
             return None
+        if impacts is None:  # modèle inconnu d'EcoLogits
+            _log.warning("EcoLogits : modèle %s inconnu, énergie `unknown`", model_id)
+            return None
+        valeur = getattr(getattr(impacts, "energy", None), "value", None)
         if valeur is None:
+            _log.warning("EcoLogits : impacts sans énergie pour %s", model_id)
             return None
         if hasattr(valeur, "min") and hasattr(valeur, "max"):
             return (float(valeur.min) + float(valeur.max)) / 2

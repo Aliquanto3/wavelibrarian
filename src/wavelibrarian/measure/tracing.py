@@ -9,6 +9,7 @@ from typing import Any, Literal, Protocol
 
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.types import Condition, CostPost, Phase, Usage
@@ -35,6 +36,8 @@ class JsonlSpanExporter(SpanExporter):
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self.ecrits = 0  # spans effectivement écrits
+        self.erreur: OSError | None = None  # dernière écriture ratée (le processeur l'avale)
         path.parent.mkdir(parents=True, exist_ok=True)
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
@@ -50,8 +53,13 @@ class JsonlSpanExporter(SpanExporter):
             }
             ligne.update(dict(span.attributes or {}))
             lignes.append(json.dumps(ligne, ensure_ascii=False))
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write("\n".join(lignes) + "\n")
+        try:
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write("\n".join(lignes) + "\n")
+        except OSError as exc:
+            self.erreur = exc
+            return SpanExportResult.FAILURE
+        self.ecrits += len(lignes)
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
@@ -67,7 +75,8 @@ class Tracer:
         self._ctx = context
         self.exporter = JsonlSpanExporter(path)
         self.processor = SimpleSpanProcessor(self.exporter)
-        self._provider = TracerProvider()
+        # Échantillonnage explicite : `OTEL_TRACES_SAMPLER` ne doit écarter aucun span.
+        self._provider = TracerProvider(sampler=ALWAYS_ON)
         self._provider.add_span_processor(self.processor)
         if otlp_endpoint is not None:
             self._provider.add_span_processor(_otlp_processor(otlp_endpoint))
@@ -121,8 +130,14 @@ class Tracer:
             attrs["gen_ai.provider.name"] = provider
         if model_id is not None:
             attrs["gen_ai.request.model"] = model_id
+        avant = self.exporter.ecrits
         span = self._tracer.start_span(step, start_time=debut, attributes=attrs)
         span.end(end_time=fin)
+        if self.exporter.ecrits != avant + 1:
+            # Les traces sont la seule source des coûts : une ligne perdue arrête l'Exécution.
+            erreur, self.exporter.erreur = self.exporter.erreur, None
+            cause = f" : {erreur}" if erreur else " (SDK OpenTelemetry désactivé ?)"
+            raise WlError(f"trace `{step}` non écrite dans {self.exporter.path}{cause}") from erreur
 
 
 def _otlp_processor(endpoint: str) -> Any:
@@ -130,9 +145,8 @@ def _otlp_processor(endpoint: str) -> Any:
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore
             OTLPSpanExporter,
         )
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError as exc:
         raise WlError(
             "export OTLP demandé mais `opentelemetry-exporter-otlp` n'est pas installé"
         ) from exc
-    return BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
+    return SimpleSpanProcessor(OTLPSpanExporter(endpoint=endpoint))  # AD-11 : synchrone

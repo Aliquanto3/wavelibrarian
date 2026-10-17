@@ -1,7 +1,7 @@
 """Story 1.7 : traces, tokenizers, énergie et coût de possession (sans réseau, sans GPU)."""
 
-import builtins
 import json
+import subprocess
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -138,6 +138,35 @@ def test_export_synchrone_local_sans_otlp(tmp_path: Path) -> None:
     assert len(_lignes(tmp_path / "t.jsonl")) == 1  # écrit dès record, sans flush
 
 
+def test_ecriture_ratee_leve(tmp_path: Path) -> None:
+    """SimpleSpanProcessor avale les erreurs d'export : le Tracer les fait remonter."""
+    chemin = tmp_path / "t.jsonl"
+    tracer = Tracer(_Ctx(), chemin)
+    chemin.mkdir()  # ouvrir un dossier en ajout échoue
+    with pytest.raises(WlError, match="non écrite"):
+        _record(tracer)
+    chemin.rmdir()
+    _record(tracer)  # l'erreur ne colle pas aux appels suivants
+    assert len(_lignes(chemin)) == 1
+
+
+def test_sdk_desactive_leve(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "always_off")
+    tracer = Tracer(_Ctx(), tmp_path / "t.jsonl")
+    with pytest.raises(WlError, match="non écrite"):
+        _record(tracer)
+
+
+def test_echantillonnage_ignore_l_environnement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "always_off")
+    tracer = Tracer(_Ctx(), tmp_path / "t.jsonl")
+    _record(tracer)
+    assert len(_lignes(tmp_path / "t.jsonl")) == 1
+
+
 def test_otlp_demande_sans_paquet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "opentelemetry.exporter.otlp.proto.http.trace_exporter", None)
     with pytest.raises(WlError, match="OTLP"):
@@ -172,8 +201,19 @@ def test_reference_avec_cache_illisible(tmp_path: Path, monkeypatch: pytest.Monk
     cle = hashlib.sha1(tokenizers._URL_ENCODAGE.encode()).hexdigest()
     assert not tokenizers.encodage_installe()
     (tmp_path / cle).write_text("x", encoding="utf-8")
-    assert tokenizers.encodage_installe()
-    # Le contenu est invalide pour tiktoken : l'échec reste un WlError, sans téléchargement.
+    # Hachage faux : refusé avant tiktoken, qui supprimerait le fichier puis retéléchargerait.
+    assert not tokenizers.encodage_installe()
+    with pytest.raises(WlError, match="wl installer"):
+        ReferenceTokenizer().count("bonjour")
+    assert (tmp_path / cle).read_text(encoding="utf-8") == "x"  # tiktoken jamais appelé
+
+
+def test_reference_cache_desactive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`TIKTOKEN_CACHE_DIR=""` désactive le cache de tiktoken (lecture réseau) : refusé."""
+    monkeypatch.setenv("TIKTOKEN_CACHE_DIR", "")
+    monkeypatch.setenv("DATA_GYM_CACHE_DIR", "ailleurs")
+    assert tokenizers._dossier_cache_tiktoken() is None
+    assert not tokenizers.encodage_installe()
     with pytest.raises(WlError, match="wl installer"):
         ReferenceTokenizer().count("bonjour")
 
@@ -229,16 +269,8 @@ def test_energie_portee_par_les_spans(tmp_path: Path) -> None:
 @pytest.mark.parametrize("nom", ["codecarbon", "ecologits"])
 def test_adaptateurs_sans_extra_energy(nom: str, monkeypatch: pytest.MonkeyPatch) -> None:
     cible = "ecologits.tracers.utils" if nom == "ecologits" else nom
-    reel = builtins.__import__
-
-    def faux_import(name: str, *a: Any, **k: Any) -> Any:
-        if name.split(".")[0] == nom:
-            raise ImportError(name)
-        return reel(name, *a, **k)
-
-    monkeypatch.setattr(builtins, "__import__", faux_import)
-    for m in [k for k in sys.modules if k.split(".")[0] == nom]:
-        monkeypatch.delitem(sys.modules, m)
+    # `None` dans sys.modules fait lever ImportError à importlib.import_module, installé ou non.
+    monkeypatch.setitem(sys.modules, cible, None)
     classe = CodecarbonMeter if nom == "codecarbon" else EcoLogitsEstimator
     with pytest.raises(WlError, match="installer l'extra energy") as exc:
         classe()
@@ -246,9 +278,16 @@ def test_adaptateurs_sans_extra_energy(nom: str, monkeypatch: pytest.MonkeyPatch
 
 
 def test_import_paresseux_des_adaptateurs() -> None:
-    # Importer le module d'énergie ne charge ni codecarbon ni ecologits.
-    src = Path(energy.__file__).read_text(encoding="utf-8")
-    assert "\nimport codecarbon" not in src and "\nimport ecologits" not in src
+    # Importer le module d'énergie (processus neuf) ne charge ni codecarbon ni ecologits.
+    code = (
+        "import sys, wavelibrarian.measure.energy as e; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] in ('codecarbon', 'ecologits')))"
+    )
+    sortie = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    ).stdout
+    assert sortie.strip() == "[]"
+    assert energy.CodecarbonMeter.__module__ == "wavelibrarian.measure.energy"
 
 
 def test_codecarbon_double_sans_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -304,6 +343,26 @@ def test_ecologits_double(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert EcoLogitsEstimator().estimate("zzz", Usage(), 1.0) is None
 
+    # Modèle inconnu : llm_impacts renvoie None.
+    monkeypatch.setitem(
+        sys.modules, "ecologits.tracers.utils", SimpleNamespace(llm_impacts=lambda **kw: None)
+    )
+    assert EcoLogitsEstimator().estimate("zzz", Usage(), 1.0) is None
+
+    # Signature changée : défaut d'intégration, pas une énergie inconnue.
+    def ancienne(model_name: str) -> Any: ...
+
+    monkeypatch.setitem(
+        sys.modules, "ecologits.tracers.utils", SimpleNamespace(llm_impacts=ancienne)
+    )
+    with pytest.raises(WlError, match="incompatible"):
+        EcoLogitsEstimator().estimate("zzz", Usage(), 1.0)
+
+    # API absente : erreur dès la construction.
+    monkeypatch.setitem(sys.modules, "ecologits.tracers.utils", SimpleNamespace())
+    with pytest.raises(WlError, match="llm_impacts"):
+        EcoLogitsEstimator()
+
 
 # --- Coût de possession ---------------------------------------------------------------------
 
@@ -320,3 +379,11 @@ def test_cout_de_possession(wl_home: Path) -> None:
     assert isinstance(total, Decimal) and total == attendu
     assert total == Decimal("0.20005")
     assert possession_cost(costs, kwh=0, compute_seconds=0, index_gb=0) == 0
+
+
+def test_hachage_attendu_identique_a_tiktoken() -> None:
+    """Le SHA-256 contrôlé est celui que tiktoken exige : sinon il retéléchargerait le fichier."""
+    import tiktoken_ext.openai_public as publics
+
+    source = Path(publics.__file__).read_text(encoding="utf-8")
+    assert f'expected_hash="{tokenizers._SHA256_ENCODAGE}"' in source

@@ -14,6 +14,9 @@ from wavelibrarian.ports.measure import Tokenizer
 
 _ENCODAGE = "o200k_base"
 _URL_ENCODAGE = "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken"
+# SHA-256 attendu par tiktoken (`tiktoken_ext/openai_public.py`) : un fichier qui ne le
+# vérifie pas serait supprimé puis retéléchargé par tiktoken, d'où le contrôle préalable.
+_SHA256_ENCODAGE = "446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d"
 
 
 class ApproxTokenizer:
@@ -25,19 +28,31 @@ class ApproxTokenizer:
         return len(text.split())
 
 
-def _dossier_cache_tiktoken() -> Path:
-    """Même règle que tiktoken : `TIKTOKEN_CACHE_DIR`, `DATA_GYM_CACHE_DIR`, sinon le temporaire."""
+def _dossier_cache_tiktoken() -> Path | None:
+    """Même règle que tiktoken : `TIKTOKEN_CACHE_DIR`, `DATA_GYM_CACHE_DIR`, sinon le temporaire.
+
+    Une variable définie mais vide désactive le cache chez tiktoken (lecture réseau) : `None`.
+    """
     for var in ("TIKTOKEN_CACHE_DIR", "DATA_GYM_CACHE_DIR"):
-        valeur = os.environ.get(var)
-        if valeur:
-            return Path(valeur)
+        if var in os.environ:
+            valeur = os.environ[var]
+            return Path(valeur) if valeur else None
     return Path(tempfile.gettempdir()) / "data-gym-cache"
 
 
 def encodage_installe() -> bool:
-    """Vrai si l'encodage de référence est déjà en cache local (aucun accès réseau)."""
-    cle = hashlib.sha1(_URL_ENCODAGE.encode()).hexdigest()  # nom de fichier choisi par tiktoken
-    return (_dossier_cache_tiktoken() / cle).is_file()
+    """Vrai si l'encodage de référence est en cache local et intègre (aucun accès réseau).
+
+    Intègre = SHA-256 attendu par tiktoken, qui lit alors le cache sans jamais télécharger.
+    """
+    dossier = _dossier_cache_tiktoken()
+    if dossier is None:
+        return False
+    chemin = dossier / hashlib.sha1(_URL_ENCODAGE.encode()).hexdigest()  # nom choisi par tiktoken
+    try:
+        return hashlib.sha256(chemin.read_bytes()).hexdigest() == _SHA256_ENCODAGE
+    except OSError:
+        return False
 
 
 class ReferenceTokenizer:

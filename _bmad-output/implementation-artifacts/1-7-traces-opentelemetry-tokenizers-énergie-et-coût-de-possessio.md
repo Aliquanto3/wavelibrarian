@@ -1,7 +1,7 @@
 ---
 story: "1.7"
 title: Traces OpenTelemetry, tokenizers, énergie et coût de possession
-status: review
+status: done
 ---
 
 # Story 1.7 : Traces OpenTelemetry, tokenizers, énergie et coût de possession
@@ -42,3 +42,19 @@ status: review
 - Contradiction de lecture : le Catalogue donne à Haiku 5.5 `tokenizer: reference` ET `token_factor: 1.5` ; l'AC applique `token_factor` seulement hors `reference`. Retenu : `reference` = tokenizer de référence tel quel ; le facteur 1,5 de Haiku n'est donc pas appliqué par `tokenizer_for`. La passerelle (1.9) doit multiplier explicitement le décompte de référence par `token_factor` pour l'estimation avant appel (spine, séquence de réservation), à arbitrer.
 - Reports : 1.9 câble `RunContext.tokenizer_for`, `make_tokenizer(profil.tokenizer)`, le Tracer (`traces.jsonl` dans le dossier de l'Exécution), et lit `FakeEstimator`/`EcoLogitsEstimator` pour `wl.energy_*` ; le runner (epic 4) appelle `spread_energy` par phase locale et `possession_cost` dans le Rapport ; l'adaptateur Anthropic (1.11) lit `response.impacts`. `OfflineEmissionsTracker(gpu_ids=[])` et la détection du compteur matériel (`_hardware`, `_mode`) sont écrits sans codecarbon installé : à confirmer avec l'extra `energy` hors du run autonome.
 - Aucun appel réseau, ni Ollama, ni GPU (`CUDA_VISIBLE_DEVICES=-1`, threads à 4) ; codecarbon et ecologits non installés, jamais exécutés.
+
+## Revue
+
+Revue Opus en une passe, avec la liste du second avis (Haiku).
+
+- medium, second avis 1 : corrigé. Avec un cache tiktoken corrompu, tiktoken supprimait le fichier puis tentait `getaddrinfo` (reproduit). `encodage_installe` contrôle désormais le SHA-256 attendu par tiktoken avant tout appel, et tiktoken n'est donc jamais atteint sans fichier intègre. Un test vérifie que la constante reste celle de `tiktoken_ext/openai_public.py`.
+- low, second avis 2 : corrigé (immédiat, lié au 1). `TIKTOKEN_CACHE_DIR=""` désactive le cache chez tiktoken (lecture réseau) : c'est maintenant un encodage absent, avec `WlError`.
+- medium, second avis 3 : corrigé. Le patch de `builtins.__import__` ne touche pas `importlib.import_module`. Le test pose `sys.modules[nom] = None`, ce qui lève `ImportError` que l'extra soit installé ou non.
+- medium, second avis 4 : corrigé en partie, le reste reporté. `llm_impacts` n'est pas documentée (review-versions.md, point 5). Une API absente ou une signature changée lèvent `WlError`, et un modèle inconnu ou un autre échec sont journalisés en `warning` au lieu d'être avalés. Reporté à 1.11 et hors du run, avec l'extra `energy` : vérifier la signature de `ecologits.tracers.utils.llm_impacts` en 0.11.3 et le type de `impacts.energy.value`. AD-17 prescrit `EcoLogits.init` puis `response.impacts` dans l'adaptateur Anthropic : choisir entre les deux voies.
+- medium, second avis 5 : reporté. Le code est déjà défensif (sans `_hardware` ni `_mode`, on obtient `estimated`, test à l'appui). À vérifier hors du run, après le pilote, avec l'extra `energy` installé : (a) `OfflineEmissionsTracker(gpu_ids=[])` n'initialise pas NVML (une liste vide peut valoir « tous les GPU », et `CUDA_VISIBLE_DEVICES` ne masque rien à NVML) ; (b) les noms réels des attributs `tracker._hardware` et `hw._mode` en codecarbon 3.3.1 ; (c) sous Windows, la méthode vaut bien `estimated` ; (d) la règle « un matériel lu sur compteur suffit » pour une phase où le CPU est estimé et le GPU mesuré.
+- medium, second avis 6 : corrigé. `SimpleSpanProcessor` avale les exceptions d'export. L'exporteur compte ses lignes et garde l'erreur, et `record` lève `WlError` si la ligne n'est pas écrite. Cela couvre aussi `OTEL_SDK_DISABLED`, et le sampler est forcé à `ALWAYS_ON` pour que `OTEL_TRACES_SAMPLER` n'écarte aucun span.
+- low, second avis 7 : corrigé (immédiat). L'import paresseux est vérifié dans un processus neuf par `sys.modules`, et non plus sur le texte du source.
+- low, second avis 8 : rejeté. `spread_energy` est déjà typée `list[tuple[float | None, EnergyMethod]]`.
+- low, second avis 9 : rejeté. Sans modèle (span `local`), l'attribut est omis, comme le veut la convention OTel. §6 donne des types et pas d'obligation de présence, et le Rapport (epic 4) devra tolérer l'absence.
+- low, second avis 10 : corrigé. AD-11 impose un export synchrone dans un seul fil, donc l'OTLP passe aussi par `SimpleSpanProcessor`.
+- Décision de l'orchestrateur : `tokenizer_for` renvoie le tokenizer de référence brut pour `reference`, et `token_factor` s'applique dans la Passerelle (1.9). Conforme à contracts.md:163, non modifié.
