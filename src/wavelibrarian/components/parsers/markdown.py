@@ -6,7 +6,7 @@ from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from pydantic import BaseModel, ConfigDict
 
-from wavelibrarian.components.parsers._sections import SectionBuilder
+from wavelibrarian.components.parsers._sections import SectionBuilder, decoder
 from wavelibrarian.core.ids import sha16_bytes
 from wavelibrarian.core.types import DocMeta, ParsedDocument
 from wavelibrarian.registry import register
@@ -43,6 +43,7 @@ class MarkdownParser:
     """Markdown : un Block par titre, paragraphe, liste, bloc de code, tableau ou image."""
 
     formats = frozenset({"markdown"})
+    version = "1"  # à incrémenter quand la sortie change : invalide le cache de parsing
 
     class Params(BaseModel):
         model_config = ConfigDict(extra="forbid", frozen=True)
@@ -52,7 +53,7 @@ class MarkdownParser:
 
     def parse(self, source_path: str, raw: bytes, lang: str, meta: DocMeta) -> ParsedDocument:
         doc_id = sha16_bytes(raw)
-        texte = raw.decode("utf-8-sig", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+        texte = decoder(raw, source_path).replace("\r\n", "\n").replace("\r", "\n")
         jetons = self._md.parse(texte)
         sections = SectionBuilder(doc_id, source_path)
         i = 0
@@ -97,14 +98,31 @@ class MarkdownParser:
 
     @staticmethod
     def _bloc(sections: SectionBuilder, jetons: list[Token]) -> None:
-        """Paragraphe, liste ou citation : images en Blocks `image`, le reste en un Block `text`."""
+        """Paragraphe, liste ou citation : images en Blocks `image`, le reste en un Block `text`.
+
+        Un titre imbriqué (dans une citation ou une liste) ouvre sa section comme au premier niveau.
+        """
         lignes: list[str] = []
         images: list[str] = []
-        for tok in jetons:
+
+        def vider() -> None:
+            sections.block("text", "\n".join(ligne for ligne in lignes if ligne.strip()))
+            for alt in images:
+                sections.block("image", alt)
+            lignes.clear()
+            images.clear()
+
+        i = 0
+        while i < len(jetons):
+            tok = jetons[i]
+            if tok.type == "heading_open":
+                vider()
+                sections.heading(int(tok.tag[1]), _texte_inline(jetons[i + 1]))
+                i += 3
+                continue
             if tok.type == "inline":
                 lignes.append(_texte_inline(tok, images))
             elif tok.type in ("fence", "code_block"):
                 lignes.append(tok.content)
-        sections.block("text", "\n".join(ligne for ligne in lignes if ligne.strip()))
-        for alt in images:
-            sections.block("image", alt)
+            i += 1
+        vider()

@@ -3,6 +3,7 @@
 Les Parsers sont obtenus par le registre (`kind: parser`), sans importer `components` (AD-1).
 """
 
+import json
 import logging
 import os
 from collections.abc import Iterable
@@ -33,10 +34,11 @@ def parsers_par_format(formats: Iterable[str], parser: str = "auto") -> dict[str
         nom = AUTO.get(fmt) if parser == "auto" else parser
         if nom is None or nom not in registry.names("parser"):
             enregistres = ", ".join(registry.names("parser")) or "aucun"
+            manque = f" (Parser « {nom} » non encore disponible)" if nom else ""
             raise ConfigError(
                 "parser",
-                f"aucun Parser enregistré pour le format « {fmt} » (parser demandé : {parser}) ;"
-                f" Parsers disponibles : {enregistres}",
+                f"aucun Parser enregistré pour le format « {fmt} »{manque} (parser demandé :"
+                f" {parser}) ; Parsers disponibles : {enregistres}",
             )
         if fmt not in getattr(registry.get("parser", nom), "formats", frozenset()):
             raise ConfigError("parser", f"le Parser « {nom} » ne prend pas en charge « {fmt} »")
@@ -53,17 +55,26 @@ def _wl_home(wl_home: Path | None) -> Path:
     return wl_home or Path(os.environ.get("WL_HOME") or ".wl")
 
 
-def _lire_cache(chemin: Path) -> ParsedDocument | None:
+def _version(cls: Any) -> str:
+    return str(getattr(cls, "version", "0"))
+
+
+def _lire_cache(chemin: Path, version: str) -> ParsedDocument | None:
+    """Document en cache, ou None s'il est absent, corrompu ou d'une autre version du Parser."""
     try:
-        return ParsedDocument.model_validate_json(chemin.read_text(encoding="utf-8"))
+        contenu = json.loads(chemin.read_text(encoding="utf-8"))
+        if not isinstance(contenu, dict) or contenu.get("parser_version") != version:
+            return None
+        return ParsedDocument.model_validate(contenu.get("document"))
     except (OSError, ValueError):
-        return None  # absent ou corrompu : on reparse
+        return None  # on reparse
 
 
-def _ecrire_cache(chemin: Path, doc: ParsedDocument) -> None:
+def _ecrire_cache(chemin: Path, doc: ParsedDocument, version: str) -> None:
     chemin.parent.mkdir(parents=True, exist_ok=True)
     tmp = chemin.with_name(f"{chemin.name}.{os.getpid()}.tmp")
-    tmp.write_text(doc.model_dump_json(), encoding="utf-8")
+    contenu = {"parser_version": version, "document": doc.model_dump(mode="json")}
+    tmp.write_text(json.dumps(contenu, ensure_ascii=False), encoding="utf-8")
     tmp.replace(chemin)
 
 
@@ -97,18 +108,18 @@ def ingest(
     documents: list[ParsedDocument] = []
     for doc in corpus.documents:  # déjà triés par source_path
         nom = par_format[doc.format]
+        cls = registry.get("parser", nom)
         fichier = cache / nom / f"{doc.doc_id}.json"
-        parse = _lire_cache(fichier)
+        parse = _lire_cache(fichier, _version(cls))
         if parse is None:
             if nom not in instances:
-                cls = registry.get("parser", nom)
                 instances[nom] = cls(cls.Params(), None)
             try:
                 parse = instances[nom].parse(doc.source_path, corpus.read(doc), doc.lang, doc.meta)
             except (OSError, ValueError) as exc:
                 log.warning("Document illisible ignoré : %s (%s)", doc.source_path, exc)
                 continue
-            _ecrire_cache(fichier, parse)
+            _ecrire_cache(fichier, parse, _version(cls))
         documents.append(_reancrer(parse, doc))
     paires = sorted((d.source_path, d.doc_id) for d in documents)
     fingerprint = sha16(*(f"{p}\x1e{i}" for p, i in paires))

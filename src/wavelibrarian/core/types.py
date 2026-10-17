@@ -106,13 +106,22 @@ class ParsedCorpus(_Modele):
         return ""
 
     def resolve(self, source_path: str, page: int | None, headings: tuple[str, ...]) -> str | None:
-        """Renvoie l'`anchor_id` (page prioritaire, sinon titres) ou None s'il n'existe pas."""
+        """Renvoie l'`anchor_id` (page prioritaire, sinon titres) ou None s'il n'existe pas.
+
+        Les titres sont d'abord cherchés tels quels (espaces normalisés) dans les `heading_path`,
+        dans l'ordre du Document : « Note 2 » désigne ce titre, pas le doublon suffixé `note-2`.
+        À défaut, le chemin de slugs est essayé.
+        """
         for doc in self.documents:
             if doc.source_path != source_path:
                 continue
             if page is not None:
                 candidat = f"{doc.doc_id}#p{page}"
             elif headings:
+                voulu = tuple(" ".join(h.split()) for h in headings)
+                for anchor_id, ancre in doc.anchors.items():
+                    if ancre.page is None and ancre.heading_path == voulu:
+                        return anchor_id
                 candidat = f"{doc.doc_id}#h/" + "/".join(slug(h) for h in headings)
             else:
                 return None

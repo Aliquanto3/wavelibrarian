@@ -1,5 +1,6 @@
 """Tests des Parsers markdown, text, html et de l'ingestion (story 2.2)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from wavelibrarian.components.parsers.markdown import MarkdownParser
 from wavelibrarian.components.parsers.text import TextParser
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.core.ids import sha16_bytes
-from wavelibrarian.core.types import DocMeta
+from wavelibrarian.core.types import DocMeta, ParsedCorpus
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_format
 
@@ -101,8 +102,51 @@ def test_html_hierarchie_et_tableau():
     assert table.anchor_id == f"{d}#h/guide/etape-a"
     assert table.text == "X | Y\n1 | 2"
     assert doc.blocks[0].text == "Avant."
-    assert any(b.text == "Fin grasse ." or b.text == "Fin grasse." for b in doc.blocks)
+    assert doc.blocks[-3].text == "Fin grasse."  # balise en ligne fondue sans espace parasite
     assert all("p{}" not in b.text and b.text != "T" for b in doc.blocks)
+
+
+def test_html_script_style_dans_body_ignores():
+    raw = b"<body><script>var x=1</script><h1>A</h1><style>a{}</style><p>x</p></body>"
+    doc = _parse(HtmlParser, "s.html", raw)
+    assert [(b.kind, b.text) for b in doc.blocks] == [("heading", "A"), ("text", "x")]
+
+
+def test_encodage_utf8_et_repli_cp1252(caplog: pytest.LogCaptureFixture):
+    # UTF-8 avec BOM : accents conservés, slug ASCII
+    raw = "﻿<h1>Été</h1><p>déjà</p>".encode()
+    doc = _parse(HtmlParser, "u.html", raw)
+    d = sha16_bytes(raw)
+    assert list(doc.anchors) == [f"{d}#h/ete"]
+    assert doc.anchors[f"{d}#h/ete"].heading_path == ("Été",)
+    # cp1252 : repli explicite signalé au journal, pas de caractère de remplacement
+    raw = "# Été\n\ndéjà\n".encode("cp1252")
+    doc = _parse(MarkdownParser, "c.md", raw)
+    assert list(doc.anchors) == [f"{sha16_bytes(raw)}#h/ete"]
+    assert [b.text for b in doc.blocks] == ["Été", "déjà"]
+    assert "UTF-8" in caplog.text
+
+
+def test_crlf_meme_ancrage_que_lf():
+    lf = b"# Histoire\n\n## Fondation\n\nTexte.\n"
+    crlf = lf.replace(b"\n", b"\r\n")
+    a, b = _parse(MarkdownParser, "a.md", lf), _parse(MarkdownParser, "a.md", crlf)
+    suffixes = [k.split("#", 1)[1] for k in a.anchors]
+    assert suffixes == ["h/histoire", "h/histoire/fondation"]
+    assert [k.split("#", 1)[1] for k in b.anchors] == suffixes
+    assert [x.text for x in a.blocks] == [x.text for x in b.blocks]
+
+
+def test_titre_dans_citation_ou_liste_ouvre_une_section():
+    raw = b"> # Cit\n> txt\n\n- ## Li\n  t\n"
+    doc = _parse(MarkdownParser, "q.md", raw)
+    d = sha16_bytes(raw)
+    assert [(b.kind, b.text, b.anchor_id) for b in doc.blocks] == [
+        ("heading", "Cit", f"{d}#h/cit"),
+        ("text", "txt", f"{d}#h/cit"),
+        ("heading", "Li", f"{d}#h/cit/li"),
+        ("text", "t", f"{d}#h/cit/li"),
+    ]
 
 
 def test_freres_identiques_ordinal_deterministe():
@@ -120,6 +164,13 @@ def test_freres_identiques_ordinal_deterministe():
     assert list(doc1.anchors) == attendu
     assert list(doc2.anchors) == attendu
     assert doc1.anchors[attendu[2]].heading_path == ("Doc", "Note")
+    # resolve suit les titres bruts : « Note 2 » est le vrai titre, pas le doublon `note-2`
+    corpus = ParsedCorpus(corpus_id="c", fingerprint="f", documents=(doc1,))
+    assert corpus.resolve("d.md", None, ("Doc", "Note 2")) == attendu[4]
+    assert corpus.anchor_text(attendu[4]) == "Note 2\n\nd"
+    assert corpus.resolve("d.md", None, ("Doc", "Note")) == attendu[1]  # premier des doublons
+    assert corpus.resolve("d.md", None, ("Doc", "  Note ")) == attendu[1]  # espaces normalisés
+    assert corpus.resolve("d.md", None, ("doc", "note")) == attendu[1]  # repli sur les slugs
 
 
 def test_niveaux_sautes_et_remontee():
@@ -161,7 +212,7 @@ def test_parsers_par_format_auto():
         parsers_par_format(["html"], "markdown")  # le Parser ne couvre pas le format
     with pytest.raises(ConfigError):
         parsers_par_format(["markdown"], "inconnu")
-    with pytest.raises(ConfigError):
+    with pytest.raises(ConfigError, match="pdf_text » non encore disponible"):
         parsers_par_format(["pdf"])  # pdf_text arrive avec la story 2.3
 
 
@@ -217,6 +268,23 @@ def test_cache_corrompu_reparse_et_renommage(tmp_path: Path, wl_home: Path):
     ingest(corpus)
     (wl_home / "parse_cache" / "markdown" / f"{sha16_bytes(MD)}.json").write_text("{pas du json")
     assert len(ingest(corpus).documents) == 1  # reparsé sans erreur
+    # une autre version du Parser invalide le cache
+    fichier = wl_home / "parse_cache" / "markdown" / f"{sha16_bytes(MD)}.json"
+    assert json.loads(fichier.read_text(encoding="utf-8"))["parser_version"] == "1"
+    appels: list[str] = []
+    original = MarkdownParser.parse
+
+    def compte(self, source_path, raw, lang, meta):
+        appels.append(source_path)
+        return original(self, source_path, raw, lang, meta)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(MarkdownParser, "parse", compte)
+        ingest(corpus)
+        assert appels == []
+        mp.setattr(MarkdownParser, "version", "2")
+        ingest(corpus)
+        assert appels == ["a.md"]
     # même contenu sous un autre nom : le cache par contenu est réancré sur le nouveau chemin
     renomme = declare(_corpus(tmp_path / "r", {"autre.md": MD}))
     doc = ingest(renomme).documents[0]

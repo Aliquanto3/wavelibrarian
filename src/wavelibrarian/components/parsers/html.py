@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from bs4.element import NavigableString, PageElement, Tag
 from pydantic import BaseModel, ConfigDict
 
-from wavelibrarian.components.parsers._sections import SectionBuilder
+from wavelibrarian.components.parsers._sections import SectionBuilder, decoder
 from wavelibrarian.core.ids import sha16_bytes
 from wavelibrarian.core.types import DocMeta, ParsedDocument
 from wavelibrarian.registry import register
@@ -44,6 +44,7 @@ class HtmlParser:
     """HTML : un Block par titre, bloc de texte, tableau ou image, dans l'ordre du Document."""
 
     formats = frozenset({"html"})
+    version = "1"  # à incrémenter quand la sortie change : invalide le cache de parsing
 
     class Params(BaseModel):
         model_config = ConfigDict(extra="forbid", frozen=True)
@@ -53,7 +54,7 @@ class HtmlParser:
 
     def parse(self, source_path: str, raw: bytes, lang: str, meta: DocMeta) -> ParsedDocument:
         doc_id = sha16_bytes(raw)
-        soupe = BeautifulSoup(raw.decode("utf-8-sig", errors="replace"), "html.parser")
+        soupe = BeautifulSoup(decoder(raw, source_path), "html.parser")
         sections = SectionBuilder(doc_id, source_path)
         self._parcourir(soupe.body or soupe, sections)
         return ParsedDocument(
@@ -70,7 +71,7 @@ class HtmlParser:
         tampon: list[str] = []
 
         def vider() -> None:
-            sections.block("text", " ".join(" ".join(tampon).split()))
+            sections.block("text", " ".join("".join(tampon).split()))
             tampon.clear()
 
         enfant: PageElement
@@ -97,5 +98,5 @@ class HtmlParser:
                 vider()
                 self._parcourir(enfant, sections)
             else:
-                tampon.append(enfant.get_text(" "))
+                tampon.append(enfant.get_text())
         vider()

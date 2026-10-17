@@ -4,10 +4,16 @@ Règle d'ancrage (AD-5) : un Block est rattaché au titre le plus profond ouvert
 `<doc_id>#h/<slug>/<slug>`. Le texte avant le premier titre, ou d'un fichier sans titre, est
 rattaché à `<doc_id>#h/`. Deux titres frères de même slug reçoivent un suffixe ordinal : le
 premier garde le slug, le deuxième prend `-2`, le troisième `-3`, etc. (déterministe, par ordre
-dans le Document ; `resolve` ne retrouve que le premier, les suivants s'adressent par leur
-`anchor_id`). Un titre sans lettre ni chiffre prend le slug `section`.
+dans le Document ; si `-2` est déjà le slug d'un vrai titre frère, on passe à `-3`).
+`ParsedCorpus.resolve` cherche d'abord le chemin de titres bruts : il retrouve un vrai titre
+« Note 2 » et, pour des doublons exacts, le premier ; les suivants s'adressent par leur
+`anchor_id`. Un titre sans lettre ni chiffre prend le slug `section`.
+
+Encodage : UTF-8 (BOM toléré) ; à défaut, repli explicite sur cp1252 avec un avertissement au
+journal, plutôt que des caractères de remplacement qui fausseraient titres et slugs.
 """
 
+import logging
 from collections import defaultdict
 from typing import Literal
 
@@ -15,6 +21,17 @@ from wavelibrarian.core.ids import slug
 from wavelibrarian.core.types import Anchor, Block
 
 Kind = Literal["text", "table", "heading", "image"]
+
+log = logging.getLogger(__name__)
+
+
+def decoder(raw: bytes, source_path: str) -> str:
+    """Texte du Document : UTF-8 strict, sinon cp1252 signalé au journal."""
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        log.warning("%s n'est pas en UTF-8 : décodé en cp1252", source_path)
+        return raw.decode("cp1252", errors="replace")
 
 
 class SectionBuilder:
