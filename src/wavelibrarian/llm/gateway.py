@@ -190,6 +190,8 @@ class MeteredGateway:
             self._trace(marquee, nom, devise, "error", latency_s=self._timer() - debut)
             raise
         latence = self._timer() - debut
+        if reponse.latency_s is not None:  # latence déclarée (Faux LLM : 0, contracts.md §3)
+            latence = reponse.latency_s
         # Appel payé : un span porte son coût quoi qu'il arrive (traces.jsonl, source des coûts).
         cout, panne = estimation, None
         try:

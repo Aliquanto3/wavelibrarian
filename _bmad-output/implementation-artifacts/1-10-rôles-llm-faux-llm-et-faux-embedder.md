@@ -1,7 +1,7 @@
 ---
 story: "1.10"
 title: Rôles LLM, Faux LLM et faux embedder
-status: review
+status: done
 ---
 
 # Story 1.10 : Rôles LLM, Faux LLM et faux embedder
@@ -24,7 +24,7 @@ status: review
 - `extract_entities` : séquences de mots capitalisés (un mot de début de phrase compte), dédoublonnées ; une relation (poids 1.0) entre entités voisines. `select_nodes` : `done` vaut toujours `true`. `agent_step` : sans résultat à l'étape 2 ou plus, `answer` avec `abstain: true` ; `args` de `answer` = `answer`, `citations` (l'id du premier résultat), `abstain`. `question_gen` : une question `factual` par ancrage, `answer_form: free`, `types` ignoré.
 - Tokens : `input_tokens` = mots du system et des messages moins les mots lus du cache ; `output_tokens` = mots de la sortie ; `cache_read_tokens` = mots du plus long préfixe en cache (system si `cache_system`, messages jusqu'à un `cache`) déjà vu par cette instance ; `cache_write_tokens` reste 0.
 - `script` : le premier scénario dont le rôle est égal et dont le glob (`fnmatchcase`) couvre `step` répond ; la sortie peut être une chaîne ou une fonction de la requête (marquée). Un scénario n'est pas validé contre le schéma : c'est la passerelle qui lève `NonConformantOutput`.
-- Cache : `step` n'entre pas dans la clé, donc deux appels de même prompt, mêmes `inputs` et même `pass_id` partagent leur réponse, scénarisée ou non (règle de 1.8).
+- Cache : pour le provider `fake`, `step` entre dans la clé avec `inputs` (revue) : une sortie scénarisée n'est servie qu'aux étapes de même nom.
 - Faux embedder : sac de mots haché (`blake2b`, indice et signe) en dimension du Catalogue (64), norme L2 = 1 (float32), texte vide ramené à un vecteur fixe ; `embed_queries` = `embed_passages`. Un span `embed` (kind `embed`, coût 0 EUR, tokens du `ctx.tokenizer_for`) par appel, y compris pour une liste vide.
 
 ## Tâches et critères
@@ -43,3 +43,13 @@ status: review
 ## Auto Run Result
 
 Livré sans réseau, sans GPU, sans appel Ollama. Reports : `cache_write_tokens` du faux reste 0 (le contrat ne le demande pas) ; la suite de conformité des Architectures (stories 5.x) fixera le contenu attendu de `agent_step` et `select_nodes` en boucle ; le runner (epic 4) doit construire `FakeProvider` et le passer à `build_gateway(providers={"fake": ...})`.
+
+## Revue
+
+- medium, second avis 1-2 : corrigé. `step` hors clé : la sortie scénarisée d'une étape était servie par le cache à une étape non scénarisée de même prompt et mêmes `inputs`, et l'inverse (reproduit). `cache_key` ajoute `step` pour le seul provider `fake`, une ligne ajoutée à contracts.md §3.
+- medium, second avis 3 : corrigé. Avec le minuteur par défaut, la passerelle traçait environ 1e-4 s pour le Faux LLM. `ProviderResponse.latency_s` (optionnel) porte la latence déclarée par le provider, le Faux LLM déclare 0 et la passerelle la reprend. Le test garde le minuteur par défaut et vérifie aussi le span.
+- medium, second avis 4 : corrigé avec 1-2. `pass_id=1` est retiré et le test couvre les deux sens (défaut puis scénarisé `crag.grade.loop2`, aucun servi par le cache). Sans le correctif, le test échoue.
+- low, second avis 5 : rejeté. Le marqueur de rôle fait partie du system réellement envoyé, qu'un provider réel compte lui aussi. Le contrat dit « tokens : nombre de mots » sans exclure le marqueur.
+- low, second avis 9 : non corrigé. `_INPUTS` de `test_gateway.py` suffit aux rôles qu'il exerce, et les 15 rôles sont couverts par `test_roles_fake.py`.
+- low, second avis 10 : rejeté. Vider `_REGISTRE` après `discover()` le désynchroniserait de `sys.modules` (un module déjà importé ne se réenregistre pas). Le vrai `fake` enregistré est l'état normal, et la fixture restaure déjà `_decouvert`.
+- low, revue : reporté. Le Cache de réponses est persistant (`WL_HOME`) : une sortie scénarisée en cache est resservie à un run suivant qui a un autre scénario, ou aucun, avec le même modèle `fake`. Le runner (epic 4) devra isoler le cache des runs scénarisés, par exemple avec un `WL_HOME` temporaire en test.

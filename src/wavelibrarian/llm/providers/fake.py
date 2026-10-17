@@ -216,7 +216,7 @@ class FakeProvider:
 
     def complete(self, request: LLMRequest, *, timeout_s: float) -> ProviderResponse:
         texte = self._sortie(request)
-        return ProviderResponse(text=texte, usage=self._usage(request, texte))
+        return ProviderResponse(text=texte, usage=self._usage(request, texte), latency_s=0.0)
 
     def _sortie(self, request: LLMRequest) -> str:
         for s in self._scenarios:

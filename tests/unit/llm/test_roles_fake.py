@@ -289,10 +289,11 @@ def test_cache_read_tokens_prefixe_deja_vu() -> None:
 
 
 def test_latence_nulle_par_la_passerelle(env: Env) -> None:
-    ticks = iter([5.0, 5.0, 5.0, 5.0])
-    env.gw._timer = lambda: next(ticks)  # type: ignore[attr-defined]
+    # minuteur par défaut de la passerelle : la latence déclarée par le Faux LLM prime
+    assert env.fake.complete(_req("summarize", {"text": "a"}), timeout_s=1).latency_s == 0.0
     res = env.gw.complete(_req("summarize", {"text": "a"}))
-    assert res.latency_s == 0.0
+    assert res.latency_s == 0.0 and not res.from_cache
+    assert env.spans()[-1]["wl.latency_s"] == 0.0
 
 
 def test_script_prime_sur_le_defaut(env: Env) -> None:
@@ -303,10 +304,14 @@ def test_script_prime_sur_le_defaut(env: Env) -> None:
         _req("grade_relevance", inputs, step="crag.grade.loop1"), schema
     )
     assert scripte.model_dump()["scores"] == [0.1]
-    autre, _ = env.gw.complete_structured(
-        _req("grade_relevance", inputs, step="autre", pass_id=1), schema
+    # même prompt, mêmes `inputs`, même `pass_id` : l'étape non scénarisée n'est pas servie
+    # par la sortie scénarisée en cache, ni l'inverse (`step` dans la clé du provider fake)
+    autre, res = env.gw.complete_structured(_req("grade_relevance", inputs, step="autre"), schema)
+    assert autre.model_dump() == defaut and not res.from_cache
+    encore, res = env.gw.complete_structured(
+        _req("grade_relevance", inputs, step="crag.grade.loop2"), schema
     )
-    assert autre.model_dump() == defaut
+    assert encore.model_dump()["scores"] == [0.1] and not res.from_cache
 
 
 def test_script_callable_et_role_inconnu(env: Env) -> None:

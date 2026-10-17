@@ -25,9 +25,10 @@ def cache_key(request: LLMRequest, provider: str) -> str:
     """`sha256(canonical_json(model, params, system, messages, pass_id))`.
 
     `step`, `role`, `cache_system`, `Message.cache` et `timeout_s` n'y entrent pas (ils ne
-    changent pas la réponse). `inputs` n'y entre que pour un provider `fake`, qui ne lit que lui
-    (AD-4, contracts.md §2.2). `system` est pris tel quel : la passerelle y a déjà posé le
-    marqueur de rôle, qui fait entrer le rôle dans la clé (le Faux LLM répond selon le rôle).
+    changent pas la réponse). `inputs` et `step` n'y entrent que pour un provider `fake` : il
+    ne lit que `inputs`, et sa sortie scénarisée dépend de `step` (AD-4, contracts.md §2.2, §3).
+    `system` est pris tel quel : la passerelle y a déjà posé le marqueur de rôle, qui fait
+    entrer le rôle dans la clé (le Faux LLM répond selon le rôle).
     Un system sans ce marqueur lève `ValueError` : la clé se calcule après le marquage.
     """
     if not request.system.startswith(role_marker(request.role)):
@@ -48,6 +49,7 @@ def cache_key(request: LLMRequest, provider: str) -> str:
     }
     if provider == "fake":
         contenu["inputs"] = request.inputs
+        contenu["step"] = request.step  # `script(role, step_glob, …)` : sortie selon l'étape
     return hashlib.sha256(canonical_json(contenu).encode("utf-8")).hexdigest()
 
 

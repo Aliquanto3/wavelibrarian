@@ -512,7 +512,7 @@ Le Faux LLM ne lit jamais le texte du prompt : il lit `LLMRequest.inputs`, dont 
 
 Les Architectures `agentic` et `pageindex` doivent produire au moins une citation valide sur une question factuelle du Mini-corpus avec ce faux (suite de conformité).
 
-Mode scénarisé (FR-52) : `FakeProvider.script(role: str, step_glob: str, output: str | Callable[[LLMRequest], str])`. La sortie scénarisée prime sur le comportement par défaut. Tokens : nombre de mots. `cache_read_tokens` vaut le nombre de mots du préfixe déjà vu (system et messages marqués `cache`). La latence vaut 0.
+Mode scénarisé (FR-52) : `FakeProvider.script(role: str, step_glob: str, output: str | Callable[[LLMRequest], str])`. La sortie scénarisée prime sur le comportement par défaut ; pour un modèle de provider fake, `step` entre donc dans la clé du Cache de réponses avec `inputs`. Tokens : nombre de mots. `cache_read_tokens` vaut le nombre de mots du préfixe déjà vu (system et messages marqués `cache`). La latence vaut 0 : le Faux LLM la déclare (`ProviderResponse.latency_s`) et la passerelle la reprend au lieu de la mesurer.
 
 ## 4. Schémas YAML
 
