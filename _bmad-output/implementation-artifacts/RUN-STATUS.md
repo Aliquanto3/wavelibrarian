@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 00:28 |
-| Story en cours | 2.5 (voie B, revue) ; 3.3 (voie A) |
-| Stories livrées | 18 / 56 |
+| Mis à jour | 2026-10-18 00:37 |
+| Story en cours | 3.3 (voie A, second avis) ; 2.6 (voie B) |
+| Stories livrées | 19 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -90,6 +90,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **3.6 (`geler`)** : agréger toutes les erreurs du fichier de Questions (aujourd'hui une seule `ConfigError`) (story 3.1).
 - **Runner (epic 4), RunContext** : garder le contexte vivant (`with`) pendant toute l'Exécution, sinon le GC libère `run.lock` ; fixer `parser` depuis la Configuration ; écrire `manifest.json`, `run.log`, `experiment.resolved.yaml` ; prévoir une libération manuelle d'une réservation `hors_execution` orpheline (story 3.2).
 - **Toute commande hors Exécution** : ouvrir `ctx.scope(post=...)` avant tout appel LLM (la passerelle refuse sinon) ; traces dans `WL_HOME/hors-execution/<run_id>/` (story 3.2).
+- **Extraction d'entités (2.4)** : l'heuristique rate les noms en début de phrase (Maëlis Torvane trouvée dans 3 Documents sur 7) ; à revoir si les questions multi-hop ou GraphRAG en dépendent (story 2.5).
 
 ## Journal de surveillance
 
@@ -116,6 +117,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 00:07 | 5 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 5 tronq., 37 s/tronq. vs 36 (-4 %) ; pire -4 % | 21 % | 12.1 Go | 1 s, 86 Mo, 75 thr (13 proc) | Sous les seuils : on continue (3.2) |
 | 00:16 | 1 tronq. (qwen3.5:4b) : think_on extraction/extraction-fr 1 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 9 % | 14.9 Go | 1 s, 86 Mo, 74 thr (13 proc) | Sous les seuils : on continue (2.5) |
 | 00:28 | 15 tronq. (qwen3.5:4b) : think_on extraction/jsonschemabench 8 tronq., 35 s/tronq. (pas de réf.) ; think_on extraction/extraction-fr 7 tronq., 36 s/tronq. vs 36 (+0 %) ; pire +0 % | 12 % | 11.6 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (3.3) |
+| 00:37 | 12 tronq. (qwen3.5:4b) : think_on extraction/jsonschemabench 7 tronq., 36 s/tronq. vs 35 (-2 %) ; think_on instructions/ifbench 5 tronq., 35 s/tronq. (pas de réf.) ; pire -2 % | 9 % | 11.4 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue (2.6) |
 
 ## Journal des stories
 
@@ -139,3 +141,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 3.1 | 23:53 | 00:07 | aceba11c9b85330dd934cc47fe9e9ea570a3d329 | 0 $ | Revue : Ancrage page+titres ambigu signalé, repli par slug restreint, messages pydantic traduits en français (transverse), faux signalement scenario corrigé. 394 tests verts. |
 | 2.4 | 00:00 | 00:16 | 548387418f8e561c7cb16e2e394b257c1b821acd | 0 $ | Revue : apostrophe typographique unifiée, entités après élision, entités d'une lettre écartées, décimales à virgule, échec d'écriture → code 1. Conflit cli.py résolu au rebase. 404 tests verts. |
 | 3.2 | 00:08 | 00:28 | 3c04983236ddbeae3975d70e129d8224ef2f4caa | 0 $ | Revue : réservations hors Exécution protégées de recover_orphans (colonne + migration), Poste obligatoire (appel hors scope refusé), traces hors Exécution séparées, run_id validé, verrou libéré sur échec, test inter-processus. 425 tests verts. |
+| 2.5 | 00:17 | 00:37 | 44826159e0192fdacf664bd2d990fb76a116696b | 0 $ | 20 Documents (16 md, 4 pdf), 4 361 mots, police DejaVu commitée (5,5 Mo téléchargés une fois, licence libre). Revue : contradictions d'univers non voulues corrigées, contracts.md §4.1/§4.7 alignés (chemins relatifs à path), long Document porté à 1 157 mots. |
