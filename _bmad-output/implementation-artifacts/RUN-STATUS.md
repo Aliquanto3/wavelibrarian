@@ -65,7 +65,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 
 - **2.2** : table format → parser enregistré à partir de `DeclaredCorpus.formats` (2.1), pour remplacer `parser: auto` (stories 1.5 et 2.1).
 - **4.3 / 4.4** : le runner remplace `parser: auto` par le parser concret avant `write_resolved` et `RunContext.parser` (stories 1.2 et 1.5) ; vérifier que `experiment.resolved.yaml` ne contient plus `auto`.
-- **Epic 3 (`wl calibrer`)** : écrire `calibration.json` au format §4.6 retenu en 1.6 (par Juge, `excluded` booléen strict, `criteria`).
+- **Epic 5 (`wl calibrer`, FR-38)** : écrire `calibration.json` au format §4.6 retenu en 1.6 (par Juge, `excluded` booléen strict, `criteria`).
 - **1.9 (Passerelle)** : câbler `RunContext.tokenizer_for(model_id, catalog, reference)`, `make_tokenizer(profil.tokenizer)` et le `Tracer` ; appliquer `token_factor` (1,5 pour Haiku) à l'estimation avant appel ; poser `wl.energy_*` via `FakeEstimator` / `EcoLogitsEstimator` (story 1.7).
 - **1.11 (providers)** : brancher les providers sur le protocole `Provider` (`llm/providers/base.py`, `complete(request, *, timeout_s)` → `ProviderResponse`) ; délai dépassé après envoi → régler à l'estimation au lieu de libérer, à vérifier sur un vrai appel interrompu ; le poids du schéma de sortie dans l'estimation dépend du mode d'envoi (outil ou `format`) (story 1.9).
 - **1.11 (providers, suite)** : lire `response.impacts` (AD-17 : `EcoLogits.init`) et vérifier `llm_impacts` en ecologits 0.11.3 (story 1.7).
