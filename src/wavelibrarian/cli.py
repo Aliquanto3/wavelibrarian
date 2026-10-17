@@ -26,7 +26,7 @@ from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_f
 from wavelibrarian.corpus.profile import profile as profil_corpus
 from wavelibrarian.corpus.scenario import corpus_apres as scenario_corpus_apres
 from wavelibrarian.corpus.tiers import tirer_chemins
-from wavelibrarian.evalset import check, generate, io
+from wavelibrarian.evalset import check, closed_book, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
@@ -263,6 +263,56 @@ def questions_generer(
         typer.echo(f"Manquantes pour {type_} : {n}")
     origine = "servi par le Cache de réponses" if res.depuis_cache else "appel au modèle"
     typer.echo(f"Coût : {res.cout.replace('.', ',')} ({origine}), Poste evalset.")
+
+
+@questions_app.command("closed-book")
+def questions_closed_book(
+    questions: Annotated[Path, typer.Argument(help="Fichier questions.yaml à filtrer.")],
+    modeles: Annotated[
+        str | None,
+        typer.Option("--modeles", help="Modèles interrogés, séparés par des virgules."),
+    ] = None,
+    profil: Annotated[str, typer.Option("--profil", help="Profil : cpu, gpu ou test.")] = "cpu",
+    graine: Annotated[int, typer.Option("--graine", help="Graine de l'Exécution.")] = 42,
+) -> None:
+    """Remplit `contaminated_by` : modèles qui connaissent déjà la Réponse (Filtre closed-book)."""
+    try:
+        jeu = io.load(questions)
+        reglages = load_profile(profil)
+        noms = (
+            [m.strip() for m in modeles.split(",")]
+            if modeles is not None
+            else list(reglages.defaults.closed_book_models)
+        )
+        closed_book.valider_modeles(noms, load_catalog())  # inconnu au Catalogue : code 2
+    except ConfigError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    try:
+        with _contexte_hors_execution(profil, graine) as ctx:
+            res = closed_book.filtrer(ctx, jeu, noms)
+    except BudgetExceeded as erreur:
+        typer.echo(f"Plafond atteint : {erreur} ; fichier inchangé.", err=True)
+        raise typer.Exit(3) from erreur
+    except ConfigError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except ProviderError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(4) from erreur
+    except WlError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    if res.fichier != jeu:
+        io.save(questions, res.fichier)  # seul `contaminated_by` change : le Gel reste valide
+    posees = len({v.question_id for v in res.verdicts})
+    typer.echo(f"Modèles interrogés : {', '.join(noms)}")
+    typer.echo(f"Questions posées : {posees} ; non posées (unanswerable) : {len(res.exclues)}")
+    contaminees = res.contaminees
+    typer.echo(f"Questions contaminées : {len(contaminees)}")
+    for qid, ms in contaminees.items():
+        typer.echo(f"  - {qid} : {', '.join(ms)}")
+    typer.echo("Poste de coût : judging.")
 
 
 def _fr(valeur: float, decimales: int = 2) -> str:
