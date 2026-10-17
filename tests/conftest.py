@@ -24,6 +24,7 @@ def wl_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture(scope="session")
 def minicorpus(tmp_path_factory: pytest.TempPathFactory) -> ParsedCorpus:
-    """Mini-corpus fictif ingéré (profil `test`, Parsers `auto`), mis en cache pour la session."""
+    """Mini-corpus fictif ingéré avec les Parsers `auto` (sans modèle ni réseau, ce qu'exige le
+    profil `test`) et un cache de parsing temporaire ; une seule ingestion pour la session."""
     wl_home = tmp_path_factory.mktemp("wl_home_minicorpus")
     return ingest(declare(CORPUS_MINICORPUS), wl_home=wl_home)

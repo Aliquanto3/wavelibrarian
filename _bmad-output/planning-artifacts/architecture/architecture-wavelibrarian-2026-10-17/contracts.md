@@ -530,11 +530,13 @@ license: CC-BY-4.0
 publishable: true                     # false ou licence restrictive : path hors dépôt ou ignoré par git (FR-5)
 volatility: low                       # low | medium | high (déclarée au MVP)
 documents:                            # optionnel, clé = source_path
-  docs/charte.md: {lang: fr, sensitivity: interne, rights_profiles: [rh]}
+  charte.md: {lang: fr, sensitivity: interne, rights_profiles: [rh]}
 tiers:                                # optionnel (FR-54)
   seed: 42
   sizes: [5, 10, 20]
 ```
+
+Les clés de `documents:` sont des `source_path`, relatifs à `path` (ici `docs`) ; la forme préfixée (`docs/charte.md`) est tolérée.
 
 ### 4.2 Catalogue de modèles — `defaults/models.yaml`
 
@@ -724,12 +726,12 @@ annotations:
 scenario_id: minicorpus-maj-1
 corpus_id: minicorpus
 operations:                            # appliquées dans l'ordre
-  - {id: op-1, op: add,    source: updates/chronique-1415.md, target: docs/chronique-1415.md}
-  - {id: op-2, op: modify, source: updates/charte-v2.md,      target: docs/charte.md}
-  - {id: op-3, op: delete,                                    target: docs/note-obsolete.md}
+  - {id: op-1, op: add,    source: updates/chronique-1415.md, target: chronique-1415.md}
+  - {id: op-2, op: modify, source: updates/charte-v2.md,      target: charte.md}
+  - {id: op-3, op: delete,                                    target: note-obsolete.md}
 ```
 
-`target` est un `source_path` du Corpus. `source` se résout par rapport au fichier du scénario.
+`target` est un `source_path` du Corpus, relatif à son `path` (ici `docs`). `source` se résout par rapport au fichier du scénario.
 
 ## 5. Fichiers d'une Exécution — `<WL_HOME>/runs/<run_id>/`
 

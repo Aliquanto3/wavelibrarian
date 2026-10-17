@@ -8,7 +8,7 @@ On raconte qu'une femme, Elwenn Marsac, sonne la cloche du port les nuits de bro
 
 ## Le hareng d'argent
 
-Un hareng plus grand qu'une barque vivrait dans la fosse située au large de Brumeval. Quiconque le voit doit rejeter à l'eau sa première prise de la saison. Les pêcheurs de la Compagnie des Marées Grises ne croient pas à cette histoire, mais ils respectent l'usage.
+Un hareng plus grand qu'une barque vivrait dans la fosse située au large de Brumeval. Quiconque le voit doit rejeter à l'eau sa première prise de la saison. Les marins de la Compagnie des Marées Grises ne croient pas à cette histoire, mais ils respectent l'usage.
 
 ## Les lanternes de Sarnoux
 

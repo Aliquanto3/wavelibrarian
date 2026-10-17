@@ -8,7 +8,7 @@ Ships dock at the Old Mole, the first quay of the town, built in the year 1203. 
 
 ## What to see
 
-The Lighthouse of Keld can be visited by boat on clear days. The keeper, Bram Oskelle, welcomes guests and offers tea. In town, do not miss the shipyard of Ormesse, where the schooner Misty Gold was launched this year for the Grey Tides Company.
+The Lighthouse of Keld can be visited by boat on clear days. The keeper, Bram Oskelle, welcomes guests and offers tea. In town, do not miss the shipyard of Ormesse, where the coaster Misty Gold was launched this year for the Grey Tides Company.
 
 ## What to eat
 
@@ -16,4 +16,4 @@ Try the seaweed soup of Brumeval, served with black bread and smoked silver herr
 
 ## Practical advice
 
-The council meets on the fifteenth of each month and its sessions are open to the public. Money is counted in deniers. A night in an inn costs about six deniers. If a ship arrives from an island hit by the grey fever, passengers must wait eleven days at anchor before landing.
+The council meets on the first day of each month in the Hall of Ropes, and most of its sessions are open to the public. Money is counted in deniers. A night in an inn costs about six deniers. If a ship arrives from an island hit by the grey fever, passengers must wait eleven days at anchor before landing.

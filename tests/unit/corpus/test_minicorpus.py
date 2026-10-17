@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from types import ModuleType
 
+import pypdfium2 as pdfium
+import pypdfium2.raw as pdfium_raw
 import pytest
 import yaml
 
@@ -59,14 +61,28 @@ def test_groupe_de_documents_lies_par_entites(minicorpus: ParsedCorpus):
     for doc in minicorpus.documents:
         for e in entites_du_document(doc):
             par_entite.setdefault(e, set()).add(doc.source_path)
-    assert len(par_entite["compagnie des marées grises"]) >= 4
-    assert len(par_entite["oswin dacrel"]) >= 4
+    for entite in ("compagnie des marées grises", "oswin dacrel"):
+        assert len(par_entite[entite]) >= 4, entite
+    # Maëlis Torvane relie aussi le groupe ; l'heuristique de 2.4 la manque en début de phrase.
+    avec_maelis = {
+        d.source_path
+        for d in minicorpus.documents
+        if any("Maëlis Torvane" in b.text for b in d.blocks)
+    }
+    assert len(avec_maelis) >= 4
 
 
 def test_deux_versions_contradictoires(minicorpus: ParsedCorpus):
+    """Deux versions datées d'une même charte coexistent dans le Corpus (Questions temporelles).
+
+    Ce sont deux Documents distincts (deux `source_path`) au même titre ; la seconde déclare
+    remplacer la première. La modification d'un Document par le Scénario est un autre cas.
+    """
     v1, v2 = _doc(minicorpus, "charte-conseil-v1.md"), _doc(minicorpus, "charte-conseil-v2.md")
-    assert v1.blocks[0].text == v2.blocks[0].text  # même titre : même Document, deux versions
+    assert v1.blocks[0].text == v2.blocks[0].text == "Charte du Conseil des Quais"
     assert v1.doc_id != v2.doc_id
+    assert "applicable jusqu'à la révision de l'an 1413" in v1.blocks[1].text
+    assert "remplace la charte de l'an 1290" in v2.blocks[1].text
     t1, t2 = (" ".join(b.text for b in d.blocks) for d in (v1, v2))
     assert "quatre ans" in t1 and "six ans" in t2
     assert "sept sièges" in t1 and "neuf sièges" in t2
@@ -119,15 +135,26 @@ def test_police_libre_commitee_avec_licence():
     assert "Bitstream" in (polices / "DejaVu-LICENSE.txt").read_text(encoding="utf-8")
 
 
+def _corps_maximal(chemin: Path) -> float:
+    """Plus grand corps de caractère d'un PDF : 11 pour le texte, 12 et plus pour un titre."""
+    pdf = pdfium.PdfDocument(chemin)
+    try:
+        corps = [0.0]
+        for page in pdf:
+            texte = page.get_textpage()
+            corps += [pdfium_raw.FPDFText_GetFontSize(texte, i) for i in range(texte.count_chars())]
+        return max(corps)
+    finally:
+        pdf.close()
+
+
 def test_un_pdf_multipage_et_un_pdf_sans_titre(minicorpus: ParsedCorpus):
     pdfs = [d for d in minicorpus.documents if d.format == "pdf"]
     assert any(len(d.anchors) >= 2 for d in pdfs)
-    sans_titre = [
-        s.stem
-        for s in (MINI / "pdf-src").glob("*.txt")
-        if not any(ligne.startswith("#") for ligne in s.read_text(encoding="utf-8").splitlines())
-    ]
-    assert sans_titre
+    corps = {d.source_path: _corps_maximal(MINI / "docs" / d.source_path) for d in pdfs}
+    sans_titre = {chemin for chemin, taille in corps.items() if taille < 12}
+    assert sans_titre == {"lettre-torvane.pdf"}, corps
+    assert len(sans_titre) < len(pdfs)
 
 
 def test_markdown_sans_html_brut_ni_meta_charset():
@@ -162,7 +189,14 @@ def test_extras_hors_docs():
     assert "Pélagie" not in texte_docs
 
 
-def test_fixture_minicorpus_en_cache_de_session(minicorpus: ParsedCorpus, request):
+_VUS: list[ParsedCorpus] = []
+
+
+@pytest.mark.parametrize("passage", [1, 2])
+def test_fixture_minicorpus_en_cache_de_session(minicorpus: ParsedCorpus, passage: int):
+    """Deux tests distincts reçoivent le même objet : la fixture n'est ingérée qu'une fois."""
     assert isinstance(minicorpus, ParsedCorpus)
     assert minicorpus.corpus_id == "minicorpus"
-    assert request.getfixturevalue("minicorpus") is minicorpus
+    _VUS.append(minicorpus)
+    if passage == 2:
+        assert len(_VUS) >= 2 and all(c is minicorpus for c in _VUS)

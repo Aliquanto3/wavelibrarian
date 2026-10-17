@@ -4,11 +4,11 @@ La Compagnie des Marées Grises a été créée à Port-Ysel en l'an 1388 par do
 
 ## Organisation
 
-La Compagnie est dirigée par un directeur nommé par l'assemblée des armateurs. Depuis l'an 1409, cette fonction est exercée par Tamsin Orrelle. La flotte compte onze navires, dont le plus ancien, la Grande Sève, a été lancé en l'an 1391. Le registre des navires en donne la liste complète.
+La Compagnie est dirigée par un directeur nommé par l'assemblée des armateurs. Depuis l'an 1409, cette fonction est exercée par Tamsin Orrelle. La flotte compte quatre navires, dont le plus ancien, la Grande Sève, a été lancé en l'an 1391. Le registre des navires en donne la liste complète.
 
 ## Activités
 
-Les navires de la Compagnie transportent le hareng fumé, le sel de Sarnoux et le courrier du Conseil des Quais. Maëlis Torvane a navigué sur la Grande Sève pendant six saisons, ce qui lui a permis de relever les courants décrits dans son atlas.
+Les navires de la Compagnie transportent le hareng fumé et le sel de Sarnoux ; la Grande Sève est la seule à porter aussi le courrier du Conseil des Quais. Maëlis Torvane a navigué sur la Grande Sève pendant six saisons, ce qui lui a permis de relever les courants décrits dans son atlas.
 
 ## Relations avec le Conseil
 
