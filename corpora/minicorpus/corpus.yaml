@@ -1,0 +1,17 @@
+# Mini-corpus fictif de WaveLibrarian : univers inventé (Archipel de Vaelmor), publiable.
+# Tous les textes sont originaux et placés sous licence CC-BY-4.0.
+corpus_id: minicorpus
+path: docs
+lang: fr
+license: CC-BY-4.0
+publishable: true
+volatility: low
+documents:
+  # Clé = source_path, relatif à `path`.
+  visitor-guide-port-ysel.md: {lang: en}
+  tide-almanac-notes.md: {lang: en}
+  journal-torvane.md: {sensitivity: interne, rights_profiles: [rh]}
+  procedure-quarantaine.md: {sensitivity: confidentiel, rights_profiles: [sante]}
+tiers:
+  seed: 42
+  sizes: [5, 10, 20]

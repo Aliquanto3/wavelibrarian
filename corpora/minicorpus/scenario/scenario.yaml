@@ -1,0 +1,9 @@
+# Scénario de mise à jour du Mini-corpus (contracts.md §4.7).
+# `source` se résout par rapport à ce fichier ; `target` est un `source_path` du Corpus
+# (relatif à `path`, donc sans préfixe `docs/`).
+scenario_id: minicorpus-maj-1
+corpus_id: minicorpus
+operations:
+  - {id: op-1, op: add, source: updates/chronique-1415.md, target: chronique-1415.md}
+  - {id: op-2, op: modify, source: updates/bulletin-maree-v2.md, target: bulletin-maree.md}
+  - {id: op-3, op: delete, target: note-obsolete.md}
