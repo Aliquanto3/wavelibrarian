@@ -4,11 +4,12 @@ Ordre fixe : marqueur de rôle, cache, réservation au registre, appel (essais e
 coût par le Catalogue, règlement, mise en cache, span. Seule la passerelle émet les spans LLM.
 """
 
+import json
 import time
 from collections.abc import Callable, Mapping
 from decimal import Decimal
 from math import ceil
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, ValidationError
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
@@ -84,22 +85,33 @@ class MeteredGateway:
             raise WlError("le marqueur `[[wl:role=…]]` est posé par la passerelle seule (AD-4)")
         return request.model_copy(update={"system": role_marker(request.role) + request.system})
 
-    def _estimation(self, request: LLMRequest) -> Usage:
+    def _estimation(
+        self, request: LLMRequest, provider: Provider, schema_json: dict[str, Any] | None
+    ) -> Usage:
         """Tokens d'entrée × `token_factor` + `max_tokens`, palier compris (via le Catalogue).
 
-        Majorant : un prompt qui peut être mis en cache est compté au tarif d'écriture.
+        Majorant : un prompt qui peut être mis en cache est compté au tarif d'écriture. Le schéma
+        de sortie compte comme entrée quand le provider l'envoie dans le prompt (outil), pas quand
+        il part dans `format` (grammaire d'Ollama).
         """
         entry = self._catalog.get(request.model_id)
-        texte = "\n".join([request.system, *(m.content for m in request.messages)])
-        n = self._tokenizer_for(request.model_id).count(texte)
+        morceaux = [request.system, *(m.content for m in request.messages)]
+        surcout = 0
+        if schema_json is not None and getattr(provider, "schema_in_prompt", False):
+            morceaux.append(json.dumps(schema_json, ensure_ascii=False, sort_keys=True))
+            surcout = int(getattr(provider, "schema_prompt_overhead", 0))
+        n = self._tokenizer_for(request.model_id).count("\n".join(morceaux))
         if entry.tokenizer == "reference":  # `tokenizer_for` n'a pas appliqué le facteur
             n = ceil(Decimal(n) * entry.token_factor)
+        n += surcout
         marque = request.cache_system or any(m.cache for m in request.messages)
         if entry.prompt_cache and marque:
             return Usage(cache_write_tokens=n, output_tokens=request.max_tokens)
         return Usage(input_tokens=n, output_tokens=request.max_tokens)
 
-    def _appeler(self, provider: Provider, request: LLMRequest) -> ProviderResponse:
+    def _appeler(
+        self, provider: Provider, request: LLMRequest, schema_json: dict[str, Any] | None
+    ) -> ProviderResponse:
         timeout = request.timeout_s if request.timeout_s is not None else self._timeout
         for tentative in Retrying(
             stop=stop_after_attempt(self._retries.max_attempts),
@@ -111,7 +123,7 @@ class MeteredGateway:
             reraise=True,
         ):
             with tentative:
-                return provider.complete(request, timeout_s=timeout)
+                return provider.complete(request, timeout_s=timeout, output_schema=schema_json)
         raise AssertionError("inatteignable")  # pragma: no cover
 
     def _trace(
@@ -127,13 +139,16 @@ class MeteredGateway:
         latency_s: float = 0.0,
         from_cache: bool = False,
         energie: bool = False,
+        energy_kwh: float | None = None,
     ) -> None:
         usage = usage or Usage()
         extra: dict[str, str | int | float | bool] = {}
         if energie:
             kwh = None
             if self._catalog.get(request.model_id).kind == "api":
-                kwh = self._estimator.estimate(request.model_id, usage, latency_s)
+                kwh = energy_kwh  # lue par le provider dans la réponse (EcoLogits)
+                if kwh is None:
+                    kwh = self._estimator.estimate(request.model_id, usage, latency_s)
             # Local : énergie mesurée par phase et répartie par le runner (AD-17), inconnue ici.
             extra["wl.energy_method"] = "estimated" if kwh is not None else "unknown"
             if kwh is not None:
@@ -175,7 +190,10 @@ class MeteredGateway:
                 latency_s=0.0, from_cache=True, stocker=None,
             )  # fmt: skip
 
-        estimation = self._catalog.cost(request.model_id, self._estimation(marquee))
+        schema_json = schema.model_json_schema() if schema is not None else None
+        estimation = self._catalog.cost(
+            request.model_id, self._estimation(marquee, provider, schema_json)
+        )
         try:
             reservation = self._ledger.reserve(nom, estimation, devise)
         except BudgetExceeded:
@@ -184,10 +202,18 @@ class MeteredGateway:
 
         debut = self._timer()
         try:
-            reponse = self._appeler(provider, marquee)
-        except BaseException:
+            reponse = self._appeler(provider, marquee, schema_json)
+        except BaseException as exc:
+            latence = self._timer() - debut
+            if isinstance(exc, ProviderError) and exc.sent:
+                # Requête partie sans réponse (délai dépassé) : le fournisseur a pu facturer.
+                try:
+                    self._ledger.settle(reservation, estimation)
+                finally:
+                    self._trace_paye_en_erreur(marquee, nom, devise, Usage(), estimation, latence)
+                raise
             self._ledger.release(reservation)
-            self._trace(marquee, nom, devise, "error", latency_s=self._timer() - debut)
+            self._trace(marquee, nom, devise, "error", latency_s=latence)
             raise
         latence = self._timer() - debut
         if reponse.latency_s is not None:  # latence déclarée (Faux LLM : 0, contracts.md §3)
@@ -209,7 +235,7 @@ class MeteredGateway:
         return self._finir(
             marquee, schema, nom, devise, reponse.text, reponse.usage,
             cost=cout, cost_uncached=cout, latency_s=latence, from_cache=False, stocker=cle,
-            remplacer=not use_cache,
+            remplacer=not use_cache, energy_kwh=reponse.energy_kwh,
         )  # fmt: skip
 
     def _trace_paye_en_erreur(
@@ -234,6 +260,7 @@ class MeteredGateway:
         from_cache: bool,
         stocker: str | None,
         remplacer: bool = False,
+        energy_kwh: float | None = None,
     ) -> tuple[T | None, LLMResult]:
         """Valide la sortie structurée, trace, puis ne met en cache que les succès.
 
@@ -250,6 +277,7 @@ class MeteredGateway:
         self._trace(
             request, nom, devise, statut, usage=usage, cost=cost, cost_uncached=cost_uncached,
             latency_s=latency_s, from_cache=from_cache, energie=not from_cache,
+            energy_kwh=energy_kwh,
         )  # fmt: skip
         if statut == "ok" and stocker is not None:
             self._cache.put(stocker, texte, usage, replace=remplacer)

@@ -514,6 +514,8 @@ Les Architectures `agentic` et `pageindex` doivent produire au moins une citatio
 
 Mode scénarisé (FR-52) : `FakeProvider.script(role: str, step_glob: str, output: str | Callable[[LLMRequest], str])`. La sortie scénarisée prime sur le comportement par défaut ; pour un modèle de provider fake, `step` entre donc dans la clé du Cache de réponses avec `inputs`. Tokens : nombre de mots. `cache_read_tokens` vaut le nombre de mots du préfixe déjà vu (system et messages marqués `cache`). La latence vaut 0 : le Faux LLM la déclare (`ProviderResponse.latency_s`) et la passerelle la reprend au lieu de la mesurer.
 
+Protocole `Provider` (story 1.11) : `complete(request, *, timeout_s, output_schema=None) -> ProviderResponse(text, usage, latency_s?, energy_kwh?)`. `output_schema` est le schéma JSON de `complete_structured` (Anthropic : outil `emit_output` imposé ; Ollama : champ `format`). Un provider peut déclarer `schema_in_prompt` et `schema_prompt_overhead` : la passerelle ajoute alors le schéma (et le surcoût fixe) à l'estimation d'entrée. `ProviderError(sent=True)` : requête partie sans réponse, la réservation est réglée à l'estimation au lieu d'être libérée.
+
 ## 4. Schémas YAML
 
 Chaque schéma correspond à un modèle pydantic de `config/schemas.py` avec `extra="forbid"`. Les chemins relatifs se résolvent par rapport au fichier qui les contient.

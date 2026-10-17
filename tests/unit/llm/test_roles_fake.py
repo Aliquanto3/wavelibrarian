@@ -332,9 +332,9 @@ def test_inputs_differents_pas_servis_par_le_cache(env: Env) -> None:
     appels: list[int] = []
     reel = env.fake.complete
 
-    def espion(request: LLMRequest, *, timeout_s: float) -> Any:
+    def espion(request: LLMRequest, *, timeout_s: float, **kw: Any) -> Any:
         appels.append(1)
-        return reel(request, timeout_s=timeout_s)
+        return reel(request, timeout_s=timeout_s, **kw)
 
     env.fake.complete = espion  # type: ignore[method-assign]
     a = {"question": "q", "blocks": {"S1": "Alpha un."}}

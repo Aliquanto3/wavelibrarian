@@ -107,16 +107,18 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "anthropic et httpx confinés à llm.providers"
+name = "anthropic, httpx et httpx2 (client du SDK) confinés à llm.providers"
 type = "forbidden"
 source_modules = ["wavelibrarian"]
-forbidden_modules = ["anthropic", "httpx"]
+forbidden_modules = ["anthropic", "httpx", "httpx2"]
 unmatched_ignore_imports_alerting = "none"
 ignore_imports = [
     "wavelibrarian.llm.providers -> anthropic",
     "wavelibrarian.llm.providers -> httpx",
     "wavelibrarian.llm.providers.** -> anthropic",
     "wavelibrarian.llm.providers.** -> httpx",
+    "wavelibrarian.llm.providers -> httpx2",
+    "wavelibrarian.llm.providers.** -> httpx2",
 ]
 
 [[tool.importlinter.contracts]]

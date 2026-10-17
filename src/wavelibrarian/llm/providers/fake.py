@@ -214,7 +214,13 @@ class FakeProvider:
             raise WlError(f"rôle inconnu {role!r} ; rôles : {', '.join(sorted(ROLES))}")
         self._scenarios.append(_Scenario(role, step_glob, output))
 
-    def complete(self, request: LLMRequest, *, timeout_s: float) -> ProviderResponse:
+    def complete(
+        self,
+        request: LLMRequest,
+        *,
+        timeout_s: float,
+        output_schema: dict[str, Any] | None = None,
+    ) -> ProviderResponse:
         texte = self._sortie(request)
         return ProviderResponse(text=texte, usage=self._usage(request, texte), latency_s=0.0)
 

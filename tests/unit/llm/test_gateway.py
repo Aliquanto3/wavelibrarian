@@ -48,14 +48,19 @@ class FauxProvider:
         self.usage = usage
         self.requests: list[LLMRequest] = []
         self.timeouts: list[float] = []
+        self.schemas: list[dict[str, Any] | None] = []
+        self.energy: float | None = None
 
-    def complete(self, request: LLMRequest, *, timeout_s: float) -> ProviderResponse:
+    def complete(
+        self, request: LLMRequest, *, timeout_s: float, output_schema: dict[str, Any] | None = None
+    ) -> ProviderResponse:
         self.requests.append(request)
+        self.schemas.append(output_schema)
         self.timeouts.append(timeout_s)
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         if isinstance(item, Exception):
             raise item
-        return ProviderResponse(text=item, usage=self.usage)
+        return ProviderResponse(text=item, usage=self.usage, energy_kwh=self.energy)
 
 
 class Env:
@@ -378,3 +383,60 @@ def test_build_gateway_depuis_le_profil_test(wl_home: Path, tmp_path: Path) -> N
     assert s["wl.energy_method"] == "estimated"
     ledger.close()
     cache.close()
+
+
+# --- Story 1.11 : délai après envoi, poids du schéma, énergie lue par le provider --------------
+
+
+def test_delai_apres_envoi_regle_a_l_estimation(make_env: Callable[..., Env]) -> None:
+    env = make_env(ProviderError("délai", retryable=False, sent=True), budget=_budget("1.00"))
+    with pytest.raises(ProviderError):
+        env.gw.complete(_req())
+    (estimation,) = env.reserved
+    assert env.ledger.balance("fake").run_remaining == D("1.00") - estimation  # réglé, pas libéré
+    (s,) = env.spans()
+    assert s["wl.status"] == "error" and D(s["wl.cost"]) == estimation
+
+
+class _FauxSchemaPrompt(FauxProvider):
+    def __init__(self, in_prompt: bool, overhead: int = 0) -> None:
+        super().__init__('{"reponse": "x"}')
+        self.schema_in_prompt = in_prompt
+        self.schema_prompt_overhead = overhead
+
+
+def _reserve_structure(
+    make_env: Callable[..., Env], provider: FauxProvider | None, pass_id: int
+) -> Decimal:
+    env = make_env()
+    if provider is not None:
+        env.gw._providers = {"anthropic": provider}  # type: ignore[attr-defined]
+    env.gw.complete_structured(_req("claude-haiku-5-5", pass_id=pass_id), Schema)
+    return env.reserved[0]
+
+
+def test_schema_dans_l_estimation_selon_le_mode_d_envoi(make_env: Callable[..., Env]) -> None:
+    format_ollama = _reserve_structure(make_env, _FauxSchemaPrompt(False), 1)
+    outil = _reserve_structure(make_env, _FauxSchemaPrompt(True), 2)
+    outil_surcout = _reserve_structure(make_env, _FauxSchemaPrompt(True, 100), 3)
+    env = make_env('{"reponse": "x"}')
+    env.gw._providers = {"anthropic": env.provider}  # type: ignore[attr-defined]
+    env.gw.complete(_req("claude-haiku-5-5", pass_id=4))  # texte libre : aucun schéma
+    assert format_ollama == env.reserved[0]  # `format` : le schéma n'entre pas dans le prompt
+    assert outil > format_ollama  # outil : le schéma compte comme entrée
+    assert outil_surcout - outil == D(100) * D("0.10") / D(1_000_000)  # consigne d'outil fixe
+
+
+def test_schema_json_transmis_au_provider(make_env: Callable[..., Env]) -> None:
+    env = make_env('{"reponse": "x"}')
+    env.gw.complete_structured(_req(), Schema)
+    env.gw.complete(_req(pass_id=1))
+    assert env.provider.schemas == [Schema.model_json_schema(), None]
+
+
+def test_energie_lue_par_le_provider_prime_sur_l_estimateur(make_env: Callable[..., Env]) -> None:
+    env = make_env("ok")
+    env.provider.energy = 0.5
+    env.gw.complete(_req("claude-haiku-5-5"))
+    (s,) = env.spans()
+    assert s["wl.energy_kwh"] == 0.5 and s["wl.energy_method"] == "estimated"

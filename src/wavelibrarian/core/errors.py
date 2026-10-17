@@ -35,10 +35,15 @@ class Inapplicable(WlError):
 
 
 class ProviderError(WlError):
-    """Échec d'un fournisseur de modèle ; `retryable` indique si un nouvel essai a un sens."""
+    """Échec d'un fournisseur de modèle ; `retryable` indique si un nouvel essai a un sens.
 
-    def __init__(self, message: str, retryable: bool = False) -> None:
+    `sent` : la requête est partie sans réponse exploitable (délai dépassé après envoi) ; le
+    fournisseur a pu facturer, la passerelle règle alors la réservation à l'estimation.
+    """
+
+    def __init__(self, message: str, retryable: bool = False, *, sent: bool = False) -> None:
         self.retryable = retryable
+        self.sent = sent
         super().__init__(message)
 
 
