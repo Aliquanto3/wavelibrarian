@@ -16,14 +16,25 @@ _SCHEMA = (
 )
 
 
+def role_marker(role: str) -> str:
+    """Marqueur que la passerelle pose en première ligne du system (AD-4, contracts.md §3)."""
+    return f"[[wl:role={role}]]\n"
+
+
 def cache_key(request: LLMRequest, provider: str) -> str:
     """`sha256(canonical_json(model, params, system, messages, pass_id))`.
 
     `step`, `role`, `cache_system`, `Message.cache` et `timeout_s` n'y entrent pas (ils ne
     changent pas la réponse). `inputs` n'y entre que pour un provider `fake`, qui ne lit que lui
     (AD-4, contracts.md §2.2). `system` est pris tel quel : la passerelle y a déjà posé le
-    marqueur de rôle.
+    marqueur de rôle, qui fait entrer le rôle dans la clé (le Faux LLM répond selon le rôle).
+    Un system sans ce marqueur lève `ValueError` : la clé se calcule après le marquage.
     """
+    if not request.system.startswith(role_marker(request.role)):
+        raise ValueError(
+            f"system sans marqueur {role_marker(request.role)!r} : "
+            "la clé de cache se calcule après le marquage par la passerelle"
+        )
     contenu: dict[str, Any] = {
         "model": request.model_id,
         "params": {
@@ -51,7 +62,11 @@ class ResponseCache:
 
     def __init__(self, wl_home: Path | None = None) -> None:
         self._conn = connect(resolve_wl_home(wl_home) / "llm_cache.sqlite")
-        self._conn.execute(_SCHEMA)
+        try:
+            self._conn.execute(_SCHEMA)
+        except BaseException:
+            self._conn.close()
+            raise
 
     def close(self) -> None:
         self._conn.close()

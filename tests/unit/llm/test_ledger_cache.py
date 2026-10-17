@@ -13,7 +13,7 @@ from wavelibrarian.config.experiment import Amount, Budget
 from wavelibrarian.core.errors import BudgetExceeded, ConfigError, WlError
 from wavelibrarian.core.types import Usage
 from wavelibrarian.llm.budget import Ledger
-from wavelibrarian.llm.cache import ResponseCache, cache_key
+from wavelibrarian.llm.cache import ResponseCache, cache_key, role_marker
 from wavelibrarian.ports.gateway import LLMRequest, Message
 
 D = Decimal
@@ -44,10 +44,15 @@ def test_reserver_regler_puis_refus(wl_home: Path) -> None:
         # Chaque écriture ouvre une transaction BEGIN IMMEDIATE.
         assert trace.count("BEGIN IMMEDIATE") == 3  # reserve, settle, reserve refusée
         assert trace.count("COMMIT") == 2 and trace.count("ROLLBACK") == 1
-        assert all(
-            s.startswith(("INSERT", "UPDATE")) is False or i > 0 and trace[i - 1] != "COMMIT"
-            for i, s in enumerate(trace)
-        )
+        # Toute écriture se situe entre un BEGIN IMMEDIATE et sa fin de transaction.
+        dans_transaction = False
+        for s in trace:
+            if s == "BEGIN IMMEDIATE":
+                dans_transaction = True
+            elif s in ("COMMIT", "ROLLBACK"):
+                dans_transaction = False
+            elif s.startswith(("INSERT", "UPDATE", "DELETE")):
+                assert dans_transaction, s
 
 
 def test_ecriture_toujours_dans_begin_immediate(wl_home: Path) -> None:
@@ -78,12 +83,42 @@ def test_plafond_de_periode_et_mois_suivant(wl_home: Path) -> None:
 
 def test_reservation_orpheline_reglee_a_l_estimation(wl_home: Path) -> None:
     lg = Ledger(budget(), "r1", wl_home)
-    lg.reserve("anthropic", D("0.30"), "USD")
+    r = lg.reserve("anthropic", D("0.30"), "USD")
     lg.close()  # arrêt brutal : jamais réglée
-    with Ledger(budget(), "r1", wl_home) as lg2:
+    # Réouverture par le runner, qui tient run.lock.
+    with Ledger(budget(), "r1", wl_home, recover_orphans=True) as lg2:
         assert lg2.balance("anthropic").run_remaining == D("0.70")
-        lg2.recover_orphans()  # idempotent
+        assert lg2.recover_orphans() == 0  # idempotent
         assert lg2.balance("anthropic").run_remaining == D("0.70")
+        with pytest.raises(WlError):
+            lg2.settle(r, D("0.10"))  # réglée à l'estimation, donc close
+
+
+def test_ouverture_simple_ne_regle_pas_les_reservations_en_cours(wl_home: Path) -> None:
+    with Ledger(budget(), "r1", wl_home) as lg:
+        r = lg.reserve("anthropic", D("0.30"), "USD")
+        with Ledger(budget(), "r1", wl_home) as lecteur:  # ex. affichage du solde
+            assert lecteur.balance("anthropic").run_remaining == D("0.70")
+        lg.settle(r, D("0.45"))  # coût réel conservé
+        assert lg.balance("anthropic").run_remaining == D("0.55")
+
+
+def test_changement_de_devise_en_cours_de_mois_refuse(wl_home: Path) -> None:
+    with Ledger(budget(), "r1", wl_home) as lg:
+        lg.settle(lg.reserve("anthropic", D("0.50"), "USD"), D("0.50"))
+    b = Budget(per_run={}, period={"anthropic": Amount(amount=D("1.00"), currency="EUR")})
+    with Ledger(b, "r2", wl_home) as lg:
+        with pytest.raises(ConfigError, match="USD"):
+            lg.reserve("anthropic", D("0.10"), "EUR")
+        with pytest.raises(ConfigError, match="USD"):
+            lg.balance("anthropic")
+
+
+def test_horloge_naive_refusee(wl_home: Path) -> None:
+    naive = datetime(2026, 10, 1)  # noqa: DTZ001
+    with Ledger(budget(), "r1", wl_home, clock=lambda: naive) as lg:
+        with pytest.raises(ValueError, match="naïve"):
+            lg.reserve("anthropic", D("0.10"), "USD")
 
 
 def test_reservation_liberee_ne_compte_plus(wl_home: Path) -> None:
@@ -201,7 +236,7 @@ def req(**kw: object) -> LLMRequest:
         "model_id": "m",
         "role": "closed_book",
         "step": "generate",
-        "system": "sys",
+        "system": role_marker("closed_book") + "sys",
         "messages": (Message(role="user", content="q"),),
         "max_tokens": 100,
     }
@@ -225,7 +260,9 @@ def test_cle_sensible_a_pass_id_message_temperature_pas_a_step() -> None:
     assert cache_key(req(pass_id=1), "anthropic") != ref
     assert cache_key(req(messages=(Message(role="user", content="q2"),)), "anthropic") != ref
     assert cache_key(req(temperature=0.7), "anthropic") != ref
-    assert cache_key(req(system="autre"), "anthropic") != ref
+    assert cache_key(req(system=role_marker("closed_book") + "autre"), "anthropic") != ref
+    juge = req(role="judge", system=role_marker("judge") + "sys")
+    assert cache_key(juge, "fake") != cache_key(req(), "fake")  # rôle porté par le marqueur
     assert cache_key(req(model_id="n"), "anthropic") != ref
     assert cache_key(req(step="rerank"), "anthropic") == ref
     assert cache_key(req(cache_system=True, timeout_s=3.0), "anthropic") == ref
@@ -236,3 +273,10 @@ def test_inputs_dans_la_cle_seulement_pour_le_provider_fake() -> None:
     assert cache_key(a, "anthropic") == cache_key(b, "anthropic")
     assert cache_key(a, "ollama") == cache_key(b, "ollama")
     assert cache_key(a, "fake") != cache_key(b, "fake")
+
+
+def test_cle_refuse_un_system_sans_marqueur_de_role() -> None:
+    with pytest.raises(ValueError, match="marqueur"):
+        cache_key(req(system="sys"), "fake")
+    with pytest.raises(ValueError, match="marqueur"):
+        cache_key(req(role="judge"), "fake")  # marqueur d'un autre rôle

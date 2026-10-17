@@ -61,15 +61,26 @@ class Ledger:
         run_id: str,
         wl_home: Path | None = None,
         clock: Callable[[], datetime] = _maintenant,
-        recover_orphans: bool = True,
+        *,
+        recover_orphans: bool = False,
     ) -> None:
+        """`recover_orphans=True` seulement par le runner, après avoir pris `run.lock` (AD-11).
+
+        Sinon, un second `Ledger` ouvert pendant une Exécution réglerait ses réservations en
+        cours, et le `settle` qui suit perdrait le coût réel. Une réservation laissée ouverte
+        compte déjà au montant estimé : ne pas la récupérer ne fait jamais dépasser un plafond.
+        """
         self._budget = budget
         self._run_id = run_id
         self._clock = clock
         self._conn = connect(resolve_wl_home(wl_home) / "ledger.sqlite")
-        self._conn.execute(_SCHEMA)
-        if recover_orphans:
-            self.recover_orphans()
+        try:
+            self._conn.execute(_SCHEMA)
+            if recover_orphans:
+                self.recover_orphans()
+        except BaseException:
+            self._conn.close()
+            raise
 
     def close(self) -> None:
         self._conn.close()
@@ -81,12 +92,15 @@ class Ledger:
         self.close()
 
     def _periode(self) -> str:
-        return f"{self._clock().astimezone(UTC):%Y-%m}"
+        maintenant = self._clock()
+        if maintenant.tzinfo is None:
+            raise ValueError("horloge naïve : le mois civil se calcule en UTC")
+        return f"{maintenant.astimezone(UTC):%Y-%m}"
 
     def recover_orphans(self) -> int:
         """Règle au montant estimé toute réservation laissée ouverte (arrêt brutal, AD-11).
 
-        Valable parce qu'une seule Exécution tourne à la fois (`run.lock`).
+        Valable seulement si l'appelant tient `run.lock` (une seule Exécution à la fois).
         """
         with transaction(self._conn) as c:
             return c.execute(
@@ -108,10 +122,22 @@ class Ledger:
         return total
 
     def _depenses(
-        self, c: sqlite3.Connection, provider: str, periode: str
+        self, c: sqlite3.Connection, provider: str, currency: str, periode: str
     ) -> tuple[Decimal, Decimal]:
-        run = self._somme(c, "provider=? AND run_id=?", (provider, self._run_id))
-        per = self._somme(c, "provider=? AND period=?", (provider, periode))
+        autre = c.execute(
+            "SELECT currency FROM reservations WHERE provider=? AND currency<>? "
+            "AND status<>'released' AND (run_id=? OR period=?) LIMIT 1",
+            (provider, currency, self._run_id, periode),
+        ).fetchone()
+        if autre is not None:
+            raise ConfigError(
+                f"budget.{provider}",
+                f"dépenses déjà comptées en {autre[0]}, plafond en {currency} : "
+                "changer de devise en cours de mois mélangerait les montants",
+            )
+        cle = "provider=? AND currency=?"
+        run = self._somme(c, f"{cle} AND run_id=?", (provider, currency, self._run_id))
+        per = self._somme(c, f"{cle} AND period=?", (provider, currency, periode))
         return run, per
 
     def reserve(self, provider: str, amount: Decimal, currency: str) -> int:
@@ -127,7 +153,10 @@ class Ledger:
                 )
         periode = self._periode()
         with transaction(self._conn) as c:
-            run, per = self._depenses(c, provider, periode)
+            if per_run is None and period is None:
+                run = per = Decimal(0)  # sans plafond : ni limite ni contrôle de devise
+            else:
+                run, per = self._depenses(c, provider, currency, periode)
             if per_run is not None and run + amount > per_run.amount:
                 raise BudgetExceeded(
                     f"{provider} : plafond par Exécution de {per_run.amount} {currency} dépassé "
@@ -167,10 +196,12 @@ class Ledger:
     def balance(self, provider: str) -> Balance:
         """Soldes restants du fournisseur, dans la devise de son plafond."""
         per_run, period = self._plafonds(provider)
-        run, per = self._depenses(self._conn, provider, self._periode())
         cap = per_run or period
+        if cap is None:
+            return Balance(currency=None, run_remaining=None, period_remaining=None)
+        run, per = self._depenses(self._conn, provider, cap.currency, self._periode())
         return Balance(
-            currency=cap.currency if cap else None,
+            currency=cap.currency,
             run_remaining=None if per_run is None else per_run.amount - run,
             period_remaining=None if period is None else period.amount - per,
         )
