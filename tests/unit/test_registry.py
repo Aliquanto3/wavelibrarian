@@ -54,6 +54,7 @@ def _toy() -> type:
 
 
 def test_get_et_list_components() -> None:
+    registry.discover()
     toy = _toy()
     assert registry.get("chunker", "toy") is toy
     chunkers = registry.list_components(kind="chunker")
@@ -106,7 +107,7 @@ def test_description_non_heritee_et_defaut_calcule() -> None:
         b: int = Field(default_factory=lambda data: data["a"] + 1)
 
     registry.register("retriever", "herite")(type("Herite", (Base,), {"Params": Params}))
-    [info] = registry.list_components(kind="retriever")
+    [info] = [i for i in registry.list_components(kind="retriever") if i.name == "herite"]
     assert info.description == ""
     assert [(p.name, p.default) for p in info.params] == [("a", "1"), ("b", "calculé")]
 
@@ -115,6 +116,7 @@ def test_description_non_heritee_et_defaut_calcule() -> None:
 def test_discover_recursif_et_idempotent(
     paquet: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    registry.discover()  # les modules réels (dont les Architectures qui importent des Composants)
     sous = tmp_path / "sous"
     sous.mkdir()
     (sous / "__init__.py").write_text("")

@@ -33,10 +33,13 @@ class LLMGenerator:
             None
         )
         max_tokens: int = Field(default=1024, gt=0)
+        # Contexte long : le Contexte entre dans le system, mis en cache de prompt (FR-16).
+        cache_system: bool = False
 
     def __init__(self, params: "LLMGenerator.Params", ctx: Any) -> None:
         self._ctx = ctx
         self._max_tokens = params.max_tokens
+        self._cache_system = params.cache_system
         self.model_id: str = params.model or ctx.profile.defaults.generator_models[0]
 
     def generate(self, question: QuestionInput, context: Context) -> GenerationResult:
@@ -46,14 +49,22 @@ class LLMGenerator:
         }
         contexte = context.text if context.blocks else "(aucun passage)"
         messages = [Message(role=t.role, content=t.text) for t in question.history]
-        messages.append(
-            Message(role="user", content=f"Contexte :\n{contexte}\n\nQuestion : {question.text}")
-        )
+        if self._cache_system:
+            systeme = f"{_SYSTEM}\n\nContexte :\n{contexte}"
+            messages.append(Message(role="user", content=f"Question : {question.text}"))
+        else:
+            systeme = _SYSTEM
+            messages.append(
+                Message(
+                    role="user", content=f"Contexte :\n{contexte}\n\nQuestion : {question.text}"
+                )
+            )
         requete = LLMRequest(
             model_id=self.model_id,
             role="generate",
             step="generate",
-            system=_SYSTEM,
+            system=systeme,
+            cache_system=self._cache_system,
             messages=tuple(messages),
             max_tokens=self._max_tokens,
             seed=self._ctx.seed,
