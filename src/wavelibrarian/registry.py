@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
 from wavelibrarian.core.errors import ConfigError
@@ -43,6 +44,17 @@ def _verifier_kind(kind: str) -> None:
         raise ConfigError("kind", f"kind inconnu « {kind} » ; kinds valides : {', '.join(KINDS)}")
 
 
+def _verifier_params(kind: str, name: str, cls: type) -> None:
+    params = getattr(cls, "Params", None)
+    if not (isinstance(params, type) and issubclass(params, BaseModel)):
+        raise ConfigError(f"{kind}.{name}", "la classe doit déclarer un `Params` pydantic")
+    config = params.model_config
+    if config.get("extra") != "forbid" or config.get("frozen") is not True:
+        raise ConfigError(
+            f"{kind}.{name}.Params", '`Params` doit porter extra="forbid" et frozen=True'
+        )
+
+
 def register(kind: str, name: str) -> Callable[[T], T]:
     """Décorateur qui enregistre une classe sous `(kind, name)`."""
     _verifier_kind(kind)
@@ -50,6 +62,7 @@ def register(kind: str, name: str) -> Callable[[T], T]:
     def decorateur(cls: T) -> T:
         if (kind, name) in _REGISTRE:
             raise ConfigError(f"{kind}.{name}", "déjà enregistré")
+        _verifier_params(kind, name, cls)
         _REGISTRE[(kind, name)] = cls
         return cls
 
@@ -86,6 +99,8 @@ def _params(cls: type) -> tuple[ParamInfo, ...]:
     for nom, champ in champs.items():
         if champ.default is not PydanticUndefined:
             defaut = repr(champ.default)
+        elif champ.default_factory_takes_validated_data:
+            defaut = "calculé"
         elif champ.default_factory is not None:
             defaut = repr(champ.default_factory())  # type: ignore[call-arg]
         else:
@@ -94,12 +109,17 @@ def _params(cls: type) -> tuple[ParamInfo, ...]:
     return tuple(infos)
 
 
+def _description(cls: type) -> str:
+    """Docstring propre à la classe, sans celle héritée d'une classe de base."""
+    return inspect.cleandoc(cls.__dict__.get("__doc__") or "")
+
+
 def list_components(kind: str | None = None) -> list[ComponentInfo]:
     """Entrées du registre, triées par `kind` puis par nom ; filtrées par `kind` si donné."""
     if kind is not None:
         _verifier_kind(kind)
     return [
-        ComponentInfo(k, n, inspect.getdoc(cls) or "", _params(cls))
+        ComponentInfo(k, n, _description(cls), _params(cls))
         for (k, n), cls in sorted(_REGISTRE.items())
         if kind is None or k == kind
     ]
