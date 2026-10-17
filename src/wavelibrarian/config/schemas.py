@@ -171,5 +171,49 @@ def config_error(err: ErrorDetails, source: str = "", prefixe: str = "") -> Conf
             chemin = prefixe
         else:
             chemin = prefixe + (chemin if chemin.startswith("[") else f".{chemin}")
-    msg = str(err["msg"]).removeprefix("Value error, ")
+    msg = _message(err)
     return ConfigError(chemin, f"{msg} ({source})" if source else msg)
+
+
+_MESSAGES = {
+    "missing": "champ obligatoire",
+    "extra_forbidden": "champ inconnu",
+    "string_type": "chaîne attendue",
+    "int_type": "entier attendu",
+    "int_parsing": "entier attendu",
+    "int_from_float": "entier attendu",
+    "float_type": "nombre attendu",
+    "float_parsing": "nombre attendu",
+    "decimal_type": "nombre attendu",
+    "decimal_parsing": "nombre attendu",
+    "bool_type": "booléen attendu (true ou false)",
+    "bool_parsing": "booléen attendu (true ou false)",
+    "dict_type": "dictionnaire attendu",
+    "model_type": "dictionnaire attendu",
+    "model_attributes_type": "dictionnaire attendu",
+    "list_type": "liste attendue",
+    "tuple_type": "liste attendue",
+    "date_type": "date attendue (AAAA-MM-JJ)",
+    "date_parsing": "date attendue (AAAA-MM-JJ)",
+    "date_from_datetime_parsing": "date attendue (AAAA-MM-JJ)",
+    "greater_than": "doit être strictement supérieur à {gt}",
+    "greater_than_equal": "doit être supérieur ou égal à {ge}",
+    "less_than": "doit être strictement inférieur à {lt}",
+    "less_than_equal": "doit être inférieur ou égal à {le}",
+    "too_short": "trop court : au moins {min_length} élément(s)",
+    "too_long": "trop long : au plus {max_length} élément(s)",
+    "literal_error": "valeur {input!r} non admise ; valeurs possibles : {expected}",
+    "enum": "valeur {input!r} non admise ; valeurs possibles : {expected}",
+}
+
+
+def _message(err: ErrorDetails) -> str:
+    """Message en français des types d'erreur pydantic courants (contracts.md, en-tête)."""
+    modele = _MESSAGES.get(err["type"])
+    if modele is None:
+        return str(err["msg"]).removeprefix("Value error, ")
+    ctx = {k: str(v).replace(" or ", " ou ") for k, v in (err.get("ctx") or {}).items()}
+    try:
+        return modele.format(input=err.get("input"), **ctx)
+    except (KeyError, IndexError, ValueError):
+        return str(err["msg"])

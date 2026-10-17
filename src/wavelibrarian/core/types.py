@@ -110,7 +110,8 @@ class ParsedCorpus(_Modele):
 
         Les titres sont d'abord cherchés tels quels (espaces normalisés) dans les `heading_path`,
         dans l'ordre du Document : « Note 2 » désigne ce titre, pas le doublon suffixé `note-2`.
-        À défaut, le chemin de slugs est essayé.
+        À défaut, le chemin de slugs n'est essayé que si chaque titre est déjà un slug
+        (`note-2`) : « Note 2 » sans titre de ce nom ne résout pas le doublon de « Note ».
         """
         for doc in self.documents:
             if doc.source_path != source_path:
@@ -122,7 +123,9 @@ class ParsedCorpus(_Modele):
                 for anchor_id, ancre in doc.anchors.items():
                     if ancre.page is None and ancre.heading_path == voulu:
                         return anchor_id
-                candidat = f"{doc.doc_id}#h/" + "/".join(slug(h) for h in headings)
+                if any(h != slug(h) for h in headings):
+                    return None
+                candidat = f"{doc.doc_id}#h/" + "/".join(headings)
             else:
                 return None
             return candidat if candidat in doc.anchors else None

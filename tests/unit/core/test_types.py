@@ -137,6 +137,9 @@ def test_resolve_absent() -> None:
     assert c.resolve("docs/b.pdf", 9, ()) is None
     assert c.resolve("docs/zz.md", None, ("Histoire",)) is None
     assert c.resolve("docs/a.md", None, ()) is None
+    # Repli par slug réservé aux titres déjà écrits en slug.
+    assert c.resolve("docs/a.md", None, ("histoire", "fondation")) is not None
+    assert c.resolve("docs/a.md", None, ("Histoire", "Fondation!")) is None
 
 
 def test_anchor_text_concatene_dans_l_ordre() -> None:

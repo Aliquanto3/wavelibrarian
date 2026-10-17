@@ -38,7 +38,11 @@ class Controle:
 
 
 def _decrire(a: AnchorRef) -> str:
-    cible = f"page {a.page}" if a.page is not None else " > ".join(a.headings) or "(vide)"
+    titres = " > ".join(a.headings)
+    if a.page is None:
+        cible = titres or "(vide)"
+    else:
+        cible = f"page {a.page}" + (f", {titres}" if titres else "")
     return f"{a.doc} ({cible})"
 
 
@@ -104,7 +108,7 @@ def _ancrages(
                 )
             ]
     corpus = base
-    if etat == "after":
+    if etat == "after" and q.reference_anchors:
         if apres is None:
             return [
                 Signalement(
@@ -116,6 +120,9 @@ def _ancrages(
         corpus = apres
     sortie: list[Signalement] = []
     for a in q.reference_anchors:
-        if corpus.resolve(a.doc, a.page, a.headings) is None:
+        if a.page is not None and a.headings:
+            message = f"Ancrage ambigu : page et headings sont exclusifs ({_decrire(a)})"
+            sortie.append(Signalement(q.id, message, bloquant))
+        elif corpus.resolve(a.doc, a.page, a.headings) is None:
             sortie.append(Signalement(q.id, f"Ancrage introuvable : {_decrire(a)}", bloquant))
     return sortie

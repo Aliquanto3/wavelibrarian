@@ -121,7 +121,8 @@ def _corpus_apres(parsed: ParsedCorpus, scenario: Path) -> ParsedCorpus:
         module = importlib.import_module("wavelibrarian.corpus.scenario")
     except ImportError as exc:
         raise ConfigError(
-            "--scenario", "l'application du Scénario n'est pas disponible (story 2.6)"
+            "--scenario",
+            "l'application d'un Scénario n'est pas encore disponible dans cette version",
         ) from exc
     return module.corpus_apres(parsed, scenario)  # type: ignore[no-any-return]
 

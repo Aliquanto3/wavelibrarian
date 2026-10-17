@@ -239,3 +239,52 @@ def test_commande_erreurs(tmp_path):
     autre = fichier(tmp_path, [], corpus_id="autre")
     res = runner.invoke(app, [*base, str(autre), "--corpus", str(corpus)])
     assert res.exit_code == 2 and "autre" in res.output
+
+
+def test_page_et_headings_exclusifs_et_unanswerable_apres(tmp_path):
+    ambigu = [{"doc": "docs/r.pdf", "page": 2, "headings": ["Faux"]}]
+    apres = {"operation": "op-1", "state": "after"}
+    qs = [
+        question(1, reference_anchors=ambigu),
+        question(2, type="unanswerable", reference_anchors=[], scenario_target=apres),
+    ]
+    res = check.controler(io.load(fichier(tmp_path, qs)), corpus_pdf())
+    assert [(s.question_id, s.bloquant) for s in res.signalements] == [("q-001", True)]
+    assert "exclusifs" in res.signalements[0].message
+
+
+def test_message_d_erreur_en_francais(tmp_path):
+    with pytest.raises(ConfigError) as e:
+        io.load(fichier(tmp_path, [question(1, type="inconnu")]))
+    assert "non admise" in e.value.message and "'factual'" in e.value.message
+    with pytest.raises(ConfigError) as e:
+        io.load(fichier(tmp_path, [], target_count="beaucoup"))
+    assert (e.value.path, e.value.message.split(" (")[0]) == ("target_count", "entier attendu")
+
+
+def test_commande_pdf_reel_et_titres_en_double(tmp_path, monkeypatch):
+    from fpdf import FPDF
+
+    monkeypatch.setenv("WL_HOME", str(tmp_path / ".wl"))
+    corpus = corpus_yaml(tmp_path)
+    (tmp_path / "docs" / "a.md").write_bytes(b"# Note\n\nx\n\n# Note\n\ny\n")
+    pdf = FPDF()
+    for texte in ("un", "deux", "trois"):
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=12)
+        pdf.cell(text=texte)
+    (tmp_path / "docs" / "r.pdf").write_bytes(bytes(pdf.output()))
+    qs = [
+        question(1, reference_anchors=[{"doc": "r.pdf", "page": 9}]),
+        question(2, reference_anchors=[{"doc": "r.pdf", "page": 3}]),
+        question(3, reference_anchors=[{"doc": "a.md", "headings": ["note-2"]}]),
+        question(4, reference_anchors=[{"doc": "a.md", "headings": ["Note 2"]}]),
+    ]
+    cmd = ["questions", "controler", str(fichier(tmp_path, qs)), "--corpus", str(corpus)]
+    res = CliRunner().invoke(app, cmd)
+    assert res.exit_code == 2, res.output
+    lignes = [ligne for ligne in res.output.splitlines() if "introuvable" in ligne]
+    assert lignes == [
+        "  - q-001 : Ancrage introuvable : r.pdf (page 9)",
+        "  - q-004 : Ancrage introuvable : a.md (Note 2)",
+    ]
