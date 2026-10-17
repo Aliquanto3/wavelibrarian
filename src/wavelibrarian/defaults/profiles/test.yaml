@@ -1,0 +1,14 @@
+# Profil de test : modèles factices, aucun téléchargement, aucun réseau.
+profile: test
+ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {}}
+embedder_device: cpu
+tokenizer: approx
+energy: {local: fake, api: fake, country_iso_code: FRA}
+defaults:
+  generator_models: [fake-llm-a, fake-llm-b]
+  embedder: fake-embedder
+  judge_pool: [fake-llm-c, fake-llm-b, fake-llm-a]
+  panel_size: 2
+  closed_book_models: [fake-llm-a, fake-llm-b, fake-llm-c]
+  question_gen_model: fake-llm-a
+  call_timeout_s: 30

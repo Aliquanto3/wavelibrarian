@@ -1,0 +1,14 @@
+# Profil GPU, pour l'usage ultérieur (PRD §7.3).
+profile: gpu
+ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {}}
+embedder_device: cuda
+tokenizer: reference
+energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}
+defaults:
+  generator_models: [claude-haiku-5-5, "qwen3.5:4b"]
+  embedder: bge-m3
+  judge_pool: ["qwen3.5:4b", "ministral-3:8b", claude-haiku-5-5]
+  panel_size: 2
+  closed_book_models: [claude-haiku-5-5, "qwen3.5:4b", "ministral-3:8b"]
+  question_gen_model: claude-haiku-5-5
+  call_timeout_s: 120

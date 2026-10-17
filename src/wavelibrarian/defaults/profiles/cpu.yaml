@@ -1,0 +1,14 @@
+# Profil CPU, par défaut du run autonome (PRD §7.3) : zéro couche GPU pour Ollama.
+profile: cpu
+ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {num_gpu: 0}}
+embedder_device: cpu
+tokenizer: reference
+energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}
+defaults:
+  generator_models: [claude-haiku-5-5, "minicpm5:1b-q4_k_m"]
+  embedder: multilingual-e5-small
+  judge_pool: ["minicpm5:2b-q4_k_m", "granite4.2:3b", claude-haiku-5-5]
+  panel_size: 2
+  closed_book_models: [claude-haiku-5-5, "minicpm5:1b-q4_k_m", "granite4.2:3b"]
+  question_gen_model: claude-haiku-5-5
+  call_timeout_s: 120
