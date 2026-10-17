@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.14,<3",
     "pyyaml>=6.0,<7",
-    "typer>=0.19,<1",
+    "typer>=0.26,<1",
     "anthropic>=1.15,<2",
     "httpx>=0.28,<1",
     "python-dotenv>=1.2,<2",
@@ -113,6 +113,8 @@ source_modules = ["wavelibrarian"]
 forbidden_modules = ["anthropic", "httpx"]
 unmatched_ignore_imports_alerting = "none"
 ignore_imports = [
+    "wavelibrarian.llm.providers -> anthropic",
+    "wavelibrarian.llm.providers -> httpx",
     "wavelibrarian.llm.providers.** -> anthropic",
     "wavelibrarian.llm.providers.** -> httpx",
 ]
@@ -123,7 +125,10 @@ type = "forbidden"
 source_modules = ["wavelibrarian"]
 forbidden_modules = ["sentence_transformers"]
 unmatched_ignore_imports_alerting = "none"
-ignore_imports = ["wavelibrarian.components.embedders.** -> sentence_transformers"]
+ignore_imports = [
+    "wavelibrarian.components.embedders -> sentence_transformers",
+    "wavelibrarian.components.embedders.** -> sentence_transformers",
+]
 
 [[tool.importlinter.contracts]]
 name = "Mesure confinée à measure (ecologits aussi pour le provider anthropic)"
@@ -132,19 +137,27 @@ source_modules = ["wavelibrarian"]
 forbidden_modules = ["opentelemetry", "codecarbon", "ecologits"]
 unmatched_ignore_imports_alerting = "none"
 ignore_imports = [
+    "wavelibrarian.measure -> opentelemetry",
+    "wavelibrarian.measure -> codecarbon",
+    "wavelibrarian.measure -> ecologits",
     "wavelibrarian.measure.** -> opentelemetry",
     "wavelibrarian.measure.** -> codecarbon",
     "wavelibrarian.measure.** -> ecologits",
     "wavelibrarian.llm.providers.anthropic -> ecologits",
 ]
 
+# Type `protected` et non `forbidden` : un contrat `forbidden` dont la source (`wavelibrarian`)
+# contient le module interdit saute la paire (modules qui se recouvrent) et ne vérifie rien.
 [[tool.importlinter.contracts]]
 name = "Providers atteints par la seule passerelle (AD-3)"
-type = "forbidden"
-source_modules = ["wavelibrarian"]
-forbidden_modules = ["wavelibrarian.llm.providers"]
-unmatched_ignore_imports_alerting = "none"
-ignore_imports = [
-    "wavelibrarian.llm.gateway -> wavelibrarian.llm.providers",
-    "wavelibrarian.llm.preflight -> wavelibrarian.llm.providers",
+type = "protected"
+# `as_packages = false` : en mode paquet, import-linter exige que `llm.gateway` et `llm.preflight`
+# existent déjà ; les jokers couvrent les sous-modules de `providers`.
+protected_modules = ["wavelibrarian.llm.providers", "wavelibrarian.llm.providers.**"]
+allowed_importers = [
+    "wavelibrarian.llm.gateway",
+    "wavelibrarian.llm.preflight",
+    "wavelibrarian.llm.providers",
+    "wavelibrarian.llm.providers.**",
 ]
+as_packages = false

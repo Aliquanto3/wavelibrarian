@@ -3569,7 +3569,7 @@ requires-dist = [
     { name = "tenacity", specifier = ">=9.2,<10" },
     { name = "tiktoken", specifier = ">=0.14,<1" },
     { name = "torch", marker = "extra == 'local'", specifier = ">=2.14,<3", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "typer", specifier = ">=0.19,<1" },
+    { name = "typer", specifier = ">=0.26,<1" },
 ]
 provides-extras = ["local", "energy", "docling"]
 

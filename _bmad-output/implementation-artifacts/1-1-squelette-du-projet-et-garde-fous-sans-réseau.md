@@ -1,7 +1,7 @@
 ---
 story: "1.1"
 title: Squelette du projet et garde-fous sans réseau
-status: review
+status: done
 ---
 
 # Story 1.1 : Squelette du projet et garde-fous sans réseau
@@ -49,3 +49,17 @@ status: review
 - Statut : prêt pour revue.
 - Écart : `typer` est déclaré `>=0.19,<1` et non `>=0.27,<0.28` car l'extra `docling` (docling 2.140) exige `typer<0.27` et rend la résolution impossible. Le verrou retient `typer 0.26.8`. À arbitrer à la revue (retirer la contrainte de l'extra docling, ou rehausser plus tard).
 - Aucun appel réseau, aucun extra installé, `CUDA_VISIBLE_DEVICES=-1` et threads à 4.
+
+## Revue
+
+Revue Opus du 2026-10-17, une passe, sur `1cdd5e0`.
+
+- high, revue : le contrat AD-3 (`forbidden`, source `wavelibrarian`, interdit `wavelibrarian.llm.providers`) ne vérifiait rien, car import-linter saute les paires source/interdit qui se recouvrent (`_modules_overlap`). Prouvé : `llm.autre -> llm.providers.anthropic` passait. Corrigé : contrat `protected` (`as_packages = false`, jokers sur les sous-modules de `providers`). Sondé avec des modules temporaires : la passerelle, le preflight et les imports internes aux providers passent ; `runner.x` et `llm.autre` cassent le contrat. L'AC demandait un contrat `forbidden` ; on garde son intention, le type `forbidden` ne peut pas la tenir.
+- high, second avis n° 1 : confirmé. `python -m importlinter.cli` sort 0 sans rien analyser. Corrigé : le test appelle `lint_imports_command()`, vérifie `5 kept, 0 broken`, et un nouveau test (`test_lint_imports_detecte_une_rupture`) prouve qu'un contrat cassé fait échouer l'appel.
+- medium, revue : les `ignore_imports` en `pkg.** -> x` ne couvrent pas le paquet lui-même (`llm/providers/__init__.py` important `httpx` cassait le contrat). Corrigé : chaque exception porte aussi la forme sans `.**` (providers, embedders, measure).
+- low, second avis n° 2 : écarté pour l'essentiel. `>=0.19,<1` suit déjà le motif `>=x.y,<x+1` avec x = 0, comme `httpx`, `bm25s` et `tiktoken`. La borne basse passe à `>=0.26,<1`, version testée et retenue par le verrou (0.26.8). La 0.27.3 du spine reste bloquée par `docling` (`typer<0.27`, d'après le développeur ; pas revérifié, pour ne pas faire d'appel réseau).
+- low, second avis n° 3 : écarté. `pyright` vient du groupe dev exigé par l'AC, et Node n'est téléchargé qu'une fois, au premier lancement.
+- low, second avis n° 4 : écarté. L'AC ne demande pas `--strict-markers`, et les marqueurs utilisés sont déclarés.
+- low, second avis n° 5 : écarté. L'AC demande le blocage de `socket.create_connection`, qui est vérifié ; `--disable-socket` remplace `socket.socket`, que tout client TCP finit par utiliser.
+- low, second avis n° 6 : reporté. L'AC demande un test, qui existe et passe sous Windows ; elle n'exige pas de workflow CI. À faire : lancer la suite sur Linux (par une CI à ajouter dans une story outillage) et vérifier `test_socket_tcp_bloque`.
+- low, second avis n° 7 : écarté. L'aide affichée est la chaîne française du `Typer` ; une sous-chaîne suffit à le vérifier.
