@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 00:59 |
-| Story en cours | 2.7 (voie B, second avis) ; 3.5 (voie A) |
-| Stories livrées | 22 / 56 |
+| Mis à jour | 2026-10-18 01:04 |
+| Story en cours | 3.5 (voie A) ; voie B : epic 4 |
+| Stories livrées | 23 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -95,6 +95,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Runner (epic 4), Scénario** : passer à `corpus_apres` la langue par défaut du `corpus.yaml` (`lang`) et le Parser de la base (`parser`) (story 2.6).
 - **3.5 (closed-book)** : refuser une justification vide si le contrat l'exige (`CriterionVerdict`) ; choisir le Juge par défaut avec filtre de Famille (AD-14) au lieu de `judge_pool[0]` (story 3.4).
 - **Panel (epic 4)** : construire `JudgeInput` avec les textes des Ancrages et les `context_texts` du Generator ; ouvrir `ctx.scope(post="judging")` (story 3.4).
+- **Runner (epic 4), Paliers** : déduire les `required_paths` des Ancrages des Questions et les passer à `tirer(parsed, tiers, required_paths)` (story 2.7).
 
 ## Journal de surveillance
 
@@ -125,6 +126,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 00:44 | 17 tronq. (qwen3.5:4b) : think_on instructions/ifbench 13 tronq., 35 s/tronq. (pas de réf.) ; think_on instructions/instructions-fr 4 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 23 % | 11.7 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (3.4) |
 | 00:53 | 14 tronq. (qwen3.5:4b) : think_on instructions/instructions-fr 8 tronq., 35 s/tronq. (pas de réf.) ; think_on instructions/mifeval-fr 6 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 22 % | 10.7 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (2.7) |
 | 00:58 | 16 tronq. (qwen3.5:4b) : think_on instructions/mifeval-fr 16 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 9 % | 11.6 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (3.5) |
+| 01:04 | 17 tronq. (qwen3.5:4b) : think_on rag/piaf 9 tronq., 35 s/tronq. (pas de réf.) ; think_on instructions/mifeval-fr 8 tronq., 35 s/tronq. vs 35 (+0 %) ; pire +0 % | 10 % | 11.7 Go | 1 s, 86 Mo, 75 thr (13 proc) | Sous les seuils : on continue |
 
 ## Journal des stories
 
@@ -152,3 +154,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 3.3 | 00:29 | 00:44 | ef1bfab22aa7010ad548992bbace166c4049add3 | 0 $ | Revue : dédoublonnage (texte normalisé + Ancrages, dans la sortie et face au fichier), Ancrage hors échantillon rejeté, coût en virgule fixe, --cible < 1 refusé. 466 tests verts. |
 | 2.6 | 00:39 | 00:53 | 11b462e35883ac340db4d3ef842ed8f9764e3ca3 | 0 $ | Revue : langue déclarée (et non majoritaire) pour un Document ajouté, état après identique à une ingestion directe (test oracle), chemins absolus/.. refusés, OSError → ConfigError, delete+add garde les métadonnées. Conflit cli.py résolu. 490 tests verts. |
 | 3.4 | 00:46 | 00:59 | 7b56ebc2da6502263b7da8e06c6dc878db7384e4 | 0 $ | Revue : exact_match sans faux positifs (signe moins, mots alphanumériques, plages), milliers à deux groupes, œ→oe ; disjonction et négation consignées comme limite. 527 tests verts. |
+| 2.7 | 00:54 | 01:04 | ee52043b91ef7f791af1d75a8c04656aeb759963 | 0 $ | Revue : wl corpus paliers ingère le Corpus (mêmes Paliers que tirer(parsed)), test de graine renforcé. Fin de l'epic 2. 537 tests verts. |
