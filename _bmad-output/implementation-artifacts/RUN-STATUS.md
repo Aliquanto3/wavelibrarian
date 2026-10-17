@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 00:07 |
-| Story en cours | 2.4 (voie B, second avis) ; 3.2 (voie A) |
-| Stories livrées | 16 / 56 |
+| Mis à jour | 2026-10-18 00:16 |
+| Story en cours | 3.2 (voie A) ; 2.5 (voie B) |
+| Stories livrées | 17 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -112,6 +112,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 23:49 | 10 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 10 tronq., 36 s/tronq. vs 36 (+0 %) ; pire +0 % | 19 % | 11.8 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue |
 | 23:58 | 0 tronq. (?) :  ; pire +0 % | 62 % | 14.0 Go | 1 s, 86 Mo, 74 thr (13 proc) | Sous les seuils : on continue (2.4) |
 | 00:07 | 5 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 5 tronq., 37 s/tronq. vs 36 (-4 %) ; pire -4 % | 21 % | 12.1 Go | 1 s, 86 Mo, 75 thr (13 proc) | Sous les seuils : on continue (3.2) |
+| 00:16 | 1 tronq. (qwen3.5:4b) : think_on extraction/extraction-fr 1 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 9 % | 14.9 Go | 1 s, 86 Mo, 74 thr (13 proc) | Sous les seuils : on continue (2.5) |
 
 ## Journal des stories
 
@@ -133,3 +134,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.12 | 23:27 | 23:49 | 1ed4338c07d5bd1e60f7d5533378af05900e9599 | 0 $ | Revue : embedder installé = config + poids + tokenizer, extra cassé → WlError, calibration_judge au préflight, ollama list en échec → code 4, client httpx fermé. real_local écrits, non exécutés. Fin de l'epic 1. |
 | 2.3 | 23:46 | 23:58 | 5cda356e04d9253f6e3338dd252d67be3298d60f | 0 $ | Revue : césure PDFium (U+0002) recollée, NFKC et caractères de contrôle supprimés, PdfiumError → ValueError, tests chiffré et fermeture. 327 tests verts (avant rebase). |
 | 3.1 | 23:53 | 00:07 | aceba11c9b85330dd934cc47fe9e9ea570a3d329 | 0 $ | Revue : Ancrage page+titres ambigu signalé, repli par slug restreint, messages pydantic traduits en français (transverse), faux signalement scenario corrigé. 394 tests verts. |
+| 2.4 | 00:00 | 00:16 | 548387418f8e561c7cb16e2e394b257c1b821acd | 0 $ | Revue : apostrophe typographique unifiée, entités après élision, entités d'une lettre écartées, décimales à virgule, échec d'écriture → code 1. Conflit cli.py résolu au rebase. 404 tests verts. |

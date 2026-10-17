@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-18-2026 00:07
+last_updated: 10-18-2026 00:16
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -54,7 +54,7 @@ development_status:
   2-1-déclaration-d-un-corpus: done
   2-2-ingestion-markdown-texte-et-html-avec-ancrages: done
   2-3-ingestion-pdf-avec-ancrages-par-page: done
-  2-4-profil-de-corpus-et-commande-wl-corpus-profiler: backlog
+  2-4-profil-de-corpus-et-commande-wl-corpus-profiler: done
   2-5-mini-corpus-fictif: backlog
   2-6-application-d-un-scénario-de-mise-à-jour-à-un-corpus: backlog
   2-7-paliers-de-volume-et-commande-wl-corpus-paliers: backlog
