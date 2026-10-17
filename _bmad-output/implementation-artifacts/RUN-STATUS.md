@@ -51,7 +51,7 @@ Avant de commencer, puis toutes les 10 minutes environ, consigner une ligne dans
 
 Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local redevient utilisable : tests `real_local` (stories 1.11 et 1.12) et `wl run` sur `mini-cpu.yaml`, sur le profil CPU (`num_gpu: 0`). Le GPU reste à `CUDA_VISIBLE_DEVICES=-1` sauf avis contraire d'Anaël. Le noter ici dans « État ».
 
-**Avis d'Anaël (2026-10-17, 23 h 20)** : les tests GPU de l'autre session doivent finir entre 4 h et 6 h. À partir de 4 h, vérifier toutes les 20 min qu'ils sont arrêtés (`pilot-report.md`, ou verrou `generation.lock` absent + log muet depuis 10 min + aucun processus dans `nvidia-smi`), et reconfirmer 5 min après le premier constat. Une fois confirmé, **Ollama et le GPU deviennent utilisables** (fin des contraintes de cohabitation ; garder un seul serveur de modèles).
+**Avis d'Anaël (2026-10-17, 23 h 20)** : les tests GPU de l'autre session doivent finir vers 5 h ou 6 h (précision d'Anaël à 23 h 50). À partir de 5 h, vérifier toutes les 20 min qu'ils sont arrêtés (`pilot-report.md`, ou verrou `generation.lock` absent + log muet depuis 10 min + aucun processus dans `nvidia-smi`), et reconfirmer 5 min après le premier constat. Une fois confirmé, **Ollama et le GPU deviennent utilisables** (fin des contraintes de cohabitation ; garder un seul serveur de modèles).
 
 ### Reprise après `/clear`
 
