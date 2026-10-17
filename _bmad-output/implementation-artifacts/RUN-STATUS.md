@@ -7,7 +7,7 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 | Champ | Valeur |
 | --- | --- |
 | Mis à jour | 2026-10-17 23:02 |
-| Story en cours | 1.11 |
+| Story en cours | 1.11 (voie A, revue) ; 2.1 (voie B) |
 | Stories livrées | 10 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
@@ -18,6 +18,8 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 ## Consignes du run
 
 Ordre : les stories de `sprint-status.yaml`, epics 1 à 7, dans l'ordre du fichier. Par story : `agent-cost-kit:dev-story` → `agent-cost-kit:second-avis` → `agent-cost-kit:reviewer` (avec la liste du second avis) → intégration sur `main`, puis mise à jour du sprint status et de ce fichier. Appels bloquants, une passe de revue, pas d'imbrication de sous-agents.
+
+Parallélisme (autorisé par Anaël le 2026-10-17, risque faible) : au plus deux voies, A = fin de l'epic 1 (1.11, 1.12), B = epic 2 dans l'ordre. Intégration séquentielle : rebase sur `main`, suite complète, puis fusion. Retour à une voie si le débit du banc baisse de plus de 15 %.
 
 Contexte : ne jamais relire `epics.md` en entier (150 Ko). Lire `epic-<N>-context.md` (compilé une fois par epic dans ce dossier), puis la seule section de la story : repérer `### Story N.M` par une recherche, et lire jusqu'à la story suivante. Transmettre aux sous-agents ce chemin et ces numéros de ligne, pas le fichier entier.
 
