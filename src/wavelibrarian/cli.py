@@ -1,5 +1,6 @@
 """Commande `wl` : point d'entrée du banc."""
 
+import importlib
 from pathlib import Path
 from typing import Annotated
 
@@ -8,6 +9,10 @@ import typer
 from wavelibrarian import registry
 from wavelibrarian.config.validate import validate_file
 from wavelibrarian.core.errors import ConfigError, ProviderError, ValidationFailed, WlError
+from wavelibrarian.core.types import ParsedCorpus
+from wavelibrarian.corpus.declare import declare
+from wavelibrarian.corpus.ingest import ingest
+from wavelibrarian.evalset import check, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.runner import installer as installation
 
@@ -17,6 +22,12 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+
+questions_app = typer.Typer(
+    help="Jeu d'évaluation : contrôle des Questions.", no_args_is_help=True, add_completion=False
+)
+app.add_typer(questions_app, name="questions")
 
 
 @app.callback()
@@ -100,3 +111,56 @@ def installer(
     for m in res.ollama_manquants:
         typer.echo(f"  - ollama pull {m}", err=True)
     raise typer.Exit(4)
+
+
+def _corpus_apres(parsed: ParsedCorpus, scenario: Path) -> ParsedCorpus:
+    """Corpus après application du Scénario (story 2.6 ; `ConfigError` tant qu'elle manque)."""
+    if not scenario.is_file():
+        raise ConfigError(str(scenario), "fichier de Scénario introuvable")
+    try:
+        module = importlib.import_module("wavelibrarian.corpus.scenario")
+    except ImportError as exc:
+        raise ConfigError(
+            "--scenario", "l'application du Scénario n'est pas disponible (story 2.6)"
+        ) from exc
+    return module.corpus_apres(parsed, scenario)  # type: ignore[no-any-return]
+
+
+@questions_app.command("controler")
+def questions_controler(
+    questions: Annotated[Path, typer.Argument(help="Fichier questions.yaml à contrôler.")],
+    corpus: Annotated[Path, typer.Option("--corpus", help="Fichier corpus.yaml du Corpus.")],
+    scenario: Annotated[
+        Path | None,
+        typer.Option("--scenario", help="Scénario : résout les Questions `scenario_target`."),
+    ] = None,
+) -> None:
+    """Compte les Questions, signale les Ancrages introuvables (code 2 si Question validée)."""
+    try:
+        jeu = io.load(questions)
+        parsed = ingest(declare(corpus))
+        apres = _corpus_apres(parsed, scenario) if scenario else None
+    except ConfigError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    if jeu.corpus_id != parsed.corpus_id:
+        typer.echo(
+            f"Erreur : le fichier de Questions vise le Corpus {jeu.corpus_id!r}, "
+            f"pas {parsed.corpus_id!r}.",
+            err=True,
+        )
+        raise typer.Exit(2)
+    res = check.controler(jeu, parsed, apres)
+    typer.echo("Questions par statut : " + ", ".join(f"{s} {n}" for s, n in res.par_statut.items()))
+    par_type = ", ".join(f"{t} {n}" for t, n in res.par_type.items()) or "aucune"
+    typer.echo(f"Questions par Type : {par_type}")
+    typer.echo(
+        f"Utilisables (validated, corrected) : {res.utilisables} sur {res.target_count} visées, "
+        f"écart {res.ecart:+d}."
+    )
+    for s in res.signalements:
+        typer.echo(f"  - {s.question_id} : {s.message}" + ("" if s.bloquant else " (signalé)"))
+    if res.echec:
+        typer.echo("Contrôle échoué.", err=True)
+        raise typer.Exit(2)
+    typer.echo("Contrôle réussi.")
