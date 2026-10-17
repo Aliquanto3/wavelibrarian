@@ -18,6 +18,8 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 Ordre : les stories de `sprint-status.yaml`, epics 1 à 7, dans l'ordre du fichier. Par story : `agent-cost-kit:dev-story` → `agent-cost-kit:second-avis` → `agent-cost-kit:reviewer` (avec la liste du second avis) → intégration sur `main`, puis mise à jour du sprint status et de ce fichier. Appels bloquants, une passe de revue, pas d'imbrication de sous-agents.
 
+Contexte : ne jamais relire `epics.md` en entier (150 Ko). Lire `epic-<N>-context.md` (compilé une fois par epic dans ce dossier), puis la seule section de la story : repérer `### Story N.M` par une recherche, et lire jusqu'à la story suivante. Transmettre aux sous-agents ce chemin et ces numéros de ligne, pas le fichier entier.
+
 Contraintes du run autonome, reprises de `_bmad-output/planning-artifacts/epics.md`. Elles s'ajoutent aux stories sans changer leurs critères.
 
 ### Cohabitation avec slm-quality-bench (jusqu'au 18/10 vers 10 h, ou jusqu'à `pilot-report.md`)
