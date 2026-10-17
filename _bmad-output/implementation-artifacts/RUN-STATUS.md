@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 21:40 |
-| Story en cours | 1.5 |
-| Stories livrées | 4 / 56 |
+| Mis à jour | 2026-10-17 21:52 |
+| Story en cours | 1.6 |
+| Stories livrées | 5 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -55,6 +55,15 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 2. Une story `in-progress` sans commit d'intégration est reprise depuis son fichier de story (et son worktree s'il existe).
 3. Refaire une mesure du banc avant de relancer un dev-story.
 
+## Reports entre stories
+
+À transmettre au dev-story de la story cible.
+
+- **2.1 / 2.2** : formats du Corpus et parsers du registre, nécessaires pour remplacer `parser: auto` (story 1.5).
+- **4.3 / 4.4** : le runner remplace `parser: auto` par le parser concret avant `write_resolved` et `RunContext.parser` (stories 1.2 et 1.5) ; vérifier que `experiment.resolved.yaml` ne contient plus `auto`.
+- **Gateway (1.9)** : `cache_write_1h` n'est pas facturé, `Usage` n'a pas de poste 1 h (story 1.4).
+- **Story outillage / CI** : lancer `test_socket_tcp_bloque` sous Linux (story 1.1).
+
 ## Journal de surveillance
 
 | Heure | Débit banc (10 min, modèle / piste) | CPU | RAM libre | Run (CPU s, RSS max, threads) | Décision |
@@ -65,6 +74,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 21:22 | Indicateur révisé : durée des réponses tronquées (budget de tokens fixe), même modèle / mode / jeu. think_on reasoning/bbeh-mini 42 s vs 41 s (−3 %) | 7 % | 17,0 Go | 0 s, 86 Mo, 54 thr | Pas de ralentissement réel : on continue (1.3). Les comptages bruts par piste mélangent des questions de longueurs très différentes. |
 | 21:30 | 2 tronq. (lfm2.5-2.6b) : think_on reasoning/bbeh-mini 1 tronq., 42 s/tronq. (pas de réf.) ; think_on tools/bfcl-multi 1 tronq., 25 s/tronq. (pas de réf.) ; pire +0 % | 12 % | 15.5 Go | 1 s, 86 Mo, 76 thr (9 proc) | Sous les seuils : on continue (1.4) |
 | 21:40 | 2 tronq. (gemma4:e2b-it-qat) : think_off instructions/ifbench 2 tronq., 19 s/tronq. (pas de réf.) ; pire +0 % | 23 % | 16.9 Go | 1 s, 86 Mo, 72 thr (9 proc) | Sous les seuils : on continue (1.5) |
+| 21:50 | 17 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 20 s/tronq. (nouveau modèle, référence posée) | 26 % | 15,1 Go | 1 s, 86 Mo, 59 thr | Sous les seuils |
+| 21:52 | 19 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 19 tronq., 20 s/tronq. vs 20 (-0 %) ; pire -0 % | 36 % | 13.3 Go | 1 s, 86 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.6) |
 
 ## Journal des stories
 
@@ -74,3 +85,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.2 | 21:10 | 21:30 | e349d1970419bd0b7d13367023ed0aeca48430a3 | 0 $ | Revue : 2 medium corrigés (index_key lit le parser résolu via RunContext.parser, contracts.md §2.4 mis à jour ; ArchCapabilities gelé + extra=forbid). 33 tests verts. |
 | 1.3 | 21:23 | 21:30 | 3908cf1d4686321c7aa58ba162b2c59230b53789 | 0 $ | Revue : 2 medium corrigés (fuite sys.modules dans la fixture ; register exige Params forbid+frozen, AD-2) et 6 low. 42 tests verts. |
 | 1.4 | 21:31 | 21:40 | 5b06b7ec0bca3bbb6c44479db7b51da9e8b6ccc6 | 0 $ | AC 3 contradictoire (0,60 vs palier ×5 → 3,00) : règle de palier gardée, à arbitrer. Revue : tarifs obligatoires par poste, pricing refusé sur modèle local, profil = nom de fichier. 62 tests verts. |
+| 1.5 | 21:41 | 21:52 | 6414d58681c32a6f6b8f4ccbe6839343a33a80a6 | 0 $ | Revue : ModelRef nu refusé au register, juges explicites non écrasés (is None, ge/min_length), seed strict. parser:auto reporté au runner (voir Reports). 93 tests verts. |
