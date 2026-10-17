@@ -111,3 +111,21 @@ class OllamaProvider:
                 request.model_id, num_ctx, usage.input_tokens, usage.output_tokens,
             )  # fmt: skip
         return ProviderResponse(text=texte, usage=usage)
+
+
+def list_models(
+    base_url: str, *, http_client: httpx.Client | None = None, timeout_s: float = 3.0
+) -> set[str]:
+    """Noms des modèles présents dans Ollama (`GET /api/tags`, lecture seule, préflight).
+
+    Lève `ProviderError` si le serveur est injoignable ou répond de travers.
+    """
+    http = http_client or httpx.Client()
+    url = base_url.rstrip("/") + "/api/tags"
+    try:
+        reponse = http.get(url, timeout=timeout_s)
+        reponse.raise_for_status()
+        corps = reponse.json()
+        return {str(m.get("name") or m.get("model")) for m in corps.get("models", [])}
+    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        raise ProviderError(f"Ollama ne répond pas ({type(exc).__name__})") from None

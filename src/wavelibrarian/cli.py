@@ -7,7 +7,9 @@ import typer
 
 from wavelibrarian import registry
 from wavelibrarian.config.validate import validate_file
-from wavelibrarian.core.errors import ConfigError, ValidationFailed
+from wavelibrarian.core.errors import ConfigError, ValidationFailed, WlError
+from wavelibrarian.llm.preflight import preflight
+from wavelibrarian.runner import installer as installation
 
 app = typer.Typer(
     name="wl",
@@ -50,12 +52,46 @@ def run(
         Path, typer.Argument(help="Fichier YAML de l'Expérience à valider puis exécuter.")
     ],
 ) -> None:
-    """Valide une Expérience (sans réseau) ; le runner arrive à l'epic 4."""
+    """Valide une Expérience, vérifie ses dépendances (préflight) ; le runner arrive à l'epic 4."""
     try:
-        validate_file(experience)
+        resultat = validate_file(experience)
     except ValidationFailed as echec:
         typer.echo(f"Expérience invalide : {len(echec.errors)} erreur(s).", err=True)
         for e in echec.errors:
             typer.echo(f"  - {e.path} : {e.message}", err=True)
         raise typer.Exit(2) from echec
     typer.echo("Validation réussie.")
+    modeles = {m for c in resultat.resolved.configurations for m in c.models}
+    modeles |= set(resultat.resolved.judges.pool or ())
+    verdict = preflight(modeles, resultat.catalog, resultat.resolved.profile_settings)
+    if not verdict.ok:
+        typer.echo(
+            f"Préflight échoué : {len(verdict.errors)} dépendance(s) manquante(s).", err=True
+        )
+        for e in verdict.errors:
+            typer.echo(f"  - {e}", err=True)
+        raise typer.Exit(4)
+    typer.echo("Préflight réussi.")
+
+
+@app.command("installer")
+def installer(
+    profil: Annotated[
+        str, typer.Option("--profil", help="Profil à préparer : cpu ou gpu.")
+    ] = "cpu",
+) -> None:
+    """Télécharge l'embedder et l'encodage tiktoken, puis vérifie `ollama list`."""
+    try:
+        res = installation.installer(profil)
+    except WlError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    typer.echo(f"Encodage tiktoken {res.encodage} prêt.")
+    typer.echo(f"Embedder {res.embedder} prêt.")
+    if not res.ollama_manquants:
+        typer.echo("Modèles Ollama du profil : tous présents.")
+        return
+    typer.echo("Modèles Ollama manquants (à tirer à la main) :", err=True)
+    for m in res.ollama_manquants:
+        typer.echo(f"  - ollama pull {m}", err=True)
+    raise typer.Exit(4)
