@@ -177,6 +177,7 @@ class Context:
         seed: int = 0,
         catalog: ModelCatalog | None = None,
         providers: Providers | None = None,
+        budget: Budget | None = None,
     ) -> "Context":
         """Contexte d'une commande hors Exécution : un profil seul, sans `run.lock`."""
         return cls(
@@ -186,6 +187,7 @@ class Context:
             run_id=run_id,
             seed=seed,
             providers=providers,
+            budget=budget,
             execution=False,
         )
 

@@ -2,23 +2,34 @@
 
 import importlib
 import json
+import os
+import secrets
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from wavelibrarian import registry
+from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import load_profile
 from wavelibrarian.config.validate import validate_file
-from wavelibrarian.core.errors import ConfigError, ProviderError, ValidationFailed, WlError
+from wavelibrarian.core.errors import (
+    BudgetExceeded,
+    ConfigError,
+    ProviderError,
+    ValidationFailed,
+    WlError,
+)
 from wavelibrarian.core.types import ParsedCorpus
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_format
 from wavelibrarian.corpus.profile import profile as profil_corpus
-from wavelibrarian.evalset import check, io
+from wavelibrarian.evalset import check, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
+from wavelibrarian.runner.context import Context
 
 app = typer.Typer(
     name="wl",
@@ -169,6 +180,92 @@ def questions_controler(
         typer.echo("Contrôle échoué.", err=True)
         raise typer.Exit(2)
     typer.echo("Contrôle réussi.")
+
+
+def _contexte_hors_execution(profil: str, seed: int) -> Context:
+    """Contexte d'une commande hors Exécution (traces dans `WL_HOME/hors-execution/<run_id>/`)."""
+    run_id = f"questions-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    return Context.from_profile(profil, wl_home=wl_home, run_id=run_id, seed=seed)
+
+
+@questions_app.command("generer")
+def questions_generer(
+    corpus_yaml: Annotated[Path, typer.Argument(help="Fichier `corpus.yaml` du Corpus.")],
+    repartition: Annotated[
+        str, typer.Option("--repartition", help="Questions par Type : factual=40,multi_hop=20.")
+    ],
+    modele: Annotated[
+        str | None, typer.Option("--modele", help="Modèle de génération (défaut : profil).")
+    ] = None,
+    questions: Annotated[
+        Path | None,
+        typer.Option("--questions", help="Fichier de Questions (défaut : à côté de corpus.yaml)."),
+    ] = None,
+    cible: Annotated[
+        int | None,
+        typer.Option("--cible", help="`target_count` d'un nouveau fichier (défaut : le total)."),
+    ] = None,
+    profil: Annotated[str, typer.Option("--profil", help="Profil : cpu, gpu ou test.")] = "cpu",
+    graine: Annotated[int, typer.Option("--graine", help="Graine de l'échantillon.")] = 42,
+) -> None:
+    """Ajoute des Questions `generated` ancrées dans le Corpus, dans la limite du Plafond."""
+    fichier = questions or corpus_yaml.parent / "questions.yaml"
+    try:
+        demande = generate.parse_repartition(repartition)
+        reglages = load_profile(profil)
+        nom_modele = modele or reglages.defaults.question_gen_model
+        load_catalog().get(nom_modele)  # modèle inconnu du Catalogue : code 2, avant tout appel
+        parsed = ingest(declare(corpus_yaml))
+        if fichier.exists():
+            existant = io.load(fichier)
+        else:
+            existant = io.QuestionsFile(
+                corpus_id=parsed.corpus_id,
+                target_count=cible or sum(demande.values()),
+                questions=(),
+            )
+        if existant.corpus_id != parsed.corpus_id:
+            raise ConfigError(
+                str(fichier),
+                f"le fichier vise le Corpus {existant.corpus_id!r}, pas {parsed.corpus_id!r}",
+            )
+        if existant.freeze is not None:
+            raise ConfigError(
+                str(fichier), "jeu gelé : y ajouter des Questions casserait l'empreinte"
+            )
+    except ConfigError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    try:
+        with _contexte_hors_execution(profil, graine) as ctx:
+            res = generate.generer(ctx, parsed, existant, demande, nom_modele)
+    except BudgetExceeded as erreur:
+        typer.echo(f"Plafond atteint : {erreur} ; aucune Question écrite.", err=True)
+        raise typer.Exit(3) from erreur
+    except ConfigError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except ProviderError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(4) from erreur
+    except WlError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    if res.ajoutees:
+        io.save(fichier, res.fichier)
+    typer.echo(f"Questions ajoutées : {len(res.ajoutees)} ({fichier})")
+    for q in res.ajoutees:
+        typer.echo(f"  - {q.id} ({q.type}) : {q.text}")
+    typer.echo(f"Rejetées à la génération : {len(res.rejetees)}")
+    for r in res.rejetees:
+        typer.echo(f"  - {r.type} : {r.motif}")
+    if res.en_trop:
+        typer.echo(f"Écartées en surplus de la répartition : {res.en_trop}")
+    for type_, n in res.manquantes.items():
+        typer.echo(f"Manquantes pour {type_} : {n}")
+    origine = "servi par le Cache de réponses" if res.depuis_cache else "appel au modèle"
+    typer.echo(f"Coût : {res.cout.replace('.', ',')} ({origine}), Poste evalset.")
 
 
 def _fr(valeur: float, decimales: int = 2) -> str:
