@@ -1,19 +1,23 @@
 """Commande `wl` : point d'entrée du banc."""
 
 import importlib
+import json
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from wavelibrarian import registry
+from wavelibrarian.config.defaults import load_profile
 from wavelibrarian.config.validate import validate_file
 from wavelibrarian.core.errors import ConfigError, ProviderError, ValidationFailed, WlError
 from wavelibrarian.core.types import ParsedCorpus
 from wavelibrarian.corpus.declare import declare
-from wavelibrarian.corpus.ingest import ingest
+from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_format
+from wavelibrarian.corpus.profile import profile as profil_corpus
 from wavelibrarian.evalset import check, io
 from wavelibrarian.llm.preflight import preflight
+from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
 
 app = typer.Typer(
@@ -165,3 +169,60 @@ def questions_controler(
         typer.echo("Contrôle échoué.", err=True)
         raise typer.Exit(2)
     typer.echo("Contrôle réussi.")
+
+
+corpus_app = typer.Typer(help="Déclarer, ingérer et profiler un Corpus.", no_args_is_help=True)
+app.add_typer(corpus_app, name="corpus")
+
+
+@corpus_app.command("profiler")
+def corpus_profiler(
+    corpus_yaml: Annotated[Path, typer.Argument(help="Fichier `corpus.yaml` du Corpus.")],
+    parser: Annotated[
+        str, typer.Option("--parser", help="Parser à utiliser, ou `auto` (un par format).")
+    ] = "auto",
+    profil: Annotated[
+        str, typer.Option("--profil", help="Profil d'exécution (tokenizer) : cpu, gpu ou test.")
+    ] = "cpu",
+    sortie: Annotated[
+        Path, typer.Option("--sortie", help="Dossier où écrire `corpus_profile.json`.")
+    ] = Path("."),
+) -> None:
+    """Ingère le Corpus et écrit son Profil (`corpus_profile.json`) avec un résumé."""
+    try:
+        declare_corpus = declare(corpus_yaml)
+        reglages = load_profile(profil)
+        nom = nom_parser_resolu(parsers_par_format(declare_corpus.formats, parser))
+        parse = ingest(declare_corpus, parser)
+        p = profil_corpus(
+            parse,
+            parser=nom,
+            tokenizer=make_tokenizer(reglages.tokenizer),
+            volatility=declare_corpus.spec.volatility,
+        )
+    except ConfigError as erreur:
+        typer.echo(f"Corpus invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except WlError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    sortie.mkdir(parents=True, exist_ok=True)
+    fichier = sortie / "corpus_profile.json"
+    fichier.write_text(
+        json.dumps(p.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    formats = ", ".join(f"{k} : {v}" for k, v in p.formats.items())
+    langues = ", ".join(f"{k} : {v}" for k, v in p.langs.items())
+    typer.echo(f"Profil du Corpus « {p.corpus_id} » (empreinte {p.fingerprint}) écrit : {fichier}")
+    typer.echo(f"  Documents : {p.n_documents} ({formats})")
+    typer.echo(
+        f"  Tokens : {p.n_tokens} (tokenizer {p.tokenizer}), "
+        f"{p.mean_tokens_per_document:.1f} par Document"
+    )
+    typer.echo(
+        f"  Profondeur de titres : max {p.heading_depth_max}, moyenne {p.heading_depth_mean:.2f}"
+    )
+    typer.echo(f"  Densité de liens : {p.link_density:.2f} ; part tabulaire : {p.table_share:.2f}")
+    typer.echo(f"  Images par Document : {p.images_per_document:.2f}")
+    typer.echo(f"  Langue dominante : {p.dominant_lang} ({langues}) ; volatilité : {p.volatility}")

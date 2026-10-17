@@ -53,8 +53,11 @@ class _Modele(BaseModel):
 
 
 class _EntreeCatalogue(Protocol):
-    tokenizer: str
-    token_factor: Decimal
+    @property
+    def tokenizer(self) -> str: ...
+
+    @property
+    def token_factor(self) -> Decimal: ...
 
 
 class _CatalogueTokens(Protocol):
