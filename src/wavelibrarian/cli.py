@@ -25,6 +25,7 @@ from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_format
 from wavelibrarian.corpus.profile import profile as profil_corpus
 from wavelibrarian.corpus.scenario import corpus_apres as scenario_corpus_apres
+from wavelibrarian.corpus.tiers import tirer_chemins
 from wavelibrarian.evalset import check, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
@@ -330,3 +331,25 @@ def corpus_profiler(
     )
     typer.echo(f"  Images par Document : {_fr(p.images_per_document)}")
     typer.echo(f"  Langue dominante : {p.dominant_lang} ({langues}) ; volatilité : {p.volatility}")
+
+
+@corpus_app.command("paliers")
+def corpus_paliers(
+    corpus_yaml: Annotated[Path, typer.Argument(help="Fichier `corpus.yaml` du Corpus.")],
+) -> None:
+    """Affiche les Paliers de volume tirés (clé `tiers`), avec leurs Documents."""
+    try:
+        declare_corpus = declare(corpus_yaml)
+        tiers = declare_corpus.spec.tiers
+        if tiers is None:
+            typer.echo(f"Le Corpus « {declare_corpus.corpus_id} » ne déclare pas de clé `tiers`.")
+            return
+        tirage = tirer_chemins((d.source_path for d in declare_corpus.documents), tiers)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    typer.echo(f"Paliers du Corpus « {declare_corpus.corpus_id} » (graine {tiers.seed}) :")
+    for taille, chemins in tirage.items():
+        typer.echo(f"Palier {taille} ({len(chemins)} Documents) :")
+        for chemin in chemins:
+            typer.echo(f"  {chemin}")
