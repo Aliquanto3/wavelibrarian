@@ -188,16 +188,32 @@ class MeteredGateway:
             self._trace(marquee, nom, devise, "error", latency_s=self._timer() - debut)
             raise
         latence = self._timer() - debut
+        # Appel payé : un span porte son coût quoi qu'il arrive (traces.jsonl, source des coûts).
+        cout, panne = estimation, None
         try:
             cout = self._catalog.cost(request.model_id, reponse.usage)
+        except Exception as e:  # au moins l'estimation
+            panne = e
+        try:
+            self._ledger.settle(reservation, cout)
         except BaseException:
-            self._ledger.settle(reservation, estimation)  # appel payé : au moins l'estimation
+            self._trace_paye_en_erreur(marquee, nom, devise, reponse.usage, cout, latence)
             raise
-        self._ledger.settle(reservation, cout)
+        if panne is not None:
+            self._trace_paye_en_erreur(marquee, nom, devise, reponse.usage, cout, latence)
+            raise panne
         return self._finir(
             marquee, schema, nom, devise, reponse.text, reponse.usage,
             cost=cout, cost_uncached=cout, latency_s=latence, from_cache=False, stocker=cle,
+            remplacer=not use_cache,
         )  # fmt: skip
+
+    def _trace_paye_en_erreur(
+        self, request: LLMRequest, nom: str, devise: str, usage: Usage, cout: Decimal, lat: float
+    ) -> None:
+        self._trace(
+            request, nom, devise, "error", usage=usage, cost=cout, cost_uncached=cout, latency_s=lat
+        )
 
     def _finir(
         self,
@@ -213,8 +229,13 @@ class MeteredGateway:
         latency_s: float,
         from_cache: bool,
         stocker: str | None,
+        remplacer: bool = False,
     ) -> tuple[T | None, LLMResult]:
-        """Valide la sortie structurée, ne met en cache que les succès, puis trace."""
+        """Valide la sortie structurée, trace, puis ne met en cache que les succès.
+
+        Le span part avant `put` : un échec du cache ne fait pas perdre le coût payé.
+        `remplacer` : essai qui a contourné le cache, sa réponse conforme remplace l'entrée.
+        """
         valeur: T | None = None
         statut: _Statut = "ok"
         if schema is not None:
@@ -222,12 +243,12 @@ class MeteredGateway:
                 valeur = schema.model_validate_json(texte)
             except ValidationError:
                 statut = "non_conformant"
-        if statut == "ok" and stocker is not None:
-            self._cache.put(stocker, texte, usage)
         self._trace(
             request, nom, devise, statut, usage=usage, cost=cost, cost_uncached=cost_uncached,
             latency_s=latency_s, from_cache=from_cache, energie=not from_cache,
         )  # fmt: skip
+        if statut == "ok" and stocker is not None:
+            self._cache.put(stocker, texte, usage, replace=remplacer)
         if statut == "non_conformant":
             raise NonConformantOutput(
                 f"sortie de {request.model_id!r} non conforme au schéma "

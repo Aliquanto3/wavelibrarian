@@ -305,6 +305,48 @@ def test_sortie_invalide_en_cache_est_contournee_au_second_essai(
     env.gw.complete(_req())  # met "invalide" en cache (complete ne valide pas)
     valeur, res = env.gw.complete_structured(_req(), Schema)
     assert valeur.reponse == "ok" and not res.from_cache
+    # La sortie conforme remplace l'entrée invalide : les appels suivants ne repaient pas.
+    for _ in range(2):
+        valeur, res = env.gw.complete_structured(_req(), Schema)
+        assert valeur.reponse == "ok" and res.from_cache
+    assert len(env.provider.requests) == 2
+
+
+def test_cout_introuvable_apres_appel_paye_trace_l_estimation(
+    make_env: Callable[..., Env], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = make_env()
+    catalogue = env.catalog
+
+    class Catalogue:  # le coût de l'Usage réel lève, pas celui de l'estimation
+        def get(self, model_id: str) -> Any:
+            return catalogue.get(model_id)
+
+        def cost(self, model_id: str, usage: Usage) -> Decimal:
+            if usage == USAGE:
+                raise RuntimeError("tarif illisible")
+            return catalogue.cost(model_id, usage)
+
+    monkeypatch.setattr(env.gw, "_catalog", Catalogue())
+    with pytest.raises(RuntimeError):
+        env.gw.complete(_req())
+    (span,) = env.spans()
+    assert span["wl.status"] == "error" and D(span["wl.cost"]) == env.reserved[0] > 0
+
+
+def test_panne_du_cache_ne_perd_pas_le_span(
+    make_env: Callable[..., Env], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = make_env()
+
+    def panne(*_: object, **__: object) -> None:
+        raise OSError("disque plein")
+
+    monkeypatch.setattr(env.cache, "put", panne)
+    with pytest.raises(OSError):
+        env.gw.complete(_req())
+    (span,) = env.spans()
+    assert span["wl.status"] == "ok" and D(span["wl.cost"]) == COUT
 
 
 # --- Câblage ----------------------------------------------------------------------------------

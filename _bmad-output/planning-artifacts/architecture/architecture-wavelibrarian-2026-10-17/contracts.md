@@ -161,6 +161,7 @@ class CorpusProfile(BaseModel):       # FR-7, écrit en corpus_profile.json
     volatility: Literal["low", "medium", "high"]
     def tokens_for(self, model_id: str, catalog: "ModelCatalog") -> int: ...
         # tokenizer du Catalogue si « reference », sinon n_tokens × token_factor du modèle (défaut 1,2, FR-7)
+        # (comptage du corpus ; l'estimation avant appel de la passerelle applique toujours token_factor une fois, majorant)
 
 class Usage(BaseModel):
     input_tokens: int = 0

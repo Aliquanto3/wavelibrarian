@@ -77,10 +77,15 @@ class ResponseCache:
             return None
         return CachedResponse(text=row[0], usage=Usage.model_validate_json(row[1]))
 
-    def put(self, key: str, text: str, usage: Usage) -> None:
-        """Première réponse gardée : une clé déjà présente n'est pas réécrite."""
+    def put(self, key: str, text: str, usage: Usage, *, replace: bool = False) -> None:
+        """Première réponse gardée : une clé déjà présente n'est pas réécrite.
+
+        `replace=True` (passerelle seule) remplace une entrée jugée invalide par une réponse
+        conforme, payée en contournant le cache.
+        """
+        verbe = "INSERT OR REPLACE" if replace else "INSERT OR IGNORE"
         with transaction(self._conn) as c:
             c.execute(
-                "INSERT OR IGNORE INTO responses (key, text, usage) VALUES (?, ?, ?)",
+                f"{verbe} INTO responses (key, text, usage) VALUES (?, ?, ?)",  # noqa: S608
                 (key, text, usage.model_dump_json()),
             )
