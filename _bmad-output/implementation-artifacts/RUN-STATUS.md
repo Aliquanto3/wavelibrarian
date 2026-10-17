@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 21:52 |
-| Story en cours | 1.6 |
-| Stories livrées | 5 / 56 |
+| Mis à jour | 2026-10-17 22:05 |
+| Story en cours | 1.7 |
+| Stories livrées | 6 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -61,6 +61,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 
 - **2.1 / 2.2** : formats du Corpus et parsers du registre, nécessaires pour remplacer `parser: auto` (story 1.5).
 - **4.3 / 4.4** : le runner remplace `parser: auto` par le parser concret avant `write_resolved` et `RunContext.parser` (stories 1.2 et 1.5) ; vérifier que `experiment.resolved.yaml` ne contient plus `auto`.
+- **Epic 3 (`wl calibrer`)** : écrire `calibration.json` au format §4.6 retenu en 1.6 (par Juge, `excluded` booléen strict, `criteria`).
 - **Gateway (1.9)** : `cache_write_1h` n'est pas facturé, `Usage` n'a pas de poste 1 h (story 1.4).
 - **Story outillage / CI** : lancer `test_socket_tcp_bloque` sous Linux (story 1.1).
 
@@ -76,6 +77,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 21:40 | 2 tronq. (gemma4:e2b-it-qat) : think_off instructions/ifbench 2 tronq., 19 s/tronq. (pas de réf.) ; pire +0 % | 23 % | 16.9 Go | 1 s, 86 Mo, 72 thr (9 proc) | Sous les seuils : on continue (1.5) |
 | 21:50 | 17 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 20 s/tronq. (nouveau modèle, référence posée) | 26 % | 15,1 Go | 1 s, 86 Mo, 59 thr | Sous les seuils |
 | 21:52 | 19 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 19 tronq., 20 s/tronq. vs 20 (-0 %) ; pire -0 % | 36 % | 13.3 Go | 1 s, 86 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.6) |
+| 22:05 | 6 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 4 tronq., 21 s/tronq. vs 20 (-4 %) ; think_off reasoning/var-math-fr 1 tronq., 20 s/tronq. (pas de réf.) ; think_off rag/oneruler-fr-cwe 1 tronq., 23 s/tronq. (pas de réf.) ; pire -4 % | 19 % | 14.6 Go | 1 s, 86 Mo, 73 thr (9 proc) | Sous les seuils : on continue (1.7) |
 
 ## Journal des stories
 
@@ -86,3 +88,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.3 | 21:23 | 21:30 | 3908cf1d4686321c7aa58ba162b2c59230b53789 | 0 $ | Revue : 2 medium corrigés (fuite sys.modules dans la fixture ; register exige Params forbid+frozen, AD-2) et 6 low. 42 tests verts. |
 | 1.4 | 21:31 | 21:40 | 5b06b7ec0bca3bbb6c44479db7b51da9e8b6ccc6 | 0 $ | AC 3 contradictoire (0,60 vs palier ×5 → 3,00) : règle de palier gardée, à arbitrer. Revue : tarifs obligatoires par poste, pricing refusé sur modèle local, profil = nom de fichier. 62 tests verts. |
 | 1.5 | 21:41 | 21:52 | 6414d58681c32a6f6b8f4ccbe6839343a33a80a6 | 0 $ | Revue : ModelRef nu refusé au register, juges explicites non écrasés (is None, ge/min_length), seed strict. parser:auto reporté au runner (voir Reports). 93 tests verts. |
+| 1.6 | 21:53 | 22:05 | cd4de3b219280a0b9b619eaf51c8482c00adac1e | 0 $ | Revue : agrégation complète des erreurs de Params (imbriqués compris), calibration_judge contrôlé au Catalogue, calibration.json validé strictement. 118 tests verts. |

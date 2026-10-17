@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-17-2026 21:52
+last_updated: 10-17-2026 22:05
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -41,7 +41,7 @@ development_status:
   1-3-registre-de-composants-et-commande-wl-registre: done
   1-4-catalogue-de-modèles-paramètres-de-coût-et-profils-d-exécuti: done
   1-5-chargement-et-résolution-d-une-expérience: done
-  1-6-validation-statique-d-une-expérience-et-formation-du-panel: backlog
+  1-6-validation-statique-d-une-expérience-et-formation-du-panel: done
   1-7-traces-opentelemetry-tokenizers-énergie-et-coût-de-possessio: backlog
   1-8-registre-de-dépense-et-cache-de-réponses-llm: backlog
   1-9-passerelle-mesurée: backlog
