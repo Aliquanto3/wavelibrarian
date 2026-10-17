@@ -7,6 +7,7 @@ modèle testé. Un modèle qui trouve la Réponse de référence va dans `contam
 Seul `contaminated_by` change : l'empreinte du Gel l'exclut (AD-15). Rien n'est écrit ici.
 """
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -73,7 +74,7 @@ def filtrer(ctx: ContexteGeneration, fichier: QuestionsFile, modeles: Sequence[s
     for q in retenues:
         for modele in modeles:
             with ctx.scope(post="judging", question_id=q.id):
-                reponse = _poser(ctx, q, modele)
+                reponse = sans_question(_poser(ctx, q, modele), q.text)
                 if q.answer_form == "short":
                     contaminee, methode = exact_match(q.reference_answer, reponse), "exact"
                 else:
@@ -103,6 +104,19 @@ def filtrer(ctx: ContexteGeneration, fichier: QuestionsFile, modeles: Sequence[s
     )
 
 
+def sans_question(reponse: str, question: str) -> str:
+    """Réponse privée de la question qu'elle recopie (casse et espaces ignorés).
+
+    Une réponse qui répète la question, comme le Faux LLM au rôle `closed_book` (contracts §3),
+    ne doit pas passer pour contaminée parce que la question partage des mots avec la référence.
+    """
+    mots = question.split()
+    if not mots:
+        return reponse
+    motif = r"\s+".join(re.escape(m) for m in mots)
+    return re.sub(motif, " ", reponse, flags=re.IGNORECASE).strip()
+
+
 def _poser(ctx: ContexteGeneration, q: Question, modele: str) -> str:
     requete = LLMRequest(
         model_id=modele,
@@ -126,7 +140,9 @@ def _appliquer(
         if q.id not in testees:
             questions.append(q)
             continue
-        gardes = tuple(m for m in q.contaminated_by if m not in modeles)
-        trouves = tuple(v.modele for v in verdicts if v.question_id == q.id and v.contaminee)
-        questions.append(q.model_copy(update={"contaminated_by": (*gardes, *trouves)}))
+        trouves = [v.modele for v in verdicts if v.question_id == q.id and v.contaminee]
+        # ordre stable : les entrées confirmées gardent leur place, les nouvelles vont à la fin
+        gardes = [m for m in q.contaminated_by if m not in modeles or m in trouves]
+        nouveaux = tuple((*gardes, *(m for m in trouves if m not in gardes)))
+        questions.append(q.model_copy(update={"contaminated_by": nouveaux}))
     return fichier.model_copy(update={"questions": tuple(questions)})

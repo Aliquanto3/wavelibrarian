@@ -227,6 +227,35 @@ def test_faux_llm_par_defaut_aucune_contamination(tmp_path: Path, env: Env) -> N
     assert "Questions contaminées : 0" in res.output
 
 
+def test_faux_llm_par_defaut_question_qui_contient_la_reference(tmp_path: Path, env: Env) -> None:
+    """Le Faux LLM recopie la question : ni la référence citée, ni les mots partagés ne comptent."""
+    f = _ecrire(
+        tmp_path / "q.yaml",
+        [
+            _q(1, text="Qui a fondé la guilde d'Orvane ?", reference_answer="Orvane"),
+            _q(
+                2,
+                text="Pourquoi la guilde d'Orvane a-t-elle fermé ses comptoirs ?",
+                answer_form="free",
+                reference_answer="La guilde d'Orvane a fermé ses comptoirs après la crue",
+            ),
+        ],
+    )
+    res = _lancer(f)
+    assert res.exit_code == 0, res.output
+    assert env.juge, "la réponse libre passe bien par le Juge"
+    assert all(q.contaminated_by == () for q in io.load(f).questions)
+
+
+def test_sans_question_garde_la_partie_nouvelle() -> None:
+    from wavelibrarian.evalset.closed_book import sans_question
+
+    q = "Qui a fondé la guilde d'Orvane ?"
+    assert sans_question(q, q) == ""
+    assert sans_question("QUI a fondé  la guilde d'Orvane ? Mirelle.", q) == "Mirelle."
+    assert sans_question("Mirelle", q) == "Mirelle"
+
+
 # --- AC 5 : Jeu gelé, spans judging ------------------------------------------------------------
 
 
@@ -258,6 +287,29 @@ def test_jeu_gele_seul_contaminated_by_change_et_relance_remplace(
     assert len(spans) == 2
     assert {s["wl.post"] for s in spans} == {"judging"}
     assert {s["wl.step"] for s in spans} == {"closed_book"}
+
+
+def test_relance_garde_l_ordre_de_contaminated_by(tmp_path: Path, env: Env) -> None:
+    env.reponse = lambda r: "Orvane"
+    f = _ecrire(tmp_path / "q.yaml", [_q(1, contaminated_by=["fake-llm-b", "fake-llm-c"])])
+    assert _lancer(f, "--modeles", "fake-llm-a,fake-llm-b").exit_code == 0
+    assert io.load(f).questions[0].contaminated_by == ("fake-llm-b", "fake-llm-c", "fake-llm-a")
+
+
+def test_span_du_juge_porte_judging_sur_reponse_libre(
+    tmp_path: Path, env: Env, wl_home: Path
+) -> None:
+    env.reponse = lambda r: "Orvane fonda la guilde"
+    f = _ecrire(
+        tmp_path / "q.yaml",
+        [_q(1, answer_form="free", reference_answer="Orvane fonda la guilde")],
+    )
+    assert _lancer(f, "--modeles", "fake-llm-a").exit_code == 0
+    traces = wl_home / "hors-execution" / "hors-1" / "traces.jsonl"
+    spans = [json.loads(x) for x in traces.read_text(encoding="utf-8").splitlines()]
+    assert len(spans) == 2 and len(env.juge) == 1  # question posée, puis Juge
+    assert {s["wl.post"] for s in spans} == {"judging"}
+    assert all(s["wl.question_id"] == "q-001" for s in spans)
 
 
 def test_relance_identique_ne_reecrit_pas_le_fichier(tmp_path: Path, env: Env) -> None:

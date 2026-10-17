@@ -1,7 +1,7 @@
 ---
 story: "3.5"
 title: Filtre closed-book et commande `wl questions closed-book`
-status: review
+status: done
 ---
 
 # Story 3.5 : Filtre closed-book et commande `wl questions closed-book`
@@ -38,3 +38,15 @@ status: review
 
 - Statut : review. 11 tests ciblés verts ; suite complète 538 verts ; pyright 0 erreur ; ruff propre ; contrôle rapide sans erreur.
 - Reports : (1) `question_gen_model` au Catalogue est déjà contrôlé par `generer` (3.3) ; (2) le Gel (3.6) devra ignorer `contaminated_by` dans l'empreinte (déjà le contrat) ; (3) le Panel (epic 4) construit le `JudgeInput` complet.
+
+## Revue
+
+- high, second avis 1 : corrigé. Le Faux LLM recopie la question (contracts §3), et le filtre jugeait cette copie : une question qui cite sa référence (réponse courte), ou dont la référence libre reprend ses mots (Juge factice à 50 %), ressortait contaminée. Reproduit par `wl questions closed-book --profil test` (2 sur 2). `sans_question` retire de la réponse la question recopiée avant la correspondance exacte et le Juge. Contrat §3 mis à jour en une ligne.
+- medium, second avis 2 : corrigé. Ajout de `test_faux_llm_par_defaut_question_qui_contient_la_reference` (courte et libre) et de `test_sans_question_garde_la_partie_nouvelle`.
+- low, second avis 3 : consigné. Les Questions de suivi sont posées sans historique, comme l'AC le demande (« sans contexte »).
+- low, second avis 4 : rejeté. AD-14 définit le Juge closed-book comme le premier modèle du réservoir d'une autre Famille, sans exclusion par `calibration.json` (réservée au Panel d'une Configuration).
+- low, second avis 5 : reporté. `Judge.judge` ne renvoie pas le coût de son appel : afficher le montant demande de sommer le Grand livre du Poste `judging`. À faire avec le résumé de coût des commandes hors Exécution.
+- low, second avis 6 : corrigé. `test_span_du_juge_porte_judging_sur_reponse_libre`.
+- low, second avis 7 : corrigé. `contaminated_by` garde l'ordre des entrées confirmées ; une relance identique ne réécrit plus le fichier pour un simple réordonnancement (`test_relance_garde_l_ordre_de_contaminated_by`).
+- low, second avis 8 : consigné. Pas de préflight dans `closed-book`, comme `generer` : l'erreur d'un fournisseur sort en code 4.
+- medium, revue : corrigé. Le rebase sur `main` (story 2.7) avait un conflit d'import dans `cli.py`, résolu.
