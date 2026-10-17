@@ -152,12 +152,20 @@ def _chemin(err: ErrorDetails) -> str:
     return chemin or "(racine)"
 
 
-def valider[M: BaseModel](modele: type[M], donnees: Any, source: str = "") -> M:
-    """Valide `donnees` ; la première erreur devient une `ConfigError` au chemin pointé."""
+def valider[M: BaseModel](modele: type[M], donnees: Any, source: str = "", prefixe: str = "") -> M:
+    """Valide `donnees` ; la première erreur devient une `ConfigError` au chemin pointé.
+
+    `prefixe` place le chemin sous un nœud englobant (ex. `configurations[1].params`).
+    """
     try:
         return modele.model_validate(donnees)
     except ValidationError as exc:
         err = exc.errors()[0]
         chemin = _chemin(err)
+        if prefixe:
+            if chemin == "(racine)":
+                chemin = prefixe
+            else:
+                chemin = prefixe + (chemin if chemin.startswith("[") else f".{chemin}")
         msg = str(err["msg"]).removeprefix("Value error, ")
         raise ConfigError(chemin, f"{msg} ({source})" if source else msg) from exc

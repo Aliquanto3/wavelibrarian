@@ -42,6 +42,8 @@ KINDS: tuple[str, ...] = (
 class ComponentSpec(BaseModel):
     """Forme YAML de toute référence à un Composant."""
 
+    model_config = ConfigDict(extra="forbid")  # une clé mal orthographiée est refusée (FR-9)
+
     name: str
     params: dict[str, Any] = {}
 
