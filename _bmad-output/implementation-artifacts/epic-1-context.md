@@ -63,3 +63,4 @@ Poser le socle du banc WaveLibrarian : une Expérience YAML est validée stricte
 
 > Mise à jour 2026-10-17 (revue 1.2) : `RunContext` porte désormais `parser: str` (parser résolu de la Configuration), utilisé par `index_key` ; `ArchCapabilities` est gelé avec `extra="forbid"`.
 > Mise à jour 2026-10-17 (revue 1.9) : `tokens_for` compte sans facteur ; seule l'estimation de la Passerelle applique `token_factor`, une fois (contracts.md précisé).
+> Mise à jour 2026-10-17 (revue 1.10) : pour le provider `fake`, `cache_key` inclut `inputs` et `step` ; `ProviderResponse.latency_s` optionnel (0.0 pour le Faux LLM) est repris par la Passerelle.

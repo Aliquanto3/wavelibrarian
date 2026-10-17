@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 22:46 |
-| Story en cours | 1.10 |
-| Stories livrées | 9 / 56 |
+| Mis à jour | 2026-10-17 23:02 |
+| Story en cours | 1.11 |
+| Stories livrées | 10 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -68,6 +68,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Après le pilote, extra `energy`** : vérifier que `gpu_ids=[]` n'initialise pas NVML, les noms `_hardware`/`_mode` de codecarbon 3.3.1, `estimated` sous Windows, et la règle CPU estimé / GPU mesuré (story 1.7).
 - **1.9 (Passerelle)** : calculer `cache_key` après avoir posé `role_marker(role)` (fonction de `llm/cache.py`, `cache_key` lève sinon) ; ne mettre en cache que les succès (story 1.8).
 - **Runner / RunContext (epic 4)** : `RunContext` concret qui expose `tokenizer_for(model_id)` et appelle `runner/wiring.py::build_gateway` ; répartition de l'énergie locale par phase ; refuser à la validation un plafond `ollama` hors EUR (story 1.9).
+- **Runner (epic 4), Faux LLM** : construire `FakeProvider` et le passer à `build_gateway(providers={"fake": ...})` ; isoler le Cache de réponses des runs scénarisés (`script`), sinon une sortie scénarisée persiste dans `WL_HOME` pour le run suivant (story 1.10).
 - **Runner (epic 4)** : prendre `run.lock` puis ouvrir le `Ledger` avec `recover_orphans=True` ; tester qu'un second `wl run` ne règle pas les réservations du premier (story 1.8).
 - **Gateway (1.9)** : `cache_write_1h` n'est pas facturé, `Usage` n'a pas de poste 1 h (story 1.4).
 - **Story outillage / CI** : lancer `test_socket_tcp_bloque` sous Linux (story 1.1).
@@ -88,6 +89,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 22:19 | 7 tronq. (gemma4:e2b-it-qat) : think_on instructions/ifbench 4 tronq., 20 s/tronq. (pas de réf.) ; think_on extraction/extraction-fr 3 tronq., 20 s/tronq. (pas de réf.) ; pire +0 % | 23 % | 13.9 Go | 1 s, 86 Mo, 69 thr (9 proc) | Sous les seuils : on continue (1.8) |
 | 22:32 | 1 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 1 tronq., 41 s/tronq. (pas de réf.) ; pire +0 % | 24 % | 13.1 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.9) |
 | 22:46 | 9 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 9 tronq., 41 s/tronq. vs 41 (+1 %) ; pire +0 % | 11 % | 12.6 Go | 1 s, 87 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.10) |
+| 23:01 | 5 tronq. (gemma4:e2b-it-qat) : think_on rag/oneruler-fr-cwe 4 tronq., 24 s/tronq. (pas de réf.) ; think_on reasoning/bbeh-mini 1 tronq., 42 s/tronq. (pas de réf.) ; pire +0 % | 34 % | 12.4 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.11) |
 
 ## Journal des stories
 
@@ -102,3 +104,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.7 | 22:08 | 22:19 | 6b98d4adaac09cfb1651f61c859a7bb495b7d247 | 0 $ | Revue : tiktoken sans téléchargement (empreinte SHA-256 du cache), écriture de traces vérifiée (WlError), OTLP en SimpleSpanProcessor, test d'import réel. Vérifs codecarbon reportées après le pilote. 141 tests verts, aucun PID du run sur le GPU. |
 | 1.8 | 22:20 | 22:32 | 0fb2ee81b54cf729cebc96d1962719846b6fd6cb | 0 $ | AC 2 contradictoire (plafond période 2,00 vs 2 × 1,50) : test à 3,00, à arbitrer. Revue : recover_orphans explicite (runner après run.lock), sommes par devise, cache_key exige le marqueur de rôle. 159 tests verts. |
 | 1.9 | 22:33 | 22:46 | 69482b99395300b7d6ec471f97a4d891c803bd25 | 0 $ | Revue : sortie invalide en cache remplacée (replace=True), appel payé toujours tracé avec son coût (réel ou estimé), span écrit avant le cache. 180 tests verts. |
+| 1.10 | 22:47 | 23:02 | 585760d4c83041b407f927b4a350a36a302437ca | 0 $ | Revue : step dans cache_key pour fake (sorties scénarisées), latence 0 du Faux LLM réelle (ProviderResponse.latency_s), tests sans contournement. 227 tests verts. |
