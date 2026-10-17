@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 00:53 |
-| Story en cours | 3.4 (voie A, second avis) ; 2.7 (voie B) |
-| Stories livrées | 21 / 56 |
+| Mis à jour | 2026-10-18 00:59 |
+| Story en cours | 2.7 (voie B, second avis) ; 3.5 (voie A) |
+| Stories livrées | 22 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -93,6 +93,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Extraction d'entités (2.4)** : l'heuristique rate les noms en début de phrase (Maëlis Torvane trouvée dans 3 Documents sur 7) ; à revoir si les questions multi-hop ou GraphRAG en dépendent (story 2.5).
 - **Story 4.15 / real_api** : vérifier `wl questions generer` sur `claude-haiku-5-5` réel (répartition des Types, Ancrages hors échantillon rejetés) (story 3.3).
 - **Runner (epic 4), Scénario** : passer à `corpus_apres` la langue par défaut du `corpus.yaml` (`lang`) et le Parser de la base (`parser`) (story 2.6).
+- **3.5 (closed-book)** : refuser une justification vide si le contrat l'exige (`CriterionVerdict`) ; choisir le Juge par défaut avec filtre de Famille (AD-14) au lieu de `judge_pool[0]` (story 3.4).
+- **Panel (epic 4)** : construire `JudgeInput` avec les textes des Ancrages et les `context_texts` du Generator ; ouvrir `ctx.scope(post="judging")` (story 3.4).
 
 ## Journal de surveillance
 
@@ -122,6 +124,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 00:37 | 12 tronq. (qwen3.5:4b) : think_on extraction/jsonschemabench 7 tronq., 36 s/tronq. vs 35 (-2 %) ; think_on instructions/ifbench 5 tronq., 35 s/tronq. (pas de réf.) ; pire -2 % | 9 % | 11.4 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue (2.6) |
 | 00:44 | 17 tronq. (qwen3.5:4b) : think_on instructions/ifbench 13 tronq., 35 s/tronq. (pas de réf.) ; think_on instructions/instructions-fr 4 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 23 % | 11.7 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (3.4) |
 | 00:53 | 14 tronq. (qwen3.5:4b) : think_on instructions/instructions-fr 8 tronq., 35 s/tronq. (pas de réf.) ; think_on instructions/mifeval-fr 6 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 22 % | 10.7 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (2.7) |
+| 00:58 | 16 tronq. (qwen3.5:4b) : think_on instructions/mifeval-fr 16 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 9 % | 11.6 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (3.5) |
 
 ## Journal des stories
 
@@ -148,3 +151,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 2.5 | 00:17 | 00:37 | 44826159e0192fdacf664bd2d990fb76a116696b | 0 $ | 20 Documents (16 md, 4 pdf), 4 361 mots, police DejaVu commitée (5,5 Mo téléchargés une fois, licence libre). Revue : contradictions d'univers non voulues corrigées, contracts.md §4.1/§4.7 alignés (chemins relatifs à path), long Document porté à 1 157 mots. |
 | 3.3 | 00:29 | 00:44 | ef1bfab22aa7010ad548992bbace166c4049add3 | 0 $ | Revue : dédoublonnage (texte normalisé + Ancrages, dans la sortie et face au fichier), Ancrage hors échantillon rejeté, coût en virgule fixe, --cible < 1 refusé. 466 tests verts. |
 | 2.6 | 00:39 | 00:53 | 11b462e35883ac340db4d3ef842ed8f9764e3ca3 | 0 $ | Revue : langue déclarée (et non majoritaire) pour un Document ajouté, état après identique à une ingestion directe (test oracle), chemins absolus/.. refusés, OSError → ConfigError, delete+add garde les métadonnées. Conflit cli.py résolu. 490 tests verts. |
+| 3.4 | 00:46 | 00:59 | 7b56ebc2da6502263b7da8e06c6dc878db7384e4 | 0 $ | Revue : exact_match sans faux positifs (signe moins, mots alphanumériques, plages), milliers à deux groupes, œ→oe ; disjonction et négation consignées comme limite. 527 tests verts. |
