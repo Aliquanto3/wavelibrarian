@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 21:10 |
-| Story en cours | 1.2 |
-| Stories livrées | 1 / 56 |
+| Mis à jour | 2026-10-17 21:20 |
+| Story en cours | 1.3 |
+| Stories livrées | 2 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -60,9 +60,11 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | --- | --- | --- | --- | --- | --- |
 | 20:58 | 8 (lfm2.5-2.6b / reasoning, ~1 réponse/41 s) ; fenêtre précédente sur un autre modèle, référence posée | 9 % | 17,6 Go | 0 s, 86 Mo, 57 thr (aucun pytest) | Mesure de départ, aucune ERROR : on démarre 1.1 |
 | 21:09 | 20 (lfm2.5-2.6b / reasoning) ; 11 sur les 10 min précédentes ; +82 % | 12 % | 16,7 Go | 1 s, 86 Mo, 101 thr (uv/pytest du run) | Sous les seuils : on continue (1.2) |
+| 21:20 | 19 (lfm2.5-2.6b / reasoning) ; 10 min avant : 23 ; -17 % | 16 % | 17.2 Go | 1 s, 86 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.3) |
 
 ## Journal des stories
 
 | Story | Début | Fin | Commit | Dépense | Remarques |
 | --- | --- | --- | --- | --- | --- |
 | 1.1 | 21:00 | 21:09 | 4f3294e21ae06ae43b9c78fefa2887e0c331053c | 0 $ | Revue : 2 high (contrats import-linter inopérants, test lint-imports vide) et 1 medium corrigés ; typer `>=0.26,<1` (conflit docling `<0.27`) ; test socket sous Linux reporté à une story outillage. 14 tests verts. |
+| 1.2 | 21:10 | 21:30 | e349d1970419bd0b7d13367023ed0aeca48430a3 | 0 $ | Revue : 2 medium corrigés (index_key lit le parser résolu via RunContext.parser, contracts.md §2.4 mis à jour ; ArchCapabilities gelé + extra=forbid). 33 tests verts. |

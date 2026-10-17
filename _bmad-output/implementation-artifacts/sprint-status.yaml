@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-17-2026 21:10
+last_updated: 10-17-2026 21:20
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -37,7 +37,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
   1-1-squelette-du-projet-et-garde-fous-sans-réseau: done
-  1-2-types-du-domaine-et-ports-publiés: backlog
+  1-2-types-du-domaine-et-ports-publiés: done
   1-3-registre-de-composants-et-commande-wl-registre: backlog
   1-4-catalogue-de-modèles-paramètres-de-coût-et-profils-d-exécuti: backlog
   1-5-chargement-et-résolution-d-une-expérience: backlog

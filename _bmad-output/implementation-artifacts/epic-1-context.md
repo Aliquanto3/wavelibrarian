@@ -60,3 +60,5 @@ Poser le socle du banc WaveLibrarian : une Expérience YAML est validée stricte
 - 1.7 (Tracer) et 1.8 (registre de dépense, cache) sont requis par 1.9 ; 1.9 est requis par 1.10, 1.11 et 1.12.
 - 1.6 est prolongée par 1.12 (le préflight s'insère après la validation dans `wl run`).
 - Vers les autres epics : l'epic 4 branche le runner sur la validation et la passerelle ; l'epic 3 réutilise `closed_book_judge` ; les epics 6 et 7 s'appuient sur le registre, le Faux LLM et le faux embedder.
+
+> Mise à jour 2026-10-17 (revue 1.2) : `RunContext` porte désormais `parser: str` (parser résolu de la Configuration), utilisé par `index_key` ; `ArchCapabilities` est gelé avec `extra="forbid"`.
