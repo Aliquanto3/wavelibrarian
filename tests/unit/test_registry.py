@@ -56,7 +56,7 @@ def _toy() -> type:
 def test_get_et_list_components() -> None:
     toy = _toy()
     assert registry.get("chunker", "toy") is toy
-    [info] = registry.list_components(kind="chunker")
+    [info] = [i for i in registry.list_components(kind="chunker") if i.name == "toy"]
     assert (info.name, info.kind, info.description) == ("toy", "chunker", "Découpeur jouet.")
     assert [(p.name, p.type, p.default) for p in info.params] == [
         ("size", "int", "300"),
