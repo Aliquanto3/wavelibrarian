@@ -181,13 +181,48 @@ def test_citation_invalide_retiree_et_comptee(ctx: RunCtx) -> None:
 
 
 def test_contexte_vide_le_faux_llm_s_abstient(ctx: RunCtx) -> None:
+    requetes: list[LLMRequest] = []
+
+    def sortie(req: LLMRequest) -> str:
+        requetes.append(req)
+        return default_output("generate", req.inputs)
+
+    ctx.provider.script("generate", "generate*", sortie)  # type: ignore[attr-defined]
     vide = LabeledContextBuilder(LabeledContextBuilder.Params(), None).build([])
     with ctx.scope(post="query", question_id="q-001"):
         res = _generateur(ctx).generate(_question(), vide)
+    assert requetes[0].inputs["blocks"] == {}  # le Faux LLM reçoit un contexte vide
+    assert "(aucun passage)" in requetes[0].messages[-1].content
     assert res.abstained is True
-    assert res.citations == ()
-    assert res.text == default_output("generate", {"blocks": {}}).split('"')[3]  # texte distinct
-    assert res.text != "" and res.invalid_citations == 0
+    assert res.citations == () and res.invalid_citations == 0
+    assert res.text != ""  # texte d'abstention, distinct de l'indicateur
+
+
+@pytest.mark.parametrize(
+    ("sortie", "abstention"),
+    [
+        ('{"answer": "Alpha vaut un.", "citations": [], "abstain": true}', True),
+        ('{"answer": "Je ne sais pas.", "citations": [], "abstain": false}', False),
+    ],
+)
+def test_abstention_lue_sur_l_indicateur_pas_sur_le_texte(
+    ctx: RunCtx, sortie: str, abstention: bool
+) -> None:
+    ctx.provider.script("generate", "generate*", lambda _req: sortie)  # type: ignore[attr-defined]
+    with ctx.scope(post="query", question_id="q-001"):
+        res = _generateur(ctx).generate(_question(), _contexte())
+    assert res.abstained is abstention
+    assert res.text == sortie.split('"')[3]
+
+
+def test_formes_d_etiquette(ctx: RunCtx) -> None:
+    formes = '["[S1]", " S2 ", "[S1", "S2]", "s1", "S01"]'
+    sortie = f'{{"answer": "Un.", "citations": {formes}, "abstain": false}}'
+    ctx.provider.script("generate", "generate*", lambda _req: sortie)  # type: ignore[attr-defined]
+    with ctx.scope(post="query", question_id="q-001"):
+        res = _generateur(ctx).generate(_question(), _contexte())
+    assert [c.anchor_id for c in res.citations] == ["d#h/a", "d#h/b"]
+    assert res.invalid_citations == 4  # `[S1`, `S2]`, `s1`, `S01` refusées
 
 
 def test_generation_nominale_cite_s1(ctx: RunCtx) -> None:

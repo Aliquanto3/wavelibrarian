@@ -19,7 +19,7 @@ _SYSTEM = (
     '{"answer": "...", "citations": ["S1"], "abstain": false}.'
 )
 _PREFIXE = re.compile(r"^\[S\d+\] \(.*?\) ", re.DOTALL)
-_ETIQUETTE = re.compile(r"^\[?\s*(S\d+)\s*\]?$")
+_ETIQUETTE = re.compile(r"^(?:\[(S[1-9]\d*)\]|(S[1-9]\d*))$")  # `[S1]` ou `S1`, rien d'autre
 
 
 @register("generator", "llm")
@@ -64,7 +64,7 @@ class LLMGenerator:
         invalides: set[str] = set()
         for brut in sortie.citations:
             m = _ETIQUETTE.match(brut.strip())
-            etiquette = m.group(1) if m else brut.strip()
+            etiquette = (m.group(1) or m.group(2)) if m else brut.strip()
             if etiquette in context.labels:
                 for anchor_id in context.labels[etiquette]:
                     citations[anchor_id] = None

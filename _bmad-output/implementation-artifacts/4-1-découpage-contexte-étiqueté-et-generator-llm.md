@@ -1,7 +1,7 @@
 ---
 story: "4.1"
 title: Découpage, contexte étiqueté et Generator LLM
-status: review
+status: done
 ---
 
 # Story 4.1 : Découpage, contexte étiqueté et Generator LLM
@@ -38,3 +38,18 @@ status: review
 - Statut : review. 550 tests verts (suite complète), pyright 0 erreur, ruff propre, contrôle rapide sans erreur.
 - Reports de l'epic 4 traités : aucun ne relève de cette story.
 - Reports : le seuil de 8 000 tokens est compté par le tokenizer fourni par l'Architecture appelante (celui du contexte) ; `retrieval_method` est passé tel quel.
+- Report 4.2 : `build_arch_answer` exige `tokenizer=` (argument nommé, écart à la signature à quatre arguments du critère). Chaque Baseline de la 4.2 doit passer le tokenizer du contexte (`ctx.tokenizer`, ou celui du modèle du Generator quand `tokenizer_for` existera) ; vérifier par un test qu'un Contexte de plus de 8 000 tokens est bien tronqué depuis une Architecture.
+
+## Revue
+
+- low, second avis 1 : `_ETIQUETTE` acceptait `[S1` et `S1]` — corrigé : seules `[S1]` et `S1` (après `strip`) sont reconnues, `s1` et `S01` restent invalides et comptées.
+- low, second avis 2 : aucun test de la forme `[S1]` — corrigé : `test_formes_d_etiquette`.
+- low, second avis 3 : contexte vide sans garde — rejeté : `contracts.md` §5 confie l'abstention au modèle (Faux LLM : `blocks` vide → `abstain: true`) et le critère dit « le Faux LLM s'abstient » ; aucune abstention sans appel n'est imposée.
+- low, second avis 4 : test d'abstention trop lié au Faux LLM — corrigé : le test vérifie les `inputs` envoyés (`blocks == {}`, « (aucun passage) »), et `test_abstention_lue_sur_l_indicateur_pas_sur_le_texte` prouve que `abstained` vient du champ `abstain`, pas du texte.
+- low, second avis 5 : le test du registre ne vérifiait plus `fixed_tokens` — corrigé : assertion ajoutée.
+- low, second avis 6 : `tokenizer` nommé obligatoire dans `build_arch_answer` — gardé (le seuil de 8 000 tokens exige un comptage), écart consigné, report 4.2 ci-dessus.
+- low, second avis 7 : le recouvrement est un minimum (au moins `overlap` tokens, à mot entier) et `key()` n'inclut pas le tokenizer — consigné : la clé d'index par défaut ajoute le nom du tokenizer (epic 4), donc deux tokenizers ne partagent pas un cache ; seuls les `passage_id` coïncideraient entre deux index distincts.
+- low, second avis 8 : `invalid_citations` compte les étiquettes distinctes — consigné : le contrat dit « retirée et comptée » sans préciser ; une étiquette invalide répétée compte une fois, choix documenté dans les Design Notes.
+- low, second avis 9 : `anchor_ids` non vide non imposé au formatage — consigné : l'invariant relève de `Passage` (contrat §1) et des chunkers ; `labeled` produit `[Sn] () texte` si on lui passe un Passage sans Ancrage.
+- low, revue : le chunker joint les mots par une espace, le titre d'une section se colle à son corps dans `Passage.text` (vu sur le Mini-corpus) — consigné, sans effet sur les Ancrages ni sur les critères.
+- Vérifié sur le Mini-corpus avec les paramètres par défaut (300/50, tokenizer `approx`) : 24 Passages, aucun au-delà de 300 tokens, `passage_id` uniques, Passages multi-Ancrages présents, génération nominale avec le Faux LLM.
