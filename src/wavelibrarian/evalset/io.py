@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from wavelibrarian.config.defaults import charger_yaml
-from wavelibrarian.config.schemas import valider
-from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.config.schemas import config_error, valider
+from wavelibrarian.core.errors import ConfigError, ValidationFailed
 from wavelibrarian.core.types import Question
 
 
@@ -65,3 +65,38 @@ def save(chemin: Path, doc: QuestionsFile) -> None:
     tmp = chemin.with_name(f"{chemin.name}.{os.getpid()}.tmp")
     tmp.write_text(texte, encoding="utf-8", newline="\n")
     tmp.replace(chemin)
+
+
+def load_agrege(chemin: Path) -> QuestionsFile:
+    """Comme `load`, mais toutes les erreurs du fichier d'un coup : `ValidationFailed`.
+
+    Erreurs de schéma de chaque Question et identifiants en double, chacun à son chemin pointé.
+    """
+    donnees: Any = charger_yaml(chemin)
+    if not isinstance(donnees, dict):
+        raise ConfigError(str(chemin), "un fichier de Questions doit être un dictionnaire YAML")
+    try:
+        doc = QuestionsFile.model_validate(donnees)
+    except ValidationError as exc:
+        raise ValidationFailed([config_error(e, str(chemin)) for e in exc.errors()]) from exc
+    doublons = _doublons(doc)
+    if doublons:
+        raise ValidationFailed(doublons)
+    return doc
+
+
+def _doublons(doc: QuestionsFile) -> list[ConfigError]:
+    vus: dict[str, int] = {}
+    erreurs: list[ConfigError] = []
+    for i, q in enumerate(doc.questions):
+        if q.id in vus:
+            erreurs.append(
+                ConfigError(
+                    f"questions[{i}].id",
+                    f"identifiant en double : {q.id!r} (déjà à questions[{vus[q.id]}]) ; "
+                    "un id n'est jamais réutilisé",
+                )
+            )
+        else:
+            vus[q.id] = i
+    return erreurs

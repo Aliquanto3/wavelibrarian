@@ -26,7 +26,7 @@ from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_f
 from wavelibrarian.corpus.profile import profile as profil_corpus
 from wavelibrarian.corpus.scenario import corpus_apres as scenario_corpus_apres
 from wavelibrarian.corpus.tiers import tirer_chemins
-from wavelibrarian.evalset import check, closed_book, generate, io
+from wavelibrarian.evalset import check, closed_book, freeze, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
@@ -313,6 +313,40 @@ def questions_closed_book(
     for qid, ms in contaminees.items():
         typer.echo(f"  - {qid} : {', '.join(ms)}")
     typer.echo("Poste de coût : judging.")
+
+
+@questions_app.command("geler")
+def questions_geler(
+    questions: Annotated[Path, typer.Argument(help="Fichier questions.yaml à geler.")],
+    dev_ratio: Annotated[
+        float, typer.Option("--dev-ratio", help="Part de Questions dev dans chaque Type.")
+    ] = freeze.DEV_RATIO_DEFAUT,
+    graine: Annotated[int, typer.Option("--graine", help="Graine de la répartition.")] = 42,
+) -> None:
+    """Répartit les Questions en dev / test (stratifié par Type) et écrit l'empreinte du Gel."""
+    try:
+        jeu = io.load_agrege(questions)
+        gele = freeze.geler(jeu, dev_ratio, graine)
+    except ValidationFailed as erreur:
+        for e in erreur.errors:
+            typer.echo(f"Erreur : {e}", err=True)
+        typer.echo(f"{len(erreur.errors)} erreur(s) ; fichier inchangé.", err=True)
+        raise typer.Exit(2) from erreur
+    except ConfigError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    io.save(questions, gele)
+    par: dict[str, dict[str, int]] = {}
+    for q in gele.questions:
+        if q.split is not None:
+            parts = par.setdefault(q.type, {"dev": 0, "test": 0})
+            parts[q.split] += 1
+    typer.echo(f"Jeu gelé : {questions} (graine {graine}, dev {_fr(dev_ratio)}).")
+    for type_, parts in par.items():
+        typer.echo(f"  - {type_} : dev {parts['dev']}, test {parts['test']}")
+    typer.echo(f"Hors répartition (rejected) : {sum(1 for q in gele.questions if q.split is None)}")
+    if gele.freeze is not None:
+        typer.echo(f"Empreinte : {gele.freeze.sha256}")
 
 
 def _fr(valeur: float, decimales: int = 2) -> str:
