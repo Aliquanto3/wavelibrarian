@@ -6,8 +6,8 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 20:55 |
-| Story en cours | aucune (prochaine : 1.1) |
+| Mis à jour | 2026-10-17 20:59 |
+| Story en cours | 1.1 (compilation du contexte de l'epic 1) |
 | Stories livrées | 0 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
@@ -58,6 +58,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 
 | Heure | Débit banc (10 min, modèle / piste) | CPU | RAM libre | Run (CPU s, RSS max, threads) | Décision |
 | --- | --- | --- | --- | --- | --- |
+| 20:58 | 8 (lfm2.5-2.6b / reasoning, ~1 réponse/41 s) ; fenêtre précédente sur un autre modèle, référence posée | 9 % | 17,6 Go | 0 s, 86 Mo, 57 thr (aucun pytest) | Mesure de départ, aucune ERROR : on démarre 1.1 |
 
 ## Journal des stories
 
