@@ -128,3 +128,69 @@ def test_non_publiable_hors_depot_avertit(tmp_path: Path, caplog: pytest.LogCapt
 def test_publiable_dans_depot_accepte(tmp_path: Path):
     _depot(tmp_path)
     assert len(declare(_corpus(tmp_path)).documents) == 4
+
+
+def test_hors_depot_constate_sans_git(tmp_path: Path):
+    # Garde du test précédent : tmp_path ne doit être sous aucun dépôt git.
+    from wavelibrarian.corpus.declare import _depot_englobant
+
+    assert _depot_englobant(tmp_path) is None
+    _depot(tmp_path)
+    assert _depot_englobant(tmp_path / "docs") == tmp_path
+
+
+def test_non_publiable_git_en_erreur_refuse(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import wavelibrarian.corpus.declare as mod
+
+    _depot(tmp_path)
+    (tmp_path / ".gitignore").write_text("docs/\n", encoding="utf-8")
+    fichier = _corpus(tmp_path, publishable=False)
+    monkeypatch.setattr(mod, "_git", lambda *a: None)  # git absent
+    with pytest.raises(ConfigError, match="git introuvable"):
+        declare(fichier)
+    erreur = subprocess.CompletedProcess([], 128, "", "fatal: detected dubious ownership")
+    monkeypatch.setattr(mod, "_git", lambda *a: erreur)
+    with pytest.raises(ConfigError, match="dubious ownership"):
+        declare(fichier)
+
+
+def test_non_publiable_ignore_mais_suivi_refuse(tmp_path: Path):
+    _depot(tmp_path)
+    fichier = _corpus(tmp_path, publishable=False)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "docs"], check=True)  # noqa: S603, S607
+    (tmp_path / ".gitignore").write_text("docs/\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="hors du dépôt ou dans un dossier ignoré"):
+        declare(fichier)
+
+
+@pytest.mark.parametrize("licence", ["proprietary", "Tous droits réservés", "LicenceRef-client"])
+def test_licence_restrictive_dans_depot_refusee(tmp_path: Path, licence: str):
+    _depot(tmp_path)
+    with pytest.raises(ConfigError, match="sous licence") as e:
+        declare(_corpus(tmp_path, license=licence))
+    assert e.value.path == "path"
+    (tmp_path / ".gitignore").write_text("docs/\n", encoding="utf-8")
+    assert len(declare(_corpus(tmp_path, license=licence)).documents) == 4
+
+
+@pytest.mark.parametrize("licence", ["CC-BY-4.0", "cc0-1.0", "MIT", "Etalab-2.0", "CC-BY-SA-4.0"])
+def test_licence_ouverte(licence: str):
+    from wavelibrarian.corpus.declare import licence_restrictive
+
+    assert not licence_restrictive(licence)
+
+
+def test_fichiers_caches_et_liens_exclus(tmp_path: Path):
+    fichier = _corpus(tmp_path)
+    docs = tmp_path / "docs"
+    (docs / ".cache").mkdir()
+    (docs / ".cache" / "x.md").write_bytes(b"cache")
+    (docs / ".note.md").write_bytes(b"note")
+    dehors = tmp_path / "dehors.md"
+    dehors.write_bytes(b"secret")
+    try:
+        (docs / "lien.md").symlink_to(dehors)
+    except OSError:
+        pass  # liens non autorisés sous Windows sans privilège
+    sources = [d.source_path for d in declare(fichier).documents]
+    assert sources == ["a.md", "b.txt", "c.html", "d.pdf"]

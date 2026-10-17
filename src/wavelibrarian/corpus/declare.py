@@ -114,26 +114,81 @@ def _git(racine: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
         return None
 
 
+# Licences ouvertes (préfixes SPDX ou équivalents) : toute autre licence est restrictive et
+# soumise à la même garde que `publishable: false` (contracts.md §4.1).
+LICENCES_OUVERTES = ("cc0", "cc-by", "mit", "apache-", "bsd-", "odbl", "pddl", "etalab-", "lo-")
+
+
+def licence_restrictive(licence: str) -> bool:
+    """Vrai si la licence n'est pas une licence ouverte connue (par préfixe, sans casse)."""
+    return not licence.strip().lower().startswith(LICENCES_OUVERTES)
+
+
+def _depot_englobant(racine: Path) -> Path | None:
+    """Premier ancêtre (ou `racine`) qui contient `.git` (dossier, ou fichier de worktree)."""
+    for dossier in (racine, *racine.parents):
+        if (dossier / ".git").exists():
+            return dossier
+    return None
+
+
 def _verifier_droits(spec: CorpusSpec, racine: Path) -> None:
-    """AD-19 : un Corpus non publiable dans le dépôt doit être dans un dossier ignoré par git."""
-    if spec.publishable:
+    """AD-19 : un Corpus restreint dans un dépôt doit être dans un dossier ignoré par git.
+
+    Restreint = `publishable: false` ou licence restrictive. Fail-closed : seul le cas « aucun
+    `.git` dans les ancêtres », constaté sans git, saute la vérification avec un avertissement ;
+    une erreur de git (absent, dépôt refusé) refuse la déclaration.
+    """
+    if spec.publishable and not licence_restrictive(spec.license):
         return
-    dans_depot = _git(racine, "rev-parse", "--is-inside-work-tree")
-    if dans_depot is None or dans_depot.returncode != 0 or dans_depot.stdout.strip() != "true":
+    depot = _depot_englobant(racine)
+    if depot is None:
         log.warning(
-            "Corpus %s non publiable hors d'un dépôt git : vérification des droits sautée.",
+            "Corpus %s restreint hors d'un dépôt git : vérification des droits sautée.",
             spec.corpus_id,
         )
         return
-    ignore = _git(racine, "check-ignore", "-q", str(racine))
-    if ignore is not None and ignore.returncode == 0:
-        return
-    raise ConfigError(
-        "path",
-        f"le Corpus {spec.corpus_id!r} est publishable: false mais {racine} est dans un dépôt git "
-        "sans être ignoré : placez le corpus hors du dépôt ou dans un dossier ignoré "
-        "(.gitignore), sinon il risque d'être publié.",
+    conseil = (
+        "placez le corpus hors du dépôt ou dans un dossier ignoré (.gitignore), "
+        "sinon il risque d'être publié."
     )
+    motif = "publishable: false" if not spec.publishable else f"sous licence {spec.license!r}"
+    ignore = _git(racine, "check-ignore", "-q", "--", str(racine))
+    if ignore is None or ignore.returncode not in (0, 1):
+        detail = "git introuvable" if ignore is None else ignore.stderr.strip()
+        raise ConfigError(
+            "path",
+            f"le Corpus {spec.corpus_id!r} est {motif} et {racine} est dans le dépôt {depot}, "
+            f"mais git ne peut pas vérifier qu'il est ignoré ({detail}) : {conseil}",
+        )
+    if ignore.returncode != 0:
+        raise ConfigError(
+            "path",
+            f"le Corpus {spec.corpus_id!r} est {motif} mais {racine} est dans un dépôt git "
+            f"sans être ignoré : {conseil}",
+        )
+    suivis = _git(racine, "ls-files", "--", str(racine))
+    if suivis is None or suivis.returncode != 0 or suivis.stdout.strip():
+        raise ConfigError(
+            "path",
+            f"le Corpus {spec.corpus_id!r} est {motif} : {racine} est ignoré mais des fichiers y "
+            f"sont déjà suivis par git ; retirez-les de l'index (git rm --cached) ou {conseil}",
+        )
+
+
+def _lister(racine: Path) -> list[Path]:
+    """Fichiers du Corpus, sans chemin caché (composant en `.`) ni lien symbolique."""
+    res: list[Path] = []
+    for p in racine.rglob("*"):
+        rel = p.relative_to(racine)
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        if p.is_symlink():
+            log.warning("Lien symbolique %s ignoré.", rel.as_posix())
+            continue
+        if p.is_file():
+            res.append(p)
+    return sorted(res, key=lambda p: p.relative_to(racine).as_posix())
 
 
 def _surcharges(spec: CorpusSpec, sources: set[str]) -> dict[str, DocOverride]:
@@ -174,11 +229,7 @@ def declare(chemin: Path) -> DeclaredCorpus:
 
     retenus: list[tuple[str, DocFormat, str]] = []
     vus: dict[str, str] = {}
-    fichiers = sorted(
-        (p for p in racine.rglob("*") if p.is_file()),
-        key=lambda p: p.relative_to(racine).as_posix(),
-    )
-    for fichier in fichiers:
+    for fichier in _lister(racine):
         rel = fichier.relative_to(racine).as_posix()
         fmt = EXTENSIONS.get(fichier.suffix.lower())
         if fmt is None:
