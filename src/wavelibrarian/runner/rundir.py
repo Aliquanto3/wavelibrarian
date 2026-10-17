@@ -19,12 +19,13 @@ from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import canonical_json
 from wavelibrarian.corpus.declare import DeclaredCorpus
 from wavelibrarian.corpus.ingest import nom_parser_resolu, parsers_par_format
-from wavelibrarian.llm.providers.logs import limiter_journaux
+from wavelibrarian.llm.gateway import limiter_journaux
 from wavelibrarian.ports.components import ComponentSpec
 
 Status = Literal["running", "completed", "budget_exceeded", "failed"]
 JsonlName = Literal["answers.jsonl", "verdicts.jsonl", "panel.jsonl"]
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def resolve_parsers(experience: ResolvedExperiment, corpus: DeclaredCorpus) -> ResolvedExperiment:
@@ -67,16 +68,19 @@ def create_run_dir(
     run_id: str,
     experience: ResolvedExperiment,
     *,
-    freeze_sha256: str | None = None,
+    freeze_sha256: str,
 ) -> Path:
     """Crée `runs/<run_id>/` avec `experiment.resolved.yaml`, `experiment.sha256` et
-    `manifest.json` (`status: running`) ; refuse un `run_id` déjà initialisé ou une Expérience
-    dont un parser est encore `auto`."""
+    `manifest.json` (`status: running`, empreinte du Gel `freeze_sha256` exigée par §5) ;
+    refuse un dossier `runs/<run_id>/` existant non vide, une empreinte du Gel qui n'est pas un
+    sha256 hexadécimal, ou une Expérience dont un parser est encore `auto`."""
     if not _RUN_ID.fullmatch(run_id):
         raise ValueError(f"run_id invalide : {run_id!r} (lettres, chiffres, - et _)")
     dossier = wl_home / "runs" / run_id
-    if (dossier / "manifest.json").exists():
+    if dossier.exists() and (not dossier.is_dir() or any(dossier.iterdir())):
         raise WlError(f"Exécution {run_id} déjà initialisée (reprise : --reprendre)")
+    if not _SHA256.fullmatch(freeze_sha256):
+        raise ValueError(f"freeze_sha256 invalide : {freeze_sha256!r} (sha256 hexadécimal)")
     if any(c.parser.name == "auto" for c in experience.configurations):
         raise WlError("parser « auto » non résolu : appeler resolve_parsers avant create_run_dir")
     empreinte = write_resolved(experience, dossier)

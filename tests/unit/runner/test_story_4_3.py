@@ -13,10 +13,11 @@ from wavelibrarian.architectures.bm25_only import Bm25Only
 from wavelibrarian.config.experiment import ResolvedExperiment
 from wavelibrarian.config.load import load_experiment
 from wavelibrarian.config.resolve import resolve_experiment
-from wavelibrarian.core.errors import WlError
+from wavelibrarian.core.errors import ConfigError, WlError
 from wavelibrarian.core.ids import canonical_json, sha16
 from wavelibrarian.core.types import ParsedCorpus, QuestionInput
 from wavelibrarian.corpus.declare import declare
+from wavelibrarian.corpus.ingest import ingest, parsers_par_format
 from wavelibrarian.llm.providers.fake import FakeProvider
 from wavelibrarian.ports.architecture import ArchitectureBase
 from wavelibrarian.ports.components import ComponentSpec
@@ -31,6 +32,7 @@ from wavelibrarian.runner.rundir import (
     set_status,
 )
 
+GEL = "ab" * 32
 CORPUS_MINICORPUS = Path(__file__).resolve().parents[3] / "corpora" / "minicorpus" / "corpus.yaml"
 
 
@@ -39,6 +41,7 @@ def ctx(tmp_path: Path) -> Iterator[Context]:
     c = Context.from_profile(
         "test", wl_home=tmp_path / "wl", run_id="r-1", seed=1, providers={"fake": FakeProvider()}
     )
+    c.parser = "markdown+pdf_text"  # parser résolu du Mini-corpus (resolve_parsers)
     with c:
         yield c
 
@@ -104,6 +107,7 @@ def test_index_key_est_le_hachage_des_trois_elements(
                 "corpus_fingerprint": minicorpus.fingerprint,
                 "architecture": "bm25_only",
                 "index_key": arch.index_key(),
+                "parser_versions": {"markdown": "1", "pdf_text": "1"},
             }
         )
     )
@@ -186,15 +190,49 @@ def test_cle_change_avec_le_corpus_et_le_parser(ctx: Context, minicorpus: Parsed
     assert index_key(minicorpus.fingerprint, _factory(ctx)()) != avant
 
 
+def test_cle_change_avec_la_version_du_parser(
+    ctx: Context, minicorpus: ParsedCorpus, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian.components.parsers.markdown import MarkdownParser
+
+    avant = index_key(minicorpus.fingerprint, _factory(ctx)())
+    monkeypatch.setattr(MarkdownParser, "version", "2")
+    assert index_key(minicorpus.fingerprint, _factory(ctx)()) != avant
+
+
+def test_parser_auto_refuse_par_la_cle(ctx: Context, minicorpus: ParsedCorpus) -> None:
+    ctx.parser = "auto"
+    with pytest.raises(ConfigError, match="auto"):
+        index_key(minicorpus.fingerprint, _factory(ctx)())
+
+
+def test_contenu_modifie_change_fingerprint_et_cle(ctx: Context, tmp_path: Path) -> None:
+    racine = tmp_path / "c"
+    (racine / "docs").mkdir(parents=True)
+    (racine / "corpus.yaml").write_text(
+        "corpus_id: mini\npath: docs\nlang: fr\nlicense: CC-BY-4.0\npublishable: true\n"
+        "volatility: low\n",
+        encoding="utf-8",
+    )
+    doc = racine / "docs" / "a.md"
+    doc.write_text("# Titre\n\nPremier texte.\n", encoding="utf-8")
+    ctx.parser = "markdown"
+    avant = ingest(declare(racine / "corpus.yaml"), "markdown", wl_home=tmp_path / "wl")
+    doc.write_text("# Titre\n\nTexte modifié.\n", encoding="utf-8")
+    apres = ingest(declare(racine / "corpus.yaml"), "markdown", wl_home=tmp_path / "wl")
+    assert apres.fingerprint != avant.fingerprint
+    arch = _factory(ctx)()
+    assert index_key(apres.fingerprint, arch) != index_key(avant.fingerprint, arch)
+
+
 def test_manifest_porte_embedder_dim_quand_l_architecture_en_a_un(
     ctx: Context, minicorpus: ParsedCorpus
 ) -> None:
-    class Dim:
-        dim = 8
+    assert _factory(ctx)().embedder_dim() is None  # défaut du port
 
     def factory() -> ArchitectureBase:
         arch = _factory(ctx)()
-        arch.embedder = Dim()  # type: ignore[attr-defined]
+        arch.embedder_dim = lambda: 8  # type: ignore[method-assign]
         return arch
 
     _, cle = IndexCache(ctx.wl_home).build(ctx, factory, minicorpus)
@@ -208,15 +246,33 @@ def test_manifest_porte_embedder_dim_quand_l_architecture_en_a_un(
 def test_parser_auto_remplace_avant_write_resolved(tmp_path: Path) -> None:
     experience = _experience(tmp_path)
     assert experience.configurations[0].parser.name == "auto"
-    resolue = resolve_parsers(experience, declare(CORPUS_MINICORPUS))
+    corpus = declare(CORPUS_MINICORPUS)
+    resolue = resolve_parsers(experience, corpus)
     assert resolue.configurations[0].parser.name == "markdown+pdf_text"
     wl = tmp_path / "wl"
-    dossier = create_run_dir(wl, "run-1", resolue)
+    dossier = create_run_dir(wl, "run-1", resolue, freeze_sha256=GEL)
     texte = (dossier / "experiment.resolved.yaml").read_text(encoding="utf-8")
     assert yaml.safe_load(texte)["configurations"][0]["parser"]["name"] == "markdown+pdf_text"
     assert "name: auto" not in texte
     with Context.from_experiment(resolue, wl_home=wl, run_id="run-1") as c:
         assert c.parser == "markdown+pdf_text"
+        # de bout en bout : le nom résolu sert à l'ingestion réelle puis à la clé d'index
+        parse = ingest(corpus, c.parser, wl_home=wl)
+        assert {d.source_path.rsplit(".", 1)[-1] for d in parse.documents} == {"md", "pdf"}
+        assert parse.fingerprint == ingest(corpus, wl_home=wl).fingerprint
+        _, cle = IndexCache(wl).build(c, _factory(c), parse)
+        assert IndexCache(wl).has(cle)
+
+
+def test_parser_composite_par_format() -> None:
+    assert parsers_par_format(["markdown", "pdf"], "markdown+pdf_text") == {
+        "markdown": "markdown",
+        "pdf": "pdf_text",
+    }
+    with pytest.raises(ConfigError, match="inconnu"):
+        parsers_par_format(["markdown"], "markdown+nimporte")
+    with pytest.raises(ConfigError, match="pdf"):
+        parsers_par_format(["markdown", "pdf"], "html+markdown")
 
 
 def test_parser_explicite_conserve_et_auto_refuse_par_create_run_dir(tmp_path: Path) -> None:
@@ -224,13 +280,13 @@ def test_parser_explicite_conserve_et_auto_refuse_par_create_run_dir(tmp_path: P
     resolue = resolve_parsers(experience, declare(CORPUS_MINICORPUS))
     assert resolue.configurations[0].parser.name == "markdown"
     with pytest.raises(WlError, match="auto"):
-        create_run_dir(tmp_path / "wl", "run-2", _experience(tmp_path))
+        create_run_dir(tmp_path / "wl", "run-2", _experience(tmp_path), freeze_sha256=GEL)
 
 
 def test_dossier_d_execution_fichiers_avant_tout_appel(tmp_path: Path) -> None:
     resolue = resolve_parsers(_experience(tmp_path), declare(CORPUS_MINICORPUS))
     wl = tmp_path / "wl"
-    dossier = create_run_dir(wl, "run-3", resolue, freeze_sha256="ab" * 32)
+    dossier = create_run_dir(wl, "run-3", resolue, freeze_sha256=GEL)
     assert dossier == wl / "runs" / "run-3"
     assert sorted(p.name for p in dossier.iterdir()) == [
         "experiment.resolved.yaml",
@@ -241,13 +297,21 @@ def test_dossier_d_execution_fichiers_avant_tout_appel(tmp_path: Path) -> None:
     assert manifest["status"] == "running" and manifest["profile"] == "test"
     assert manifest["models_frozen_at"] == resolue.models_frozen_at.isoformat()
     assert manifest["models"] and "fake-llm-a" in manifest["models"]
-    assert manifest["freeze_sha256"] == "ab" * 32
+    assert manifest["freeze_sha256"] == GEL
     empreinte = (dossier / "experiment.sha256").read_text(encoding="utf-8").strip()
     assert manifest["experiment_sha256"] == empreinte and len(empreinte) == 64
     with pytest.raises(WlError, match="déjà initialisée"):
-        create_run_dir(wl, "run-3", resolue)
+        create_run_dir(wl, "run-3", resolue, freeze_sha256=GEL)
     with pytest.raises(ValueError, match="run_id invalide"):
-        create_run_dir(wl, "../x", resolue)
+        create_run_dir(wl, "../x", resolue, freeze_sha256=GEL)
+    with pytest.raises(ValueError, match="freeze_sha256"):
+        create_run_dir(wl, "run-4", resolue, freeze_sha256="ab")
+    reste = wl / "runs" / "run-5"
+    reste.mkdir()
+    (reste / "answers.jsonl").write_text("{}\n", encoding="utf-8")  # dossier sans manifeste
+    with pytest.raises(WlError, match="déjà initialisée"):
+        create_run_dir(wl, "run-5", resolue, freeze_sha256=GEL)
+    assert (reste / "answers.jsonl").read_text(encoding="utf-8") == "{}\n"
     set_status(dossier, "completed")
     manifest = json.loads((dossier / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed" and "finished_at" in manifest
@@ -273,3 +337,25 @@ def test_run_log_ecrit_en_utf8(tmp_path: Path) -> None:
     finally:
         detach_run_log(handler)
     assert "bonjour é" in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
+def test_run_log_filtre_les_debug_reseau_et_les_en_tetes(tmp_path: Path) -> None:
+    racine = logging.getLogger()
+    niveau = racine.level
+    racine.setLevel(logging.DEBUG)
+    handler = attach_run_log(tmp_path)
+    try:
+        for nom in ("anthropic", "httpx", "httpx2", "httpcore2._trace"):
+            log = logging.getLogger(nom)
+            log.setLevel(logging.DEBUG)  # relevé après coup (ANTHROPIC_LOG=debug)
+            log.debug("Request headers: {'x-api-key': 'sk-ant-SECRET'} %s", nom)
+        logging.getLogger("httpx").warning("avertissement réseau gardé")
+        logging.getLogger("wavelibrarian.runner").debug("debug du runner gardé")
+    finally:
+        detach_run_log(handler)
+        racine.setLevel(niveau)
+        for nom in ("anthropic", "httpx", "httpx2", "httpcore2._trace"):
+            logging.getLogger(nom).setLevel(logging.WARNING)
+    texte = (tmp_path / "run.log").read_text(encoding="utf-8")
+    assert "SECRET" not in texte and "x-api-key" not in texte
+    assert "avertissement réseau gardé" in texte and "debug du runner gardé" in texte

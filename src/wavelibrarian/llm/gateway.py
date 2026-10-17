@@ -22,6 +22,9 @@ from wavelibrarian.core.types import Usage
 from wavelibrarian.llm.budget import Ledger
 from wavelibrarian.llm.cache import ResponseCache, cache_key, role_marker
 from wavelibrarian.llm.providers.base import Provider, ProviderResponse
+from wavelibrarian.llm.providers.logs import (  # réexport pour run.log (AD-3)
+    limiter_journaux as limiter_journaux,
+)
 from wavelibrarian.llm.roles import check_inputs
 from wavelibrarian.ports.gateway import LLMRequest, LLMResult
 from wavelibrarian.ports.measure import EnergyEstimator, Tokenizer, Tracer

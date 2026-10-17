@@ -1,7 +1,7 @@
 ---
 story: "4.3"
 title: Cache d'index et dossier d'Exécution
-status: review
+status: done
 ---
 
 # Story 4.3 : Cache d'index et dossier d'Exécution
@@ -43,3 +43,18 @@ status: review
 - Écart : le temps passé dans `build` est mesuré par `time.perf_counter` ; le Poste `update` du Scénario passera `post="update"` en story 4.7. Le nom `markdown+pdf_text` pour un corpus mixte découle de `nom_parser_resolu` (1.2 / 2.2) et non d'un nom unique.
 - Risque : `os.replace` d'un dossier sur un dossier final déjà présent échouerait sous Windows ; le cas est écarté par le test de présence préalable (exécution séquentielle, `run.lock`).
 - `pyproject.toml` : `wavelibrarian.runner.rundir` rejoint `allowed_importers` du contrat « Providers atteints par la seule passerelle » pour importer `limiter_journaux` seul ; à confirmer en revue.
+
+## Revue
+
+Revue Opus en une passe, après rebase sur `main` (caef354, aucun conflit). Sources : SA = second avis (Haiku), R = revue.
+
+- HIGH, SA 1, corrigé : `ingest(corpus, "markdown+pdf_text")` levait `ConfigError` (reproduit sur le Mini-corpus). Le nom composite reste l'identité du parser (`ctx.parser`, `CorpusProfile.parser`, `index_key`) ; `parsers_par_format` le décompose désormais par format (Parser `auto` du format s'il fait partie des composants), ce qui couvre aussi `corpus/scenario.py`. Test de bout en bout : `resolve_parsers` → `create_run_dir` → `Context.from_experiment` → `ingest(corpus, ctx.parser)` → `IndexCache.build`, plus `test_parser_composite_par_format`.
+- HIGH, SA 2, rejeté : `doc_id = sha16_bytes(octets)` (AD-5), donc un contenu modifié change `fingerprint` et `index_key` ; prouvé par `test_contenu_modifie_change_fingerprint_et_cle`.
+- medium, SA 3, corrigé : `runner.rundir` retiré des `allowed_importers` (contrats import-linter identiques à `main`) ; `limiter_journaux` réexporté par `llm/gateway.py` et importé de là.
+- medium, SA 4, corrigé : `ArchitectureBase.embedder_dim()` (défaut `None`) remplace la lecture de `architecture.embedder.dim`. Report epic 6 : chaque Architecture à embeddings redéfinit `embedder_dim()` pour que le manifeste porte la dimension (FR-3, contrôlée par `config/validate.py`).
+- medium, SA 5, corrigé : la clé porte `parser_versions` (version de chaque Parser de `ctx.parser`), ajoutée par `runner/index_cache.index_key` et non par `index_key()` pour qu'une Architecture qui redéfinit `index_key()` ne puisse pas l'omettre. Écart assumé à la formule littérale du critère (quatrième champ), justifié par AD-10 : le `doc_id` hache les octets bruts, une nouvelle version de Parser ne change pas `corpus_fingerprint`. Un parser encore `auto` est refusé par la clé (`ConfigError`).
+- medium, SA 6, corrigé : `test_run_log_filtre_les_debug_reseau_et_les_en_tetes` (DEBUG `anthropic`, `httpx`, `httpx2`, `httpcore2.*` relevés après coup, en-tête `x-api-key` absent, WARNING réseau et DEBUG du runner gardés).
+- low, SA 7, reporté : chemins absolus dans `experiment.resolved.yaml`, déjà connus depuis la 1.5 (`resolve_experiment` rend les chemins absolus) ; à traiter si l'Expérience résolue doit être publiée telle quelle.
+- low, SA 8, corrigé : `create_run_dir` refuse tout `runs/<run_id>/` existant non vide (ou qui n'est pas un dossier), même sans manifeste.
+- low, SA 9, corrigé : §5 exige l'empreinte du Gel dans `manifest.json` ; `freeze_sha256` devient obligatoire et doit être un sha256 hexadécimal.
+- low, R, reporté (story 4.8, reprise) : une Expérience résolue relue par `resolve_experiment` avec `parser: markdown+pdf_text` échouerait dans `resoudre_composant` (nom composite non enregistré) ; la reprise doit relire `experiment.resolved.yaml` comme `ResolvedExperiment`, ou `resolve_experiment` accepter un composite.

@@ -26,12 +26,22 @@ def parsers_par_format(formats: Iterable[str], parser: str = "auto") -> dict[str
     """Nom concret du Parser de chaque format ; remplace `parser: auto` (runner, epic 4).
 
     `auto` : le Parser par défaut du format, qui doit être enregistré et déclarer ce format.
-    Un nom explicite doit couvrir tous les formats demandés. `ConfigError` sinon.
+    Un nom composite (`markdown+pdf_text`, forme de `nom_parser_resolu` que le runner écrit dans
+    l'Expérience résolue) prend pour chaque format le composant qui le déclare (le Parser `auto`
+    du format s'il en fait partie). Un nom explicite doit couvrir tous les formats demandés.
+    `ConfigError` sinon.
     """
     registry.discover()
+    composants = _composants(parser) if "+" in parser else ()
     resultat: dict[str, str] = {}
     for fmt in sorted(set(formats)):
-        nom = AUTO.get(fmt) if parser == "auto" else parser
+        if parser == "auto":
+            nom = AUTO.get(fmt)
+        elif composants:
+            candidats = [n for n in composants if fmt in _formats(n)]
+            nom = AUTO.get(fmt) if AUTO.get(fmt) in candidats else next(iter(candidats), parser)
+        else:
+            nom = parser
         if nom is None or nom not in registry.names("parser"):
             enregistres = ", ".join(registry.names("parser")) or "aucun"
             manque = f" (Parser « {nom} » non encore disponible)" if nom else ""
@@ -46,9 +56,39 @@ def parsers_par_format(formats: Iterable[str], parser: str = "auto") -> dict[str
     return resultat
 
 
+def _formats(nom: str) -> frozenset[str]:
+    return getattr(registry.get("parser", nom), "formats", frozenset())
+
+
+def _composants(parser: str) -> tuple[str, ...]:
+    """Composants enregistrés d'un nom composite ; `ConfigError` pour un composant inconnu."""
+    noms = tuple(sorted(set(parser.split("+"))))
+    inconnus = [n for n in noms if n not in registry.names("parser")]
+    if inconnus or not all(noms):
+        enregistres = ", ".join(registry.names("parser")) or "aucun"
+        raise ConfigError(
+            "parser",
+            f"Parser composite « {parser} » : composant inconnu {', '.join(inconnus) or '(vide)'}"
+            f" ; Parsers disponibles : {enregistres}",
+        )
+    return noms
+
+
 def nom_parser_resolu(par_format: dict[str, str]) -> str:
     """Nom unique d'un jeu de Parsers (`markdown`, ou `html+markdown` si plusieurs)."""
     return "+".join(sorted(set(par_format.values())))
+
+
+def versions_parsers(parser: str) -> dict[str, str]:
+    """`version` de chaque Parser d'un nom résolu (simple ou composite) ; entre dans la clé
+    d'index (AD-10) car le `doc_id` hache les octets bruts, pas la sortie du Parser."""
+    if parser == "auto":
+        raise ConfigError("parser", "parser « auto » non résolu (resolve_parsers d'abord)")
+    registry.discover()
+    noms = _composants(parser) if "+" in parser else (parser,)
+    if parser not in registry.names("parser") and "+" not in parser:
+        raise ConfigError("parser", f"Parser « {parser} » non enregistré")
+    return {nom: _version(registry.get("parser", nom)) for nom in noms}
 
 
 def _wl_home(wl_home: Path | None) -> Path:

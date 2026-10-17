@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from wavelibrarian.core.ids import canonical_json, sha16
 from wavelibrarian.core.types import CostPost, ParsedCorpus, Usage
+from wavelibrarian.corpus.ingest import versions_parsers
 from wavelibrarian.ports.architecture import ArchitectureBase
 
 if TYPE_CHECKING:
@@ -24,21 +25,23 @@ if TYPE_CHECKING:
 
 
 def index_key(corpus_fingerprint: str, architecture: ArchitectureBase) -> str:
-    """`sha16(canonical_json({corpus_fingerprint, architecture, index_key()}))` (AD-10)."""
+    """`sha16(canonical_json({corpus_fingerprint, architecture, index_key(), parser_versions}))`.
+
+    AD-10, plus la `version` de chaque Parser de `ctx.parser` : le `doc_id` hache les octets
+    bruts, une nouvelle version d'un Parser ne change donc pas `corpus_fingerprint`. La version
+    est ajoutée ici et non dans `index_key()` pour qu'une Architecture qui redéfinit `index_key()`
+    ne puisse pas l'omettre. `ConfigError` si le parser est encore `auto`.
+    """
     return sha16(
         canonical_json(
             {
                 "corpus_fingerprint": corpus_fingerprint,
                 "architecture": architecture.name,
                 "index_key": architecture.index_key(),
+                "parser_versions": versions_parsers(architecture.ctx.parser),
             }
         )
     )
-
-
-def _embedder_dim(architecture: ArchitectureBase) -> int | None:
-    dim = getattr(getattr(architecture, "embedder", None), "dim", None)
-    return dim if isinstance(dim, int) else None
 
 
 def _trace_index(ctx: "Context", *, hit: bool, latency_s: float, key: str) -> None:
@@ -115,8 +118,8 @@ class IndexCache:
                 "corpus_fingerprint": corpus.fingerprint,
                 "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
             }
-            dim = _embedder_dim(arch)
-            if dim is not None:
+            dim = arch.embedder_dim()
+            if isinstance(dim, int):
                 manifest["embedder_dim"] = dim
             (tmp / "manifest.json").write_text(
                 json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

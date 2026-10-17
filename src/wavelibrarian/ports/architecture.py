@@ -58,6 +58,11 @@ class ArchitectureBase(ABC):
         """Défaut : applicable."""
         return Applicability(applicable=True)
 
+    def embedder_dim(self) -> int | None:
+        """Dimension de l'embedder de l'index, portée au manifeste (FR-3) ; `None` sans embedder.
+        Les Architectures à embeddings (epic 6) la redéfinissent."""
+        return None
+
     def index_key(self) -> dict[str, Any]:
         """Params résolus moins `query_params`, plus parser résolu et nom du tokenizer (AD-10)."""
         params = self.params.model_dump(mode="json", exclude=set(self.query_params))
