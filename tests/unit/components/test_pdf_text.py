@@ -8,7 +8,7 @@ import yaml
 from fpdf import FPDF
 
 from wavelibrarian import registry
-from wavelibrarian.components.parsers.pdf_text import PdfTextParser
+from wavelibrarian.components.parsers.pdf_text import PdfTextParser, normaliser
 from wavelibrarian.core.ids import sha16_bytes
 from wavelibrarian.core.types import DocMeta
 from wavelibrarian.corpus.declare import declare
@@ -120,3 +120,63 @@ def test_cache_versionne_pour_le_pdf(tmp_path: Path, wl_home: Path, monkeypatch)
 
 def test_auto_accepte_un_corpus_avec_pdf():
     assert parsers_par_format(["pdf", "markdown"]) == {"pdf": "pdf_text", "markdown": "markdown"}
+
+
+def test_normalise_cesure_ligatures_et_controles():
+    pdf = FPDF()
+    pdf.set_font("Helvetica", size=12)
+    pdf.add_page()
+    pdf.multi_cell(w=80, text="Le regle-\nment de la salle\nreste en vigueur.")
+    raw = bytes(pdf.output())
+    doc = PdfTextParser().parse("docs/r.pdf", raw, "fr", DocMeta())
+    assert [b.text for b in doc.blocks] == ["Le reglement de la salle\nreste en vigueur."]
+    assert normaliser("eﬃcace ﬂeur bleue\x00\x07 régle\x02ment\r\n  fin  ") == (
+        "efficace fleur bleue réglement\nfin"
+    )
+
+
+def test_pdf_chiffre_leve_value_error():
+    pdf = FPDF()
+    pdf.set_font("Helvetica", size=12)
+    pdf.add_page()
+    pdf.cell(text="Secret")
+    pdf.set_encryption(owner_password="o", user_password="u")
+    with pytest.raises(ValueError, match="illisible"):
+        PdfTextParser().parse("docs/s.pdf", bytes(pdf.output()), "fr", DocMeta())
+
+
+def test_document_ferme_meme_en_cas_d_erreur(monkeypatch):
+    import pypdfium2 as pdfium
+
+    fermes: list[int] = []
+    origine = pdfium.PdfDocument.close
+
+    def espion(self):
+        fermes.append(1)
+        return origine(self)
+
+    monkeypatch.setattr(pdfium.PdfDocument, "close", espion)
+    PdfTextParser().parse("docs/r.pdf", _pdf(["Un", "Deux"]), "fr", DocMeta())
+    assert fermes == [1]
+
+    def casse(self, index):
+        raise pdfium.PdfiumError("page illisible")
+
+    monkeypatch.setattr(pdfium.PdfDocument, "get_page", casse)
+    with pytest.raises(ValueError, match="page 1"):
+        PdfTextParser().parse("docs/r.pdf", _pdf(["Un"]), "fr", DocMeta())
+    assert fermes == [1, 1]
+
+
+def test_resolve_avec_le_chemin_de_l_ac(tmp_path: Path, wl_home: Path):
+    """AC : `resolve("docs/registre.pdf", …)` quand `docs/` est sous la racine du Corpus."""
+    racine = tmp_path / "racine"
+    fichier = _corpus(racine, {"registre.pdf": _pdf(["Un", "Deux", "Trois"])})
+    contenu = yaml.safe_load(fichier.read_text(encoding="utf-8"))
+    contenu["path"] = "."
+    fichier.write_text(yaml.safe_dump(contenu), encoding="utf-8")
+    parse = ingest(declare(fichier))
+    pdf = next(d for d in parse.documents if d.format == "pdf")
+    assert pdf.source_path == "docs/registre.pdf"
+    assert parse.resolve("docs/registre.pdf", 2, ()) == f"{pdf.doc_id}#p2"
+    assert parse.resolve("docs/registre.pdf", 9, ()) is None
