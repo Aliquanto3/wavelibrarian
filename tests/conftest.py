@@ -13,6 +13,11 @@ CORPUS_MINICORPUS = (
 )
 
 
+# Question de conformité du Jeu de référence : `factual`, un seul Ancrage, au moins 80 % de ses
+# mots dans cet Ancrage (la suite de conformité de l'epic 4 la pose pour exiger une Citation).
+CONFORMANCE_QUESTION_ID = "q-001"
+
+
 @pytest.fixture
 def wl_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Dossier d'état local isolé, exposé par la variable `WL_HOME`."""

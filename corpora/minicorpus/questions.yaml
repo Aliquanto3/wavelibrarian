@@ -1,0 +1,1063 @@
+corpus_id: minicorpus
+target_count: 40
+freeze:
+  sha256: a9509af2d5bc553ee630f56ec60bf0caca399bea7434f266a43059c28e009641
+  at: '2026-10-17T23:33:15Z'
+  seed: 42
+  dev_ratio: 0.4
+questions:
+- id: q-001
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Depuis quand Bram Oskelle est-il en poste ?
+  lang: fr
+  reference_answer: '1398'
+  answer_form: short
+  reference_anchors:
+  - doc: phare-de-keld.md
+    headings:
+    - Le phare de Keld
+    - Le gardien
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-002
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: En quelle année le phare de Keld a-t-il été construit ?
+  lang: fr
+  reference_answer: '1297'
+  answer_form: short
+  reference_anchors:
+  - doc: phare-de-keld.md
+    headings:
+    - Le phare de Keld
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-003
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Qui déclare la quarantaine à Port-Ysel ?
+  lang: fr
+  reference_answer: Oswin Dacrel
+  answer_form: short
+  reference_anchors:
+  - doc: procedure-quarantaine.md
+    headings:
+    - Procédure de quarantaine du port de Port-Ysel
+    - Déclenchement
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-004
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Quel droit paie le sel de Sarnoux selon la convention de douane ?
+  lang: fr
+  reference_answer: Un denier par mesure
+  answer_form: short
+  reference_anchors:
+  - doc: convention-douane.pdf
+    page: 1
+    headings: []
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-005
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Quelle amende punit une fausse déclaration selon la convention de douane ?
+  lang: fr
+  reference_answer: Le triple du droit éludé
+  answer_form: short
+  reference_anchors:
+  - doc: convention-douane.pdf
+    page: 2
+    headings: []
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-006
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Combien coûte la traversée de passagers de Port-Ysel à Brumeval ?
+  lang: fr
+  reference_answer: Six deniers
+  answer_form: short
+  reference_anchors:
+  - doc: tarifs-passeurs.pdf
+    page: 1
+    headings: []
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-007
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Combien d'îles habitées compte l'archipel ?
+  lang: fr
+  reference_answer: Quatre
+  answer_form: short
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Géographie
+    - Les îles principales
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-008
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Quelle hauteur atteindra la grande marée du dixième jour au Vieux Môle ?
+  lang: fr
+  reference_answer: Quatre mètres vingt
+  answer_form: short
+  reference_anchors:
+  - doc: bulletin-maree.md
+    headings:
+    - Bulletin des marées de Port-Ysel
+    - Hauteurs
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-009
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Que fait la cloche du phare de Keld par temps de brouillard ?
+  lang: fr
+  reference_answer: Elle sonne toutes les deux minutes.
+  answer_form: free
+  reference_anchors:
+  - doc: phare-de-keld.md
+    headings:
+    - Le phare de Keld
+    - Les signaux
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-010
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Pourquoi le capitaine Hadrien Velquor a-t-il refusé de passer par la passe de l'Ouest ?
+  lang: fr
+  reference_answer: Parce qu'elle était trop agitée ; la Grande Sève a contourné l'île de Keld par le
+    nord.
+  answer_form: free
+  reference_anchors:
+  - doc: journal-torvane.md
+    headings:
+    - Journal de Maëlis Torvane
+    - Premier jour
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-011
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Quel navire est le seul autorisé à transporter le courrier du Conseil des Quais ?
+  lang: fr
+  reference_answer: La Grande Sève
+  answer_form: short
+  reference_anchors:
+  - doc: registre-navires.md
+    headings:
+    - Registre des navires de Port-Ysel
+    - Règles
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-012
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Où Maëlis Torvane a-t-elle perdu son compas de laiton ?
+  lang: fr
+  reference_answer: Dans la baie de Sarnoux
+  answer_form: short
+  reference_anchors:
+  - doc: lettre-torvane.pdf
+    page: 1
+    headings: []
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-013
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Who is the keeper of the Lighthouse of Keld?
+  lang: en
+  reference_answer: Bram Oskelle
+  answer_form: short
+  reference_anchors:
+  - doc: visitor-guide-port-ysel.md
+    headings:
+    - Visitor's Guide to Port-Ysel
+    - What to see
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-014
+  type: factual
+  follow_up: false
+  cross_lingual: true
+  text: Où trouve-t-on le maître de port Oswin Dacrel chaque matin ?
+  lang: fr
+  reference_answer: Dans la Halle des Cordages
+  answer_form: short
+  reference_anchors:
+  - doc: visitor-guide-port-ysel.md
+    headings:
+    - Visitor's Guide to Port-Ysel
+    - Arriving
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-015
+  type: factual
+  follow_up: false
+  cross_lingual: true
+  text: How many seats does the Council of the Quays have under the charter of the year 1413?
+  lang: en
+  reference_answer: Nine
+  answer_form: short
+  reference_anchors:
+  - doc: charte-conseil-v2.md
+    headings:
+    - Charte du Conseil des Quais
+    - Composition
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-016
+  type: factual
+  follow_up: false
+  cross_lingual: true
+  text: For how many days must a suspect ship stay at anchor in Port-Ysel?
+  lang: en
+  reference_answer: Eleven days
+  answer_form: short
+  reference_anchors:
+  - doc: procedure-quarantaine.md
+    headings:
+    - Procédure de quarantaine du port de Port-Ysel
+    - Durée
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-017
+  type: factual
+  follow_up: false
+  cross_lingual: true
+  text: Que marque le symbole de lanterne dans l'almanach des marées ?
+  lang: fr
+  reference_answer: Les jours où le phare de Keld montre son feu à éclats.
+  answer_form: free
+  reference_anchors:
+  - doc: tide-almanac-notes.md
+    headings:
+    - Notes on the Vaelmor Tide Almanac
+    - Reading the almanac
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-018
+  type: multi_hop
+  follow_up: false
+  cross_lingual: false
+  text: Quel navire est commandé par le directeur de la Compagnie des Marées Grises ?
+  lang: fr
+  reference_answer: Le Cormoran Gris
+  answer_form: short
+  reference_anchors:
+  - doc: compagnie-marees-grises.md
+    headings:
+    - La Compagnie des Marées Grises
+    - Organisation
+  - doc: registre-navires.md
+    headings:
+    - Registre des navires de Port-Ysel
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-019
+  type: multi_hop
+  follow_up: false
+  cross_lingual: false
+  text: Quel capitaine a proposé d'importer du chêne de Sarnoux, et qui lui a écrit à ce sujet ?
+  lang: fr
+  reference_answer: Hadrien Velquor ; la cartographe Maëlis Torvane lui a écrit.
+  answer_form: free
+  reference_anchors:
+  - doc: rapport-chantier-ysel.md
+    headings:
+    - Rapport du chantier naval de Port-Ysel
+    - Difficultés
+  - doc: lettre-torvane.pdf
+    page: 1
+    headings: []
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-020
+  type: multi_hop
+  follow_up: false
+  cross_lingual: false
+  text: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
+  lang: fr
+  reference_answer: Ilsa Marenne
+  answer_form: short
+  reference_anchors:
+  - doc: rapport-chantier-ysel.md
+    headings:
+    - Rapport du chantier naval de Port-Ysel
+    - Navires construits
+  - doc: registre-navires.md
+    headings:
+    - Registre des navires de Port-Ysel
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-021
+  type: multi_hop
+  follow_up: false
+  cross_lingual: false
+  text: Combien la Compagnie des Marées Grises paierait-elle pour la seconde cale sèche ?
+  lang: fr
+  reference_answer: Deux mille deniers, la moitié des quatre mille deniers du projet.
+  answer_form: free
+  reference_anchors:
+  - doc: rapport-chantier-ysel.md
+    headings:
+    - Rapport du chantier naval de Port-Ysel
+    - Perspectives
+  - doc: lettre-torvane.pdf
+    page: 1
+    headings: []
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-022
+  type: multi_hop
+  follow_up: false
+  cross_lingual: false
+  text: Quel feu du phare de Keld est allumé d'après le bulletin des marées, et que signale-t-il ?
+  lang: fr
+  reference_answer: Le feu à éclats, qui annonce la Haute Eau et la fermeture de la passe de l'Ouest aux
+    navires de plus de quarante tonneaux.
+  answer_form: free
+  reference_anchors:
+  - doc: bulletin-maree.md
+    headings:
+    - Bulletin des marées de Port-Ysel
+    - Hauteurs
+  - doc: phare-de-keld.md
+    headings:
+    - Le phare de Keld
+    - Les signaux
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-023
+  type: multi_hop
+  follow_up: false
+  cross_lingual: false
+  text: Qui commande le bateau-pilote qui livre les vivres aux navires en quarantaine ?
+  lang: fr
+  reference_answer: Oswin Dacrel
+  answer_form: short
+  reference_anchors:
+  - doc: procedure-quarantaine.md
+    headings:
+    - Procédure de quarantaine du port de Port-Ysel
+    - Durée
+  - doc: registre-navires.md
+    headings:
+    - Registre des navires de Port-Ysel
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-024
+  type: comparison
+  follow_up: false
+  cross_lingual: false
+  text: Que change la charte de 1413 pour la durée du mandat des conseillers par rapport à celle de 1290
+    ?
+  lang: fr
+  reference_answer: Six ans au lieu de quatre ans.
+  answer_form: free
+  reference_anchors:
+  - doc: charte-conseil-v1.md
+    headings:
+    - Charte du Conseil des Quais
+    - Mandat
+  - doc: charte-conseil-v2.md
+    headings:
+    - Charte du Conseil des Quais
+    - Mandat
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-025
+  type: comparison
+  follow_up: false
+  cross_lingual: false
+  text: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans celle
+    de 1290 ?
+  lang: fr
+  reference_answer: Deux sièges de plus
+  answer_form: short
+  reference_anchors:
+  - doc: charte-conseil-v1.md
+    headings:
+    - Charte du Conseil des Quais
+    - Composition
+  - doc: charte-conseil-v2.md
+    headings:
+    - Charte du Conseil des Quais
+    - Composition
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-026
+  type: comparison
+  follow_up: false
+  cross_lingual: false
+  text: Quel navire de la Compagnie est à la fois le plus ancien et le plus lourd du registre ?
+  lang: fr
+  reference_answer: La Grande Sève (lancée en 1391, 45 tonneaux).
+  answer_form: free
+  reference_anchors:
+  - doc: registre-navires.md
+    headings:
+    - Registre des navires de Port-Ysel
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-027
+  type: comparison
+  follow_up: false
+  cross_lingual: false
+  text: Entre Keld, Brumeval et Sarnoux, quelle traversée de passagers depuis Port-Ysel est la plus chère
+    ?
+  lang: fr
+  reference_answer: Brumeval, à six deniers.
+  answer_form: short
+  reference_anchors:
+  - doc: tarifs-passeurs.pdf
+    page: 1
+    headings: []
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-028
+  type: comparison
+  follow_up: false
+  cross_lingual: false
+  text: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
+  lang: fr
+  reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
+    du Sud n'accepte que des barques de moins de vingt tonneaux.
+  answer_form: free
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Navigation
+    - Les passes
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-029
+  type: temporal
+  follow_up: false
+  cross_lingual: false
+  text: Quel jour le Conseil des Quais se réunit-il depuis la charte de 1413 ?
+  lang: fr
+  reference_answer: Le quinze de chaque mois.
+  answer_form: short
+  reference_anchors:
+  - doc: charte-conseil-v2.md
+    headings:
+    - Charte du Conseil des Quais
+    - Séances
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-030
+  type: temporal
+  follow_up: false
+  cross_lingual: false
+  text: Avant la révision de 1413, quel jour le Conseil des Quais se réunissait-il ?
+  lang: fr
+  reference_answer: Le premier jour de chaque mois.
+  answer_form: free
+  reference_anchors:
+  - doc: charte-conseil-v1.md
+    headings:
+    - Charte du Conseil des Quais
+    - Séances
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-031
+  type: temporal
+  follow_up: false
+  cross_lingual: false
+  text: Depuis quand Oswin Dacrel est-il maître de port ?
+  lang: fr
+  reference_answer: Depuis l'an 1405
+  answer_form: short
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Histoire
+    - Le Conseil des Quais
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-032
+  type: temporal
+  follow_up: false
+  cross_lingual: false
+  text: Combien d'années séparent la bataille des Barques Plates de la création de la Compagnie des Marées
+    Grises ?
+  lang: fr
+  reference_answer: Trente-trois ans (1355 et 1388).
+  answer_form: short
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Histoire
+    - Les guerres du sel
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-033
+  type: temporal
+  follow_up: false
+  cross_lingual: true
+  text: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne ?
+  lang: fr
+  reference_answer: L'édition de l'an 1409
+  answer_form: short
+  reference_anchors:
+  - doc: tide-almanac-notes.md
+    headings:
+    - Notes on the Vaelmor Tide Almanac
+    - Known errors
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-034
+  type: factual
+  follow_up: true
+  cross_lingual: false
+  text: Et combien de moutons élève-t-il avec sa famille ?
+  lang: fr
+  reference_answer: Vingt-sept
+  answer_form: short
+  reference_anchors:
+  - doc: phare-de-keld.md
+    headings:
+    - Le phare de Keld
+    - Le gardien
+  status: validated
+  split: test
+  contaminated_by: []
+  history:
+  - role: user
+    text: Qui est le gardien actuel du phare de Keld ?
+  - role: assistant
+    text: Le gardien actuel est Bram Oskelle.
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-035
+  type: multi_hop
+  follow_up: true
+  cross_lingual: false
+  text: Qui en est le capitaine ?
+  lang: fr
+  reference_answer: Hadrien Velquor
+  answer_form: short
+  reference_anchors:
+  - doc: compagnie-marees-grises.md
+    headings:
+    - La Compagnie des Marées Grises
+    - Organisation
+  - doc: registre-navires.md
+    headings:
+    - Registre des navires de Port-Ysel
+  status: validated
+  split: test
+  contaminated_by: []
+  history:
+  - role: user
+    text: Quel est le plus ancien navire de la flotte de la Compagnie des Marées Grises ?
+  - role: assistant
+    text: La Grande Sève, lancée en l'an 1391.
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-036
+  type: temporal
+  follow_up: true
+  cross_lingual: false
+  text: Et avant cette révision ?
+  lang: fr
+  reference_answer: Sept sièges
+  answer_form: short
+  reference_anchors:
+  - doc: charte-conseil-v1.md
+    headings:
+    - Charte du Conseil des Quais
+    - Composition
+  status: validated
+  split: dev
+  contaminated_by: []
+  history:
+  - role: user
+    text: Combien de sièges compte le Conseil des Quais depuis la charte de 1413 ?
+  - role: assistant
+    text: Neuf sièges.
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-037
+  type: global
+  follow_up: false
+  cross_lingual: false
+  text: Quelles sont les îles habitées de l'archipel et leur activité principale ?
+  lang: fr
+  reference_answer: Ormesse (commerce et chantiers navals), Keld (phare et élevage de moutons), Brumeval
+    (pêche au hareng argenté) et Sarnoux (sel et vannerie).
+  answer_form: free
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Géographie
+    - Les îles principales
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-038
+  type: global
+  follow_up: false
+  cross_lingual: false
+  text: Que sait-on du rôle de la Compagnie des Marées Grises dans l'archipel ?
+  lang: fr
+  reference_answer: Créée en 1388, elle détient le monopole du transport du hareng argenté, compte quatre
+    navires, verse quatre cents deniers par an au Conseil des Quais et dispose du quai numéro trois.
+  answer_form: free
+  reference_anchors:
+  - doc: compagnie-marees-grises.md
+    headings:
+    - La Compagnie des Marées Grises
+    - Organisation
+  - doc: compagnie-marees-grises.md
+    headings:
+    - La Compagnie des Marées Grises
+    - Activités
+  - doc: compagnie-marees-grises.md
+    headings:
+    - La Compagnie des Marées Grises
+    - Relations avec le Conseil
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-039
+  type: global
+  follow_up: false
+  cross_lingual: false
+  text: Quelles contraintes la saison de la Haute Eau impose-t-elle à la navigation et aux traversées
+    ?
+  lang: fr
+  reference_answer: La passe de l'Ouest est fermée aux navires de plus de quarante tonneaux, les tarifs
+    des passeurs sont majorés d'un tiers et la Compagnie reste à quai selon le bulletin.
+  answer_form: free
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Géographie
+    - Le climat
+  - doc: tarifs-passeurs.pdf
+    page: 1
+    headings: []
+  - doc: bulletin-maree.md
+    headings:
+    - Bulletin des marées de Port-Ysel
+    - Consignes
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-040
+  type: unanswerable
+  follow_up: false
+  cross_lingual: false
+  text: Quel est le nom du capitaine du Petit Sarnoux ?
+  lang: fr
+  reference_answer: Le Corpus ne le dit pas.
+  answer_form: free
+  reference_anchors: []
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-041
+  type: unanswerable
+  follow_up: false
+  cross_lingual: false
+  text: Combien coûte la traversée de passagers de Keld à Brumeval chez les passeurs ?
+  lang: fr
+  reference_answer: 'Le Corpus ne le dit pas : les tarifs ne portent que sur les départs de Port-Ysel.'
+  answer_form: free
+  reference_anchors: []
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-042
+  type: knowledge_trap
+  follow_up: false
+  cross_lingual: false
+  text: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
+  lang: fr
+  reference_answer: Onze jours (et non quarante).
+  answer_form: short
+  reference_anchors:
+  - doc: procedure-quarantaine.md
+    headings:
+    - Procédure de quarantaine du port de Port-Ysel
+    - Durée
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-043
+  type: knowledge_trap
+  follow_up: false
+  cross_lingual: false
+  text: Toutes les combien de temps le courant de la Gorge Pâle s'inverse-t-il ?
+  lang: fr
+  reference_answer: Tous les quarante-deux jours (et non plusieurs fois par jour comme un courant de marée).
+  answer_form: free
+  reference_anchors:
+  - doc: atlas-vaelmor.md
+    headings:
+    - Atlas de l'Archipel de Vaelmor
+    - Géographie
+    - Les courants
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target: null
+- id: q-044
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Qui succède à Tamsin Orrelle à la direction de la Compagnie des Marées Grises ?
+  lang: fr
+  reference_answer: Ilsa Marenne
+  answer_form: short
+  reference_anchors:
+  - doc: chronique-1415.md
+    headings:
+    - Chronique de l'an 1415
+    - La Compagnie
+  status: validated
+  split: dev
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target:
+    operation: op-1
+    state: after
+- id: q-045
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: Au-delà de quel tonnage la passe de l'Ouest est-elle fermée selon le bulletin de l'an 1415 ?
+  lang: fr
+  reference_answer: Trente tonneaux
+  answer_form: short
+  reference_anchors:
+  - doc: bulletin-maree.md
+    headings:
+    - Bulletin des marées de Port-Ysel
+    - Hauteurs
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target:
+    operation: op-2
+    state: after
+- id: q-046
+  type: temporal
+  follow_up: false
+  cross_lingual: false
+  text: Jusqu'à quel jour les navires de la Compagnie restent-ils à quai d'après le bulletin le plus récent
+    ?
+  lang: fr
+  reference_answer: Jusqu'au quinzième jour
+  answer_form: short
+  reference_anchors:
+  - doc: bulletin-maree.md
+    headings:
+    - Bulletin des marées de Port-Ysel
+    - Consignes
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target:
+    operation: op-2
+    state: after
+- id: q-047
+  type: factual
+  follow_up: false
+  cross_lingual: false
+  text: À quelle barque le quai numéro quatre est-il réservé selon la note de service ?
+  lang: fr
+  reference_answer: À la barque Écume Bleue
+  answer_form: short
+  reference_anchors:
+  - doc: note-obsolete.md
+    headings:
+    - Note sur le quai numéro quatre
+  status: validated
+  split: test
+  contaminated_by: []
+  history: []
+  origin:
+    kind: model
+    name: claude-code-dev-agent
+  scenario_target:
+    operation: op-3
+    state: before
