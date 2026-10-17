@@ -1,0 +1,59 @@
+# Revue adversariale : spine + contracts (2026-10-17)
+
+Verdict : le spine est solide sur l'argent, les identités et la reprise, mais il n'est pas prêt pour des agents indépendants : des types centraux sont non définis, les couches d'AD-1 contredisent des usages décrits, et plusieurs frontières (parsing, embeddings, état après index/load, Faux LLM) ont deux lectures légales.
+
+## Lentille 1 : paires incompatibles
+
+### CRITICAL
+
+C1. Types non définis, utilisés par des signatures liantes : `CorpusProfile` (Architecture.check), `ModelCatalog`, `ProfileSettings` (RunContext), le modèle complet `Question` (référence, split, status ; seul `QuestionInput` existe en §1). Paire : la story corpus/profile.py produit {n_docs, n_tokens}, la story long_context lit `profile.total_tokens` ; la story evalset définit `Question` dans evalset/io.py, la story config/schemas.py la redéfinit. De plus `ports/` (couche la plus basse après `core`) ne peut pas importer ces types depuis `config`, `llm` ou `corpus`.
+Correction : nouvel AD « Types partagés » : `CorpusProfile`, `Question`, `Catalog`/`ModelEntry`, `ProfileSettings`, `ExperimentSpec` vivent dans `core/` avec champs listés dans contracts.md §1. `CorpusProfile` = {corpus_id, n_docs, formats, langs, n_pages, n_tokens_reference, n_tokens_by_model: dict[model_id, int], volatility, link_density | None}. `check()` ne recalcule jamais de tokens.
+
+C2. Couches d'AD-1 contredites par les usages : (a) `config/validate.py` exige le Catalogue (`llm/catalog.py`, couche supérieure) ; (b) `scoring/panel.py` doit appeler des Juges (`components/judges`) mais `scoring` est frère de `components` ; (c) `corpus/ingest.py` doit appeler les Parsers (`components/parsers`) mais `corpus` est sous `components` ; (d) `llm` dépend du Tracer de `measure`, frère ; (e) `evalset/generate.py` et `closed_book.py` appellent la passerelle hors Exécution, sans `RunContext` défini.
+Correction : déplacer `catalog.py`/`pricing.py` dans `config/` ; `scoring/panel.py` reçoit des `Judge` injectés par le runner ; `ingest.py` reçoit les Parsers injectés (ou passe dans `runner/`). Ajouter à AD-1 : « les dépendances vers un frère passent par un Protocol de `ports/` injecté », et publier le contrat import-linter exact (layers + forbidden) en annexe.
+
+C3. Propriété du parsing et `parser: auto`. `index(corpus: ParsedCorpus, …)` reçoit un corpus déjà parsé, mais `parser` est un paramètre de Configuration qui entre dans `index_key`. Qui parse, une fois par Configuration ou une fois par Expérience ? `auto` n'est pas défini (plusieurs Parsers par format : pypdfium2 vs docling ; `formats` est un ClassVar sans priorité). Paire : la story parsers définit `auto` = premier par ordre alphabétique ; la story runner parse une fois avec le parser de la première Configuration.
+Correction : AD « Parsing » : le runner seul parse (cache `(parser, doc_id)`), un `ParsedCorpus` par `parser_spec` distinct. `auto` = table fixe `defaults/parsers.yaml` (`markdown`, `text`, `html`, `pdf: pdfium`), résolue par `resolve.py` avant hachage. Le `parser` est un champ de la Configuration, hors `Params` de l'Architecture.
+
+C4. Embeddings, reranking et étapes locales hors passerelle. AD-3 ne couvre que les LLM, `Tracer.record` a des `kind` `embed`/`rerank`/`local`, mais aucune règle ne dit qui émet ces spans. Paire : l'Embedder trace et le Retriever trace aussi (double compte), ou personne (latence, énergie locale et coût d'index manquants). De même `Retriever.retrieve(query_vector=None)` : qui embed la requête ? HyDE et la réécriture changent le texte à embedder.
+Correction : AD « Mesure des étapes locales » : l'Embedder et le Reranker concrets émettent seuls leur span (`ctx.tracer.record`), un par appel de lot ; une Architecture ne trace jamais ; le Retriever dense/hybride embed lui-même la requête quand `query_vector is None` ; sinon supprimer `query_vector`.
+
+### HIGH
+
+H5. État après `index`/`update`/cache. Miss : `index()` puis `answer()` sur la même instance ; hit : `load()` puis `answer()`. Rien n'impose que `index()` laisse l'instance prête, ni que `load(new_directory)` suive `update()`. Paire : arch A garde l'état en mémoire après `index`, arch B exige `load` ; le runner qui appelle `load` après `index` double le travail pour A, sinon B plante sur miss.
+Correction : AD : « après `index` ou `update`, le runner construit une instance neuve et appelle `load(directory)` ; `answer` n'est jamais appelé sans `load` ». La conformance teste miss et hit (réponses identiques). Imposer dans le dossier d'index un `passages.jsonl` lisible par `update`.
+
+H6. Le Faux LLM doit parser des prompts écrits par d'autres stories (« première phrase du bloc [S1] », « 30 premiers mots de l'entrée », juge « mots de la référence », `grade_relevance`, `select_nodes`). Aucune disposition imposée (system vs messages, libellés). Paire : le Generator met le contexte dans `system`, le Faux lit `messages[-1]`. Les Architectures échouent la conformité pour des raisons de format.
+Correction : ajouter `inputs: dict[str, str | list[str]] = {}` à `LLMRequest`, clés par rôle listées en §3 (generate {question, context_blocks}, judge {question, reference_answer, answer, context, criteria}, summarize {text}, etc.), que le Faux lit seul. Le prompt textuel reste libre ; `inputs` entre dans la clé du cache.
+
+H7. `JudgeInput.context_texts` : l'`Answer` ne porte que `context_anchor_ids`. Reconstruire par `anchor_text` est faux pour RAPTOR, wiki, graphe (le Generator a reçu des résumés) et énorme pour CAG/long_context. Paire : la story scoring reconstruit depuis les ancrages, la story RAPTOR suppose que la fidélité se juge sur les résumés.
+Correction : ajouter `Answer.context_texts: tuple[str, ...]` (texte réellement fourni, rempli depuis `Context.blocks`, avec borne documentée et `context_truncated: bool` pour le contexte long). Le runner copie sans reconstruire. Définir `reference_texts` = `anchor_text` du corpus à l'état de la Question (scénario inclus).
+
+H8. Invariants de `Passage` contradictoires : « un Passage ne déborde jamais d'un Document », `doc_id: str` et `passage_id = sha256(doc_id, chunker_key, ordinal)` contre les nœuds RAPTOR, pages de wiki et communautés de graphe multi-Documents (AD-7). Paire : RAPTOR met `doc_id="multi"`, le wiki prend le premier doc ; les `passage_ids` du GraphStore divergent.
+Correction : `Passage.doc_id: str | None` (None si `level>0` multi-docs) ; id des nœuds `level>0` = `sha16("node", architecture, level, sorted(child_ids))` ; l'invariant ne vaut que pour `level == 0`. Préciser dans AD-10 l'invalidation des nœuds dont une feuille est supprimée à l'`update`.
+
+H9. Postes de coût manquants pour juges, génération de questions, filtre closed-book, calibration : `CostPost = indexing|update|query`, `ctx.post` fixé « pendant answer ». Paire : le runner pose `query` autour du jugement (les Juges gonflent le coût par requête et faussent TCO et Pareto), ou le Tracer lève ; `config_id` est vide pour `question_gen`.
+Correction : étendre `CostPost` et `wl.post` avec `judging` et `evalset` ; AD-8 : le Rapport exclut ces postes du coût de la Configuration et les affiche à part ; `config_id` vide autorisé sous `evalset`.
+
+H10. Modèles d'une Configuration non découvrables statiquement : AD-14 (famille) et AD-13 (prix, fenêtre) exigent la liste des modèles par Configuration (résumeur, extracteur, rewriter, compileur wiki), mais seuls Generator, Decider et Embedder ont `model_id`, et la validation précède la construction. Paire : RAPTOR nomme `summary_model`, GraphRAG `extraction_llm` ; la validation les rate et le Panel peut contenir la famille du résumeur. Les défauts de profil (`generator_models`, `embedder`) n'ont pas de mécanisme d'injection dans les `Params` figés.
+Correction : tout champ de `Params` désignant un modèle est typé `ModelRef` (alias annoté) ; `validate.py` les collecte en parcourant récursivement les `ComponentSpec` ; `resolve.py` injecte les défauts de profil (`ModelRef | None = None` rempli depuis `profile.defaults.<rôle>`). Ajouter la table clé de `params` → `kind` (`store` → `vector_store`) en §4.4, et `name: auto` pour l'embedder résolu par le fournisseur du Catalogue (sinon le profil `test` importe `sentence_transformers`).
+
+H11. Propriété des champs d'`Answer` : `answer_id`, `config_id`, `condition`, `retrieved` pour `retrieval_method: cited` (agentic, wiki : quels ScoredPassage, quel rang ?). `RunContext` n'a pas `condition` alors que le Tracer en dépend. Paire : une Architecture construit `answer_id` avec `ctx.run_id`, une autre le laisse vide ; `retrieval.csv` mélange des `retrieved` vides et synthétiques.
+Correction : l'Architecture renvoie un `Answer` partiel que le runner complète par `model_copy(update=…)` (`answer_id`, `config_id`, `condition`) ; ajouter `condition` à `RunContext` ; pour `cited`, `retrieved` = Passages lus ou cités dans l'ordre de première citation, `rank` = cet ordre, `score` = 1.0.
+
+### MEDIUM
+
+M12. Intégrité de l'index, concurrence, exploitation. (a) `index_key()` est laissé à chaque auteur, sans vérification ; il omet le tokenizer (le chunker `fixed_tokens` en dépend), le device et les préfixes du Catalogue. (b) `index/<key>/` est écrit en place : un crash laisse un dossier partiel, deux `wl run` (nuit + test réel) écrasent le même dossier et `ledger.sqlite` sans transaction `IMMEDIATE` (AD-11 n'interdit pas deux processus). (c) OpenTelemetry et codecarbon lancent des fils (contredit « un seul fil »), et un `BatchSpanProcessor` perd des spans au crash alors que `traces.jsonl` est la source des coûts. (d) Aucun préflight d'environnement : Ollama arrêté donne `status: error` sur toutes les Questions, nuit gâchée ; pas de journal de run.
+Correction : `index_key` par défaut dans `ArchitectureBase` = hachage de tous les `Params` moins un `ClassVar query_only_params`, plus `tokenizer.name` ; test de conformance : modifier chaque champ change la clé ou figure dans `query_only_params`. Écriture dans `<key>.tmp-<pid>` puis `os.replace`. Verrou `<WL_HOME>/.lock` (second `wl run` refusé) et transactions `IMMEDIATE` dès le MVP. `SimpleSpanProcessor` imposé. Préflight après validation (Ollama joignable, modèles via `ollama list`, clé présente, code de sortie 2) et `runs/<run_id>/run.log`.
+
+## Lentille 2 : grille du bon spine
+
+- AD-1 : vérifiable par import-linter mais incohérente avec les usages (C2). Le diagramme dit « peut importer », le texte « uniquement inférieures » : dire que le diagramme est un sous-ensemble.
+- AD-2 : `ctx.build` ne dit pas comment il résout `auto` ni les défauts de profil (H10, C3).
+- AD-10 : la Rule ne peut pas empêcher la divergence (M12a) ; elle repose sur la discipline de chaque auteur.
+- AD-14 : « tous les modèles LLM de la Configuration » n'est pas calculable (H10).
+- AD-20 : `temperature: 0` et `seed` « si le fournisseur l'accepte » ne garantit pas le rejeu sur Ollama ; dire que le Cache de réponses est la source du rejeu.
+- AD-5 : renvoie à contracts §1 pour `config_id`, qui y est absent ; préciser « fourni dans le YAML, jamais calculé ».
+- Reprise (AD-9/AD-11) : un span écrit pour une Question dont la réponse n'a pas été persistée est dupliqué à la reprise (rejeu servi par le Cache à coût 0, coût payé dans le premier span). Le Rapport doit dédupliquer par `(config_id, condition, question_id, step, loop)` en gardant le coût payé.
+- Différés qui peuvent faire diverger : « Parallélisme » (écrire les transactions `IMMEDIATE` maintenant coûte une ligne) ; « NER heuristique » (`corpus/entities.py` et le Faux LLM `extract_entities` dupliquent l'heuristique : un seul module).
+- Dimensions silencieuses : exploitation du run de nuit (préflight, journal, durée maximale, espace disque de `WL_HOME`, nettoyage du cache d'index), épinglage des modèles Ollama, chemins Windows (`source_path` POSIX vs `Path` : conversion unique dans `core/ids.py`).

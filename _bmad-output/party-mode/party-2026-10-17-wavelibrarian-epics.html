@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Table ronde des epics</title>
+<style>
+:root{
+  --bg:#f6f1e7; --paper:#fffaf0; --ink:#2b2622; --muted:#6f655b; --line:#d9cdb8;
+  --mary:#2f7d6d; --john:#8a4b2a; --sally:#b0457a; --winston:#3d5a8a; --amelia:#5b6b2f; --vex:#1f1f1f;
+  --accent:#c98a2b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16130f; --paper:#1f1b16; --ink:#efe6d8; --muted:#a99c8a; --line:#3a3229;
+    --mary:#5fc1ab; --john:#e09a72; --sally:#e48bb6; --winston:#8fb0e8; --amelia:#b3c56f; --vex:#d0d0d0;
+    --accent:#e6b25a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16130f; --paper:#1f1b16; --ink:#efe6d8; --muted:#a99c8a; --line:#3a3229;
+  --mary:#5fc1ab; --john:#e09a72; --sally:#e48bb6; --winston:#8fb0e8; --amelia:#b3c56f; --vex:#d0d0d0;
+  --accent:#e6b25a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Georgia,"Times New Roman",serif}
+main{max-width:860px;margin:0 auto;padding:40px 16px 80px}
+header{text-align:center}
+.kicker{font:600 12px/1 system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(28px,6vw,44px);line-height:1.1;margin:.4em 0 .2em}
+.sub{color:var(--muted);font-style:italic}
+.table-svg{display:block;margin:28px auto 8px;max-width:420px;width:100%;height:auto}
+.seat{transform-origin:center;animation:breathe 4s ease-in-out infinite}
+.seat:nth-of-type(2){animation-delay:.6s}.seat:nth-of-type(3){animation-delay:1.2s}
+.seat:nth-of-type(4){animation-delay:1.8s}.seat:nth-of-type(5){animation-delay:2.4s}
+@keyframes breathe{0%,100%{opacity:.85}50%{opacity:1}}
+.door{animation:knock 6s ease-in-out infinite}
+@keyframes knock{0%,90%,100%{transform:translateX(0)}92%{transform:translateX(-2px)}94%{transform:translateX(2px)}96%{transform:translateX(-2px)}}
+@media (prefers-reduced-motion: reduce){.seat,.door{animation:none}}
+.cast{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:28px 0 40px}
+.card{background:var(--paper);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:12px 14px}
+.card b{display:block;font-size:18px}
+.card span{font:13px/1.4 system-ui,sans-serif;color:var(--muted)}
+h2{font-size:22px;margin:48px 0 6px;border-bottom:1px solid var(--line);padding-bottom:6px}
+h2 small{font:600 12px system-ui,sans-serif;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;display:block}
+.turn{display:grid;grid-template-columns:36px 1fr;gap:10px;margin:14px 0}
+.turn .ic{font-size:24px;line-height:1.3;text-align:center}
+.turn .who{font:700 13px system-ui,sans-serif;color:var(--c);letter-spacing:.04em}
+.turn p{margin:2px 0 0}
+.stage{font-style:italic;color:var(--muted);text-align:center;margin:18px 0}
+.verdict{background:var(--paper);border:1px dashed var(--accent);border-radius:10px;padding:14px 16px;margin:20px 0}
+.verdict b{color:var(--accent)}
+ul.fix{margin:8px 0 0;padding-left:20px}
+footer{margin-top:56px;text-align:center;color:var(--muted);font-size:14px}
+code{font:13px ui-monospace,Consolas,monospace;background:color-mix(in srgb,var(--line) 45%,transparent);padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="kicker">Party Mode · 17 octobre 2026 · WaveLibrarian</div>
+  <h1>La table ronde des 52 stories, qui en ont fait 56</h1>
+  <div class="sub">Un annuaire de 1 800 lignes posé au milieu de la table, et cinq personnes qui refusaient de le signer tel quel.</div>
+  <svg class="table-svg" viewBox="0 0 420 300" role="img" aria-label="Table ronde avec cinq places et une porte">
+    <ellipse cx="210" cy="160" rx="120" ry="70" fill="none" stroke="var(--line)" stroke-width="3"/>
+    <rect x="182" y="140" width="56" height="40" rx="3" fill="var(--paper)" stroke="var(--accent)"/>
+    <text x="210" y="165" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="system-ui">epics.md</text>
+    <g class="seat"><circle cx="210" cy="72" r="20" fill="var(--mary)"/><text x="210" y="78" text-anchor="middle" font-size="16">📊</text></g>
+    <g class="seat"><circle cx="330" cy="128" r="20" fill="var(--john)"/><text x="330" y="134" text-anchor="middle" font-size="16">📋</text></g>
+    <g class="seat"><circle cx="296" cy="236" r="20" fill="var(--sally)"/><text x="296" y="242" text-anchor="middle" font-size="16">🎨</text></g>
+    <g class="seat"><circle cx="124" cy="236" r="20" fill="var(--winston)"/><text x="124" y="242" text-anchor="middle" font-size="16">🏗️</text></g>
+    <g class="seat"><circle cx="90" cy="128" r="20" fill="var(--amelia)"/><text x="90" y="134" text-anchor="middle" font-size="16">💻</text></g>
+    <g class="door"><rect x="380" y="20" width="26" height="46" rx="2" fill="none" stroke="var(--vex)" stroke-width="2"/><text x="393" y="50" text-anchor="middle" font-size="14">🔒</text></g>
+  </svg>
+</header>
+
+<section class="cast" aria-label="Distribution">
+  <div class="card" style="--c:var(--mary)"><b>📊 Mary</b><span>Analyste. Arrive avec la calculatrice avant d'avoir lu une ligne.</span></div>
+  <div class="card" style="--c:var(--john)"><b>📋 John</b><span>Chef de produit. Perd deux fois et le note pour le compte rendu.</span></div>
+  <div class="card" style="--c:var(--sally)"><b>🎨 Sally</b><span>UX. Ne pense qu'au café de 10 h et à ce qu'on lit en premier.</span></div>
+  <div class="card" style="--c:var(--winston)"><b>🏗️ Winston</b><span>Architecte. Défend son spine, puis y trouve lui-même une erreur.</span></div>
+  <div class="card" style="--c:var(--amelia)"><b>💻 Amelia</b><span>Développeuse. Compte les rôles du Faux LLM, et gagne.</span></div>
+  <div class="card" style="--c:var(--vex)"><b>🔒 Vex</b><span>Invité de passage. Ne s'assoit pas, et ne boit pas de café.</span></div>
+</section>
+
+<h2><small>Premier tour</small>Les comptes avant la lecture</h2>
+<div class="turn" style="--c:var(--mary)"><div class="ic">📊</div><div><div class="who">MARY</div><p>52 × 27 minutes, ça fait environ 23 heures. Le minimum de SM-3 ne sera pas atteint cette nuit.</p></div></div>
+<div class="turn" style="--c:var(--john)"><div class="ic">📋</div><div><div class="who">JOHN</div><p>Vous voulez un socle irréprochable, ou un RAG naïf qui bat une Baseline ? Je dis tranche verticale.</p></div></div>
+<div class="turn" style="--c:var(--winston)"><div class="ic">🏗️</div><div><div class="who">WINSTON</div><p>L'ordre du spine n'est pas une préférence. Ce sont les dépendances.</p></div></div>
+<div class="turn" style="--c:var(--amelia)"><div class="ic">💻</div><div><div class="who">AMELIA</div><p>Une question française pleine de mots outils passe sous 0,5, et Corrective RAG échoue sa propre conformité alors que son code est juste.</p></div></div>
+<div class="turn" style="--c:var(--winston)"><div class="ic">🏗️</div><div><div class="who">WINSTON</div><p><code>runner | report</code> sont frères. Le runner ne peut pas produire le Rapport. C'est de ma faute.</p></div></div>
+<div class="turn" style="--c:var(--john)"><div class="ic">📋</div><div><div class="who">JOHN</div><p>Il vient d'avouer une erreur dans son propre spine, notez-le.</p></div></div>
+<div class="turn" style="--c:var(--sally)"><div class="ic">🎨</div><div><div class="who">SALLY</div><p>Anaël ouvre <code>report.md</code> à 10 h. Que voit-il en premier ?</p></div></div>
+<div class="verdict"><b>Anaël tranche : option (a).</b> On garde l'ordre du spine, et SM-3 sera atteint en deux nuits. Les quatre correctifs sont appliqués :
+<ul class="fix"><li>la Question de conformité ;</li><li>la CLI qui enchaîne runner puis report ;</li><li>une police TTF pour les « œ » ;</li><li>le front de Pareto en tête du Rapport.</li></ul></div>
+
+<h2><small>Second tour</small>Les grosses stories, puis quelqu'un frappe</h2>
+<div class="turn" style="--c:var(--amelia)"><div class="ic">💻</div><div><div class="who">AMELIA</div><p>Quinze rôles dans une seule story. Mon intuition repose sur un fait.</p></div></div>
+<div class="turn" style="--c:var(--mary)"><div class="ic">📊</div><div><div class="who">MARY</div><p>Je n'ai qu'une mesure, et elle est passée du premier coup. Ton argument tient sur l'intuition, pas sur des données.</p></div></div>
+<div class="turn" style="--c:var(--winston)"><div class="ic">🏗️</div><div><div class="who">WINSTON</div><p>Je ne couperais que la 1.9.</p></div></div>
+<div class="turn" style="--c:var(--john)"><div class="ic">📋</div><div><div class="who">JOHN</div><p>Enfin quelqu'un de raisonnable.</p></div></div>
+<p class="stage">On frappe à la porte. Un type en sweat noir entre, sans s'asseoir.</p>
+<div class="turn" style="--c:var(--vex)"><div class="ic">🔒</div><div><div class="who">VEX</div><p>On m'a dit qu'il y avait un plafond de 5 $. Je vais le contourner. Il suffit d'un <code>from wavelibrarian.llm.providers.anthropic import …</code>.</p></div></div>
+<div class="turn" style="--c:var(--vex)"><div class="ic">🔒</div><div><div class="who">VEX</div><p>Je reviendrai pour FR-47.</p></div></div>
+<p class="stage">Il repart. Personne ne l'a vu prendre un café.</p>
+<div class="verdict"><b>Anaël tranche : les quatre coupes et les quatre correctifs.</b> On passe à 56 stories (1.9, 4.4, 4.11 et 7.5 coupées en deux). Côté sécurité :
+<ul class="fix"><li>seul <code>llm.gateway</code> importe les providers ;</li><li>l'index PyTorch est <code>explicit</code> ;</li><li>les loggers du SDK sont forcés à <code>WARNING</code> ;</li><li><code>inputs</code> entre dans la clé de cache du Faux LLM.</li></ul>
+AD-3 et <code>contracts.md</code> sont mis à jour. Sally obtient son <code>RUN-STATUS.md</code>.</div>
+
+<h2><small>Bilan</small>Qui est reparti avec quoi</h2>
+<div class="turn" style="--c:var(--amelia)"><div class="ic">💻</div><div><div class="who">AMELIA</div><p>Deux victoires sur deux.</p></div></div>
+<div class="turn" style="--c:var(--john)"><div class="ic">📋</div><div><div class="who">JOHN</div><p>Deux défaites, toutes deux élégantes.</p></div></div>
+<div class="turn" style="--c:var(--winston)"><div class="ic">🏗️</div><div><div class="who">WINSTON</div><p>Un spine corrigé, et deux nuits propres.</p></div></div>
+<div class="turn" style="--c:var(--sally)"><div class="ic">🎨</div><div><div class="who">SALLY</div><p>Un réveil qui commence par un tableau, et non par un <code>git log</code>.</p></div></div>
+<div class="turn" style="--c:var(--mary)"><div class="ic">📊</div><div><div class="who">MARY</div><p>Environ 25 heures, environ 150 $ d'agents. Elle l'avait dit dès le début.</p></div></div>
+
+<footer>WaveLibrarian · <code>_bmad-output/planning-artifacts/epics.md</code> passé en <code>status: final</code> le 17 octobre 2026.</footer>
+</main>
+</body>
+</html>
