@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Outils
+.pytest_cache/
+.ruff_cache/
+.claude/settings.local.json
+.claude/cost-kit/.blocages
+.env
+

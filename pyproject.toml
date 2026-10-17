@@ -1,0 +1,35 @@
+[project]
+name = "wavelibrarian"
+version = "0.1.0"
+description = "Banc de comparaison des architectures de recherche documentaire IA (RAG, GraphRAG, LLM Wiki, recherche agentique)."
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "Aliquanto3", email = "anael.yahi@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = [".claude"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
