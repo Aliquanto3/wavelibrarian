@@ -478,6 +478,7 @@ class RunContext(Protocol):
     gateway: ModelGateway
     tracer: Tracer
     tokenizer: Tokenizer                  # tokenizer de référence du profil
+    parser: str                           # parser résolu de la Configuration (auto remplacé par les noms concrets), lu par index_key() (AD-10)
     catalog: ModelCatalog
     profile: ProfileSettings
     def build(self, kind: str, spec: ComponentSpec) -> Any: ...   # seule voie de construction (AD-2)

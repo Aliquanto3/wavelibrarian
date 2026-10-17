@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from wavelibrarian.core.types import (
     ArchAnswer,
@@ -20,6 +20,9 @@ from wavelibrarian.ports.context import RunContext
 
 
 class ArchCapabilities(BaseModel):
+    # ClassVar partagé par toutes les instances : gelé, et une faute de frappe lève une erreur.
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     incremental_update: bool = False  # False : update() = réindexation complète, poste "update"
     retrieval_method: Literal["ranked", "provided", "cited", "none"] = "ranked"
     full_corpus_in_prompt: bool = False  # contexte long, CAG : contrôle de fenêtre et de palier
@@ -60,7 +63,7 @@ class ArchitectureBase(ABC):
         params = self.params.model_dump(mode="json", exclude=set(self.query_params))
         return {
             "params": params,
-            "parser": params.get("parser"),
+            "parser": self.ctx.parser,
             "tokenizer": self.ctx.tokenizer.name,
         }
 

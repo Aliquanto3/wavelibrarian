@@ -93,8 +93,8 @@ class _P(BaseModel):
     size: int = 300
 
 
-def _arch() -> _Arch:
-    ctx = SimpleNamespace(tokenizer=SimpleNamespace(name="approx"))
+def _arch(parser: str = "markdown=markdown,pdf=pdf_text") -> _Arch:
+    ctx = SimpleNamespace(tokenizer=SimpleNamespace(name="approx"), parser=parser)
     return _Arch(_P(), ctx)
 
 
@@ -127,6 +127,17 @@ def test_check_et_index_key_par_defaut() -> None:
     assert a.check(None) == Applicability(applicable=True)  # type: ignore[arg-type]
     cle = a.index_key()
     assert cle["params"] == {"size": 300} and cle["tokenizer"] == "approx"
+    assert cle["parser"] == "markdown=markdown,pdf=pdf_text"
+    assert _arch(parser="pdf=pdf_ocr").index_key() != cle
+
+
+def test_arch_capabilities_strictes_et_gelees() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ArchCapabilities(requires_prompt_cahce=True)  # type: ignore[call-arg]
+    with pytest.raises(ValidationError):
+        ArchCapabilities().requires_prompt_cache = True  # type: ignore[misc]
 
 
 def test_search_index_accepte_des_objets_conformes() -> None:

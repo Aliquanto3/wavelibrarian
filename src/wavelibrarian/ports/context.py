@@ -19,6 +19,9 @@ class RunContext(Protocol):
     gateway: ModelGateway
     tracer: Tracer
     tokenizer: Tokenizer  # tokenizer de référence du profil
+    # parser résolu de la Configuration, `auto` remplacé par les noms concrets (AD-10) :
+    # forme canonique fixée par le runner, même valeur que `CorpusProfile.parser`.
+    parser: str
     # `ModelCatalog` et `ProfileSettings` vivent dans `config` (couche supérieure à `ports`) :
     # typés `Any` ici pour respecter le contrat de couches.
     catalog: Any
