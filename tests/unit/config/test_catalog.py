@@ -201,3 +201,43 @@ def test_coherence_profils_catalogue(catalog: ModelCatalog, nom: str) -> None:
     for mid in profil.model_ids():
         catalog.get(mid)
     assert catalog.get(profil.defaults.embedder).modality == "embedding"
+
+
+def test_cout_un_million_catalogue_livre(catalog: ModelCatalog) -> None:
+    # Règle de palier du contrat §4.2 : 1 M d'entrée dépasse 100 000, donc x5 sur
+    # 0.10 + 0.50. L'exemple 0.60 de l'AC est à arbitrer par Anaël.
+    cout = catalog.cost(HAIKU, Usage(input_tokens=MILLION, output_tokens=MILLION))
+    assert cout == Decimal("3.00")
+
+
+def _catalogue(tmp_path: Path, modele: dict[str, object]) -> Path:
+    f = tmp_path / "models.yaml"
+    f.write_text(
+        yaml.safe_dump({"catalog_date": "2026-10-17", "models": [modele]}), encoding="utf-8"
+    )
+    return f
+
+
+_PRIX = {"date": "2026-10-17", "currency": "USD", "per_mtok": {"input": "1", "output": "2"}}
+
+
+def test_local_avec_prix_refuse(tmp_path: Path) -> None:
+    m = {"id": "m", "provider": "ollama", "family": "f", "kind": "local", "modality": "llm"}
+    with pytest.raises(ConfigError, match="local") as exc:
+        load_catalog(_catalogue(tmp_path, {**m, "pricing": _PRIX}))
+    assert exc.value.path == "models[0].pricing"
+
+
+def test_tarifs_requis(tmp_path: Path) -> None:
+    m = {"id": "m", "provider": "anthropic", "family": "f", "kind": "api", "modality": "llm"}
+    sans_sortie = {**_PRIX, "per_mtok": {"input": "1"}}
+    with pytest.raises(ConfigError, match="output") as exc:
+        load_catalog(_catalogue(tmp_path, {**m, "pricing": sans_sortie}))
+    assert exc.value.path == "models[0].pricing"
+    with pytest.raises(ConfigError, match="cache_read, cache_write"):
+        load_catalog(_catalogue(tmp_path, {**m, "prompt_cache": True, "pricing": _PRIX}))
+    # Sans cache déclaré, des tokens de cache sans tarif ne sont pas facturés à 0 en silence.
+    cat = load_catalog(_catalogue(tmp_path, {**m, "pricing": _PRIX}))
+    assert cat.cost("m", Usage(input_tokens=MILLION)) == Decimal("1")
+    with pytest.raises(ConfigError, match="cache_read"):
+        cat.cost("m", Usage(cache_read_tokens=10))

@@ -1,7 +1,7 @@
 ---
 story: "1.4"
 title: Catalogue de modèles, paramètres de coût et profils d'exécution
-status: review
+status: done
 ---
 
 # Story 1.4 : Catalogue de modèles, paramètres de coût et profils d'exécution
@@ -39,3 +39,17 @@ status: review
 - Écart : l'exemple de la story (`Usage` de 1 M d'entrée et 1 M de sortie égale 0.60) contredit sa propre règle de palier (1 M dépasse 100 000, donc x5 soit 3.00). Le code suit la règle et le contrat `contracts.md` §4.2 ; le test vérifie 0.60 sans palier et 3.00 avec. À arbitrer par l'orchestrateur.
 - Reports : typage de `RunContext.catalog` et `.profile` ; branchement de `costs:` d'Expérience (1.5) ; `cache_write_1h` non facturé.
 - Aucun appel réseau, ni Ollama, ni GPU (`CUDA_VISIBLE_DEVICES=-1`, threads à 4).
+
+## Revue
+
+- high, AC 3 (dev + orchestrateur) : contradiction de l'AC, 1 M / 1 M vaut 3.00 avec le palier x5. Arbitré : la règle de palier du contrat §4.2 est gardée ; test 0.60 sans palier conservé, test explicite 3.00 sur le `models.yaml` livré ajouté (`test_cout_un_million_catalogue_livre`). **À arbitrer par Anaël** : corriger l'exemple de l'AC (`epics.md` non modifié).
+- medium, second avis n° 2 : corrigé. Un prix doit déclarer `input` et `output`, plus `cache_read` et `cache_write` si `prompt_cache` ; `cost` lève `ConfigError` au lieu de facturer 0 un poste sans tarif (`test_tarifs_requis`).
+- medium, second avis n° 3 : corrigé. Un modèle `kind: local` avec `pricing` est refusé à `models[i].pricing`, conformément au §4.2 (`test_local_avec_prix_refuse`).
+- low, n° 4 : reporté. `cache_write_1h` est déclaré mais non facturé, `Usage` n'a pas de poste 1 h ; à traiter avec la Passerelle si le cache 1 h est utilisé.
+- low, n° 5 : reporté. Les dates sont par section : une surcharge d'une seule valeur garde la date de la section par défaut. Conforme au schéma §4.2 bis ; la story du Rapport devra afficher la source de chaque surcharge.
+- low, n° 6 : corrigé. `load_profile` refuse un fichier dont `profile` ne correspond pas au nom demandé.
+- low, n° 7 : reporté à la story 1.5, comme prévu (branchement de `costs:`).
+- low, n° 8 : accepté. Fenêtres de contexte Ollama de 32 768 reprises du contrat §4.2 ; à revoir au premier appel réel.
+- low, n° 9 : rejeté. Facturer des tokens de cache que le fournisseur déclare est correct ; avec le correctif n° 2, un poste sans tarif lève une erreur au lieu de coûter 0.
+- low, n° 10 : vérifié, rejeté. `uv build --wheel --offline` embarque les cinq YAML de `defaults/`.
+- low, n° 11 : reporté. `RunContext.catalog` et `.profile` restent en `Any` à cause du contrat `layers` (voir Design Notes).

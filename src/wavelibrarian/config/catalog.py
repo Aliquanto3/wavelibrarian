@@ -59,8 +59,13 @@ class ModelCatalog(_Schema):
         )
         total = Decimal(0)
         for tokens, poste in postes:
-            if tokens:
-                total += Decimal(tokens) * rates.get(poste, Decimal(0))
+            if not tokens:
+                continue
+            if poste not in rates:
+                raise ConfigError(
+                    "models", f"{model_id!r} : aucun tarif `{poste}` pour {tokens} tokens facturés"
+                )
+            total += Decimal(tokens) * rates[poste]
         return total / _MTOK * mult
 
 

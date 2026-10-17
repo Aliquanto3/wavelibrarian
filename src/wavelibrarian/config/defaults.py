@@ -31,7 +31,10 @@ def load_profile(name: str) -> ProfileSettings:
     if name not in PROFILS:
         raise ConfigError("profile", f"profil inconnu : {name!r} (profils : {', '.join(PROFILS)})")
     chemin = defaults_dir() / "profiles" / f"{name}.yaml"
-    return valider(ProfileSettings, charger_yaml(chemin), str(chemin))
+    profil = valider(ProfileSettings, charger_yaml(chemin), str(chemin))
+    if profil.profile != name:
+        raise ConfigError("profile", f"{chemin} déclare le profil {profil.profile!r}")
+    return profil
 
 
 def fusionner(base: dict[str, Any], surcharge: dict[str, Any]) -> dict[str, Any]:

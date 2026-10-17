@@ -55,8 +55,19 @@ class ModelEntry(_Schema):
     @field_validator("pricing")
     @classmethod
     def _api_sans_prix(cls, v: Pricing | None, info: Any) -> Pricing | None:
-        if v is None and info.data.get("kind") == "api":
-            raise ValueError("un modèle d'API doit déclarer son prix (`pricing`)")
+        kind = info.data.get("kind")
+        if v is None:
+            if kind == "api":
+                raise ValueError("un modèle d'API doit déclarer son prix (`pricing`)")
+            return v
+        if kind == "local":
+            raise ValueError("un modèle local n'a pas de `pricing` (coût de possession, FR-31)")
+        requis = {"input", "output"}
+        if info.data.get("prompt_cache"):
+            requis |= {"cache_read", "cache_write"}
+        manquants = sorted(requis - v.per_mtok.keys())
+        if manquants:
+            raise ValueError(f"tarif manquant dans `per_mtok` : {', '.join(manquants)}")
         return v
 
 
