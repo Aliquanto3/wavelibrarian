@@ -7,7 +7,7 @@ import typer
 
 from wavelibrarian import registry
 from wavelibrarian.config.validate import validate_file
-from wavelibrarian.core.errors import ConfigError, ValidationFailed, WlError
+from wavelibrarian.core.errors import ConfigError, ProviderError, ValidationFailed, WlError
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.runner import installer as installation
 
@@ -63,6 +63,8 @@ def run(
     typer.echo("Validation réussie.")
     modeles = {m for c in resultat.resolved.configurations for m in c.models}
     modeles |= set(resultat.resolved.judges.pool or ())
+    if resultat.resolved.judges.calibration_judge is not None:
+        modeles.add(resultat.resolved.judges.calibration_judge)
     verdict = preflight(modeles, resultat.catalog, resultat.resolved.profile_settings)
     if not verdict.ok:
         typer.echo(
@@ -83,6 +85,9 @@ def installer(
     """Télécharge l'embedder et l'encodage tiktoken, puis vérifie `ollama list`."""
     try:
         res = installation.installer(profil)
+    except ProviderError as erreur:  # Ollama injoignable : code 4 du contrat (contracts.md §8)
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(4) from erreur
     except WlError as erreur:
         typer.echo(f"Erreur : {erreur}", err=True)
         raise typer.Exit(1) from erreur

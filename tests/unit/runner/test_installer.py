@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import pytest
 from typer.testing import CliRunner
 
@@ -12,7 +13,7 @@ import wavelibrarian.cli as cli
 from wavelibrarian.cli import app
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import load_profile
-from wavelibrarian.core.errors import WlError
+from wavelibrarian.core.errors import ProviderError, WlError
 from wavelibrarian.llm.preflight import PreflightResult
 from wavelibrarian.runner import installer as inst
 
@@ -94,15 +95,27 @@ def test_ollama_list_commande_introuvable(monkeypatch: pytest.MonkeyPatch) -> No
         raise FileNotFoundError("ollama")
 
     monkeypatch.setattr(inst.subprocess, "run", introuvable)
-    with pytest.raises(WlError, match="ollama list"):
+    with pytest.raises(ProviderError, match="ollama list"):
         inst.ollama_list()
 
 
-def _resultat(modeles: list[str], profil: str = "cpu") -> Any:
+def test_ollama_list_en_echec_code_4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ollama arrêté : `ollama list` rend un code non nul, `wl installer` sort en 4."""
+    monkeypatch.setattr(inst, "telecharger_encodage", lambda _n: None)
+    monkeypatch.setattr(inst, "telecharger_embedder", lambda _r: None)
+    monkeypatch.setattr(
+        inst.subprocess, "run", lambda *_a, **_k: SimpleNamespace(returncode=1, stdout="")
+    )
+    res = CliRunner().invoke(app, ["installer", "--profil", "cpu"])
+    assert res.exit_code == 4
+    assert "Ollama est-il démarré" in res.output
+
+
+def _resultat(modeles: list[str], profil: str = "cpu", juge_calibration: str | None = None) -> Any:
     conf = SimpleNamespace(models=tuple(modeles))
     resolu = SimpleNamespace(
         configurations=(conf,),
-        judges=SimpleNamespace(pool=None),
+        judges=SimpleNamespace(pool=None, calibration_judge=juge_calibration),
         profile_settings=load_profile(profil),
     )
     return SimpleNamespace(resolved=resolu, catalog=load_catalog())
@@ -132,3 +145,32 @@ def test_wl_run_preflight_reussi(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     res = CliRunner().invoke(app, ["run", str(tmp_path / "e.yaml")])
     assert res.exit_code == 0
     assert "Préflight réussi" in res.output
+
+
+def test_wl_run_ollama_injoignable_code_4(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Préflight réel jusqu'au transport : seule la connexion à Ollama est simulée."""
+    vrai_client = httpx.Client
+
+    def refuse(requete: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refusé", request=requete)
+
+    monkeypatch.setattr(
+        "wavelibrarian.llm.providers.ollama.httpx.Client",
+        lambda: vrai_client(transport=httpx.MockTransport(refuse)),
+    )
+    monkeypatch.setattr(cli, "validate_file", lambda _c: _resultat(["granite4.2:3b"]))
+    res = CliRunner().invoke(app, ["run", str(tmp_path / "e.yaml")])
+    assert res.exit_code == 4
+    assert "Ollama injoignable à http://localhost:11434" in res.output
+
+
+def test_wl_run_juge_de_calibration_controle(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    resultat = _resultat(["fake-llm-a"], "test", juge_calibration="claude-haiku-5-5")
+    monkeypatch.setattr(cli, "validate_file", lambda _c: resultat)
+    res = CliRunner().invoke(app, ["run", "e.yaml"])
+    assert res.exit_code == 4
+    assert "claude-haiku-5-5" in res.output

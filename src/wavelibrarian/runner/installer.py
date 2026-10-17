@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import load_profile
-from wavelibrarian.core.errors import WlError
+from wavelibrarian.core.errors import ProviderError, WlError
 
 ENCODAGE = "o200k_base"
 
@@ -46,15 +46,16 @@ def telecharger_embedder(hf_repo: str) -> None:
 
 
 def ollama_list() -> str:
-    """Sortie de `ollama list` ; `WlError` si la commande est introuvable ou échoue."""
+    """Sortie de `ollama list` ; `ProviderError` (Ollama injoignable, code 4) si la commande
+    est introuvable ou échoue."""
     try:
         res = subprocess.run(
             ["ollama", "list"], capture_output=True, text=True, timeout=30, check=False
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise WlError(f"`ollama list` impossible ({type(exc).__name__})") from exc
+        raise ProviderError(f"`ollama list` impossible ({type(exc).__name__})") from exc
     if res.returncode != 0:
-        raise WlError("`ollama list` a échoué : Ollama est-il démarré ?")
+        raise ProviderError("`ollama list` a échoué : Ollama est-il démarré ?")
     return res.stdout
 
 

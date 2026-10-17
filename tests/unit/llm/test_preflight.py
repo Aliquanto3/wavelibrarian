@@ -8,8 +8,10 @@ import pytest
 
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import load_profile
+from wavelibrarian.core.errors import ProviderError
 from wavelibrarian.llm.local_models import embedder_installe, hf_cache_dir
 from wavelibrarian.llm.preflight import preflight
+from wavelibrarian.llm.providers.ollama import list_models
 
 URL = "http://localhost:11434"
 CPU = load_profile("cpu")
@@ -35,10 +37,20 @@ def environnement_vide(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hf"))
 
 
-def _installer_embedder(tmp_path: Path, repo: str) -> None:
+def _installer_embedder(
+    tmp_path: Path,
+    repo: str,
+    fichiers: tuple[str, ...] = (
+        "config.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "modules.json",
+    ),
+) -> None:
     snap = tmp_path / "hf" / ("models--" + repo.replace("/", "--")) / "snapshots" / "abc"
-    snap.mkdir(parents=True)
-    (snap / "config.json").write_text("{}", encoding="utf-8")
+    snap.mkdir(parents=True, exist_ok=True)
+    for nom in fichiers:
+        (snap / nom).write_text("{}", encoding="utf-8")
 
 
 def test_ollama_injoignable_nomme_l_url() -> None:
@@ -117,3 +129,62 @@ def test_cache_hf_variables(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.delenv("HF_HUB_CACHE")
     monkeypatch.setenv("HF_HOME", str(tmp_path / "home"))
     assert hf_cache_dir() == tmp_path / "home" / "hub"
+
+
+def test_cache_hf_xdg(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("HF_HUB_CACHE")
+    monkeypatch.delenv("HF_HOME", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    assert hf_cache_dir() == tmp_path / "xdg" / "huggingface" / "hub"
+
+
+def test_instantane_incomplet_n_est_pas_installe(tmp_path: Path) -> None:
+    """Téléchargement interrompu : config sans poids, puis poids sans tokenizer."""
+    repo = "intfloat/multilingual-e5-small"
+    _installer_embedder(tmp_path, repo, ("config.json", "modules.json"))
+    assert not embedder_installe(repo)
+    assert not preflight(["multilingual-e5-small"], CATALOGUE, CPU).ok
+    _installer_embedder(tmp_path, repo, ("model.safetensors",))
+    assert not embedder_installe(repo)
+    _installer_embedder(tmp_path, repo, ("tokenizer_config.json",))
+    assert embedder_installe(repo)
+
+
+@pytest.mark.parametrize(
+    "reponse",
+    [
+        httpx.Response(200, json={"models": None}),
+        httpx.Response(200, json=["x"]),
+        httpx.Response(200, text="pas du json"),
+        httpx.Response(500),
+    ],
+)
+def test_list_models_reponse_de_travers(reponse: httpx.Response) -> None:
+    client = httpx.Client(transport=httpx.MockTransport(lambda _r: reponse))
+    if reponse.status_code == 200 and reponse.content == b'{"models":null}':
+        assert list_models(URL, http_client=client) == set()
+        return
+    with pytest.raises(ProviderError, match="Ollama ne répond pas"):
+        list_models(URL, http_client=client)
+
+
+def test_list_models_url_invalide() -> None:
+    with pytest.raises(ProviderError):
+        list_models("http://[::1", http_client=_client([]))
+
+
+def test_list_models_ferme_son_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    fermes: list[bool] = []
+    vrai_client = httpx.Client
+
+    class Client(vrai_client):  # type: ignore[misc, valid-type]
+        def __init__(self) -> None:
+            super().__init__(transport=httpx.MockTransport(lambda _r: httpx.Response(200, json={})))
+
+        def close(self) -> None:
+            fermes.append(True)
+            super().close()
+
+    monkeypatch.setattr("wavelibrarian.llm.providers.ollama.httpx.Client", Client)
+    assert list_models(URL) == set()
+    assert fermes == [True]

@@ -126,6 +126,9 @@ def list_models(
         reponse = http.get(url, timeout=timeout_s)
         reponse.raise_for_status()
         corps = reponse.json()
-        return {str(m.get("name") or m.get("model")) for m in corps.get("models", [])}
-    except (httpx.HTTPError, ValueError, AttributeError) as exc:
+        return {str(m.get("name") or m.get("model")) for m in corps.get("models") or []}
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError, AttributeError, TypeError) as exc:
         raise ProviderError(f"Ollama ne répond pas ({type(exc).__name__})") from None
+    finally:
+        if http_client is None:
+            http.close()

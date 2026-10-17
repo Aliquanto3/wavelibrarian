@@ -53,6 +53,10 @@ class SentenceTransformersEmbedder:
                 from sentence_transformers import SentenceTransformer  # pyright: ignore[reportMissingImports]
             except ImportError:
                 raise WlError("installer l'extra local") from None
+            except Exception as exc:  # extra présent mais cassé (DLL de torch, etc.)
+                raise WlError(
+                    f"extra local inutilisable ({type(exc).__name__}) : réinstaller l'extra local"
+                ) from exc
             try:
                 self._modele = SentenceTransformer(
                     self._repo, device=self._device, local_files_only=True

@@ -171,3 +171,18 @@ def test_real_local_encode_deux_phrases(tmp_path: Path) -> None:
     assert np.allclose(np.linalg.norm(v, axis=1), 1.0, atol=1e-4)
     q = emb.embed_queries(["Où dort le chat ?"])
     assert float(q[0] @ v[0]) > float(q[0] @ v[1])
+
+
+def test_extra_local_casse_leve_une_wlerror(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Extra présent mais inutilisable (DLL de torch sous Windows) : `WlError` en français."""
+
+    class Casse(type(sys)):  # type: ignore[misc]
+        def __getattr__(self, nom: str) -> Any:
+            raise OSError("[WinError 126] c10.dll introuvable")
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers", Casse("sentence_transformers"))
+    emb = _Ctx(tmp_path / "t.jsonl").build("embedder", ComponentSpec(name="sentence_transformers"))
+    with pytest.raises(WlError, match="extra local inutilisable"):
+        emb.embed_queries(["bonjour"])
