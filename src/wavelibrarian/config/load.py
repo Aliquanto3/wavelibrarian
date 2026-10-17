@@ -10,12 +10,15 @@ from wavelibrarian.config.schemas import valider
 from wavelibrarian.core.errors import ConfigError
 
 
-def load_experiment(chemin: Path) -> Experiment:
+def load_experiment(chemin: Path, *, verifier_params: bool = True) -> Experiment:
     """Charge `chemin` par `yaml.safe_load` ; toute clé inconnue ou mal typée lève `ConfigError`.
 
     Les `params` de chaque Configuration sont validés contre le `Params` enregistré de son
     Architecture et de ses Composants. Le chemin de l'erreur est en notation pointée
     (`configurations[1].params.kk`).
+
+    `verifier_params=False` saute cette vérification des `params` : `config/validate.py` la fait
+    lui-même, pour regrouper toutes les erreurs au lieu de s'arrêter à la première.
     """
     donnees = charger_yaml(chemin)
     if not isinstance(donnees, dict):
@@ -27,6 +30,7 @@ def load_experiment(chemin: Path) -> Experiment:
             raise ConfigError(f"configurations[{i}].id", f"identifiant en double : {conf.id!r}")
         vus.add(conf.id)
     registry.discover()
-    for i, conf in enumerate(experience.configurations):
-        verifier_configuration(conf, f"configurations[{i}]")
+    if verifier_params:
+        for i, conf in enumerate(experience.configurations):
+            verifier_configuration(conf, f"configurations[{i}]")
     return experience

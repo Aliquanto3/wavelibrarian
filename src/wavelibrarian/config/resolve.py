@@ -32,13 +32,32 @@ _ALIAS_KIND = {"store": "vector_store", "lexical": "lexical_index", "graph": "gr
 
 
 @dataclass
-class _Collecte:
-    """État d'un parcours : profil et Catalogue (None = validation seule), modèles trouvés."""
+class Collecte:
+    """État d'un parcours : profil et Catalogue (None = validation seule), relevés.
+
+    `erreurs` non None : mode agrégation (story 1.6), les `ConfigError` y sont ajoutées et le
+    parcours continue ; None : la première erreur est levée.
+    """
 
     profile: ProfileSettings | None = None
     catalog: ModelCatalog | None = None
     models: list[str] = field(default_factory=list)
     producers: list[str] = field(default_factory=list)
+    erreurs: list[ConfigError] | None = None
+    chemins_modeles: dict[str, str] = field(default_factory=dict)  # modèle -> 1er chemin
+    composants: list[tuple[str, str, str]] = field(default_factory=list)  # (kind, nom, chemin)
+    juges_explicites: list[tuple[str, str]] = field(default_factory=list)  # (chemin, modèle)
+    embedders: list[tuple[str, str]] = field(default_factory=list)  # (chemin, modèle)
+    pile: list[str] = field(default_factory=list)  # kinds des Composants en cours de parcours
+    architecture: type | None = None
+    chemin: str = ""  # `configurations[i]`
+    config_id: str = ""
+
+    def signaler(self, erreur: ConfigError) -> None:
+        """Lève `erreur`, ou la note en mode agrégation."""
+        if self.erreurs is None:
+            raise erreur
+        self.erreurs.append(erreur)
 
 
 def _classe(kind: str, name: str, chemin: str) -> type:
@@ -87,7 +106,18 @@ def _noter(liste: list[str], valeur: str) -> None:
         liste.append(valeur)
 
 
-def _embedder_par_defaut(col: _Collecte, chemin: str) -> ComponentSpec:
+def _noter_modele(col: Collecte, valeur: str, chemin: str, producteur: bool) -> None:
+    _noter(col.models, valeur)
+    col.chemins_modeles.setdefault(valeur, chemin)
+    if producteur:
+        _noter(col.producers, valeur)
+    if "judge" in col.pile:
+        col.juges_explicites.append((chemin, valeur))
+    if "embedder" in col.pile:
+        col.embedders.append((chemin, valeur))
+
+
+def _embedder_par_defaut(col: Collecte, chemin: str) -> ComponentSpec:
     assert col.profile is not None and col.catalog is not None
     modele = col.profile.defaults.embedder
     nom = "fake" if col.catalog.get(modele).provider == "fake" else "sentence_transformers"
@@ -97,53 +127,72 @@ def _embedder_par_defaut(col: _Collecte, chemin: str) -> ComponentSpec:
 
 
 def resoudre_composant(
-    kind: str, spec: ComponentSpec, chemin: str, col: _Collecte
+    kind: str, spec: ComponentSpec, chemin: str, col: Collecte
 ) -> dict[str, Any]:
     """Valide et résout un Composant ; renvoie `{"name": ..., "params": {...}}` complet."""
-    cls = _classe(kind, spec.name, f"{chemin}.name")
-    params = resoudre_params(cls.Params, spec.params, f"{chemin}.params", col)  # pyright: ignore[reportAttributeAccessIssue]
+    try:
+        cls = _classe(kind, spec.name, f"{chemin}.name")
+    except ConfigError as exc:
+        col.signaler(exc)
+        return {"name": spec.name, "params": dict(spec.params)}
+    col.composants.append((kind, spec.name, chemin))
+    col.pile.append(kind)
+    try:
+        params = resoudre_params(cls.Params, spec.params, f"{chemin}.params", col)  # pyright: ignore[reportAttributeAccessIssue]
+    finally:
+        col.pile.pop()
     return {"name": spec.name, "params": params}
 
 
 def resoudre_params(
-    modele: type[BaseModel], brut: dict[str, Any], chemin: str, col: _Collecte
+    modele: type[BaseModel], brut: dict[str, Any], chemin: str, col: Collecte
 ) -> dict[str, Any]:
     """Valide `brut` contre `modele` (clés inconnues refusées) puis complète les défauts."""
-    inst = valider(modele, brut, prefixe=chemin)
+    try:
+        inst = valider(modele, brut, prefixe=chemin)
+    except ConfigError as exc:
+        col.signaler(exc)
+        return dict(brut)
     res = inst.model_dump(mode="python")
     for nom, champ in modele.model_fields.items():
-        valeur = getattr(inst, nom)
         chem = f"{chemin}.{nom}"
-        ref = next((m for m in champ.metadata if isinstance(m, ModelRefMeta)), None)
-        if ref is not None:
-            if valeur is None and col.profile is not None:
-                valeur = _role_default(col.profile, ref.role_default, chem)
-                res[nom] = valeur
-            if valeur is not None:
-                _noter(col.models, valeur)
-                if ref.answer_producer:
-                    _noter(col.producers, valeur)
-        elif _annotation_contient_composant(champ.annotation):
-            kind = _kind_du_champ(nom, champ)
-            if kind is None:
-                raise ConfigError(
-                    chem, 'kind du Composant indéterminé (`Field(json_schema_extra={"kind": ...})`)'
-                )
-            if valeur is None:
-                if kind == "embedder" and col.profile is not None:
-                    res[nom] = resoudre_composant(kind, _embedder_par_defaut(col, chem), chem, col)
-            elif isinstance(valeur, ComponentSpec):
-                res[nom] = resoudre_composant(kind, valeur, chem, col)
-            else:  # tuple de ComponentSpec
-                res[nom] = [
-                    resoudre_composant(kind, s, f"{chem}[{i}]", col) for i, s in enumerate(valeur)
-                ]
+        try:
+            _resoudre_champ(nom, champ, getattr(inst, nom), chem, res, col)
+        except ConfigError as exc:
+            col.signaler(exc)
     return res
+
+
+def _resoudre_champ(
+    nom: str, champ: FieldInfo, valeur: Any, chem: str, res: dict[str, Any], col: Collecte
+) -> None:
+    ref = next((m for m in champ.metadata if isinstance(m, ModelRefMeta)), None)
+    if ref is not None:
+        if valeur is None and col.profile is not None:
+            valeur = _role_default(col.profile, ref.role_default, chem)
+            res[nom] = valeur
+        if valeur is not None:
+            _noter_modele(col, valeur, chem, ref.answer_producer)
+    elif _annotation_contient_composant(champ.annotation):
+        kind = _kind_du_champ(nom, champ)
+        if kind is None:
+            raise ConfigError(
+                chem, 'kind du Composant indéterminé (`Field(json_schema_extra={"kind": ...})`)'
+            )
+        if valeur is None:
+            if kind == "embedder" and col.profile is not None:
+                res[nom] = resoudre_composant(kind, _embedder_par_defaut(col, chem), chem, col)
+        elif isinstance(valeur, ComponentSpec):
+            res[nom] = resoudre_composant(kind, valeur, chem, col)
+        else:  # tuple de ComponentSpec
+            res[nom] = [
+                resoudre_composant(kind, s, f"{chem}[{i}]", col) for i, s in enumerate(valeur)
+            ]
 
 
 def verifier_configuration(conf: Configuration, chemin: str) -> None:
     """Validation stricte des `params` d'une Configuration, sans profil (utilisée au chargement)."""
-    col = _Collecte()
+    col = Collecte()
     cls = _classe("architecture", conf.architecture, f"{chemin}.architecture")
     resoudre_params(cls.Params, conf.params, f"{chemin}.params", col)  # pyright: ignore[reportAttributeAccessIssue]
     if conf.parser.name != "auto":
@@ -157,12 +206,21 @@ def _chemin_absolu(base: Path, valeur: str | None) -> str | None:
 
 
 def resolve_experiment(
-    experience: Experiment, source: Path, wl_home: Path | None = None
+    experience: Experiment,
+    source: Path,
+    wl_home: Path | None = None,
+    *,
+    erreurs: list[ConfigError] | None = None,
+    releves: list[Collecte] | None = None,
 ) -> ResolvedExperiment:
     """Résout `experience` (lue dans `source`) : l'Expérience telle qu'elle sera exécutée.
 
     Précédence (AD-12) : défauts du code, puis profil, puis Expérience. Les chemins relatifs
     sont pris par rapport au fichier de l'Expérience.
+
+    `erreurs` (mode agrégation de `config/validate.py`) : les `ConfigError` y sont rassemblées
+    au lieu d'être levées, et une Configuration à l'Architecture inconnue est omise du résultat.
+    `releves` reçoit alors le relevé (modèles, Composants) de chaque Configuration résolue.
     """
     registry.discover()
     base = source.resolve().parent
@@ -175,14 +233,25 @@ def resolve_experiment(
     configurations: list[ResolvedConfiguration] = []
     for i, conf in enumerate(experience.configurations):
         chemin = f"configurations[{i}]"
-        col = _Collecte(profile=profil, catalog=catalogue)
-        cls = _classe("architecture", conf.architecture, f"{chemin}.architecture")
+        col = Collecte(
+            profile=profil, catalog=catalogue, erreurs=erreurs, chemin=chemin, config_id=conf.id
+        )
+        try:
+            cls = _classe("architecture", conf.architecture, f"{chemin}.architecture")
+        except ConfigError as exc:
+            col.signaler(exc)
+            continue
+        col.architecture = cls
+        col.pile.append("architecture")
         params = resoudre_params(cls.Params, conf.params, f"{chemin}.params", col)  # pyright: ignore[reportAttributeAccessIssue]
+        col.pile.pop()
         parser = conf.parser
         if parser.name != "auto":
             parser = ComponentSpec.model_validate(
                 resoudre_composant("parser", parser, f"{chemin}.parser", col)
             )
+        if releves is not None:
+            releves.append(col)
         configurations.append(
             ResolvedConfiguration(
                 id=conf.id,

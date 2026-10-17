@@ -1,11 +1,13 @@
 """Commande `wl` : point d'entrée du banc."""
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from wavelibrarian import registry
-from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.config.validate import validate_file
+from wavelibrarian.core.errors import ConfigError, ValidationFailed
 
 app = typer.Typer(
     name="wl",
@@ -40,3 +42,20 @@ def registre(
             typer.echo("    Params : aucun")
         for p in e.params:
             typer.echo(f"    - {p.name} ({p.type}), défaut : {p.default}")
+
+
+@app.command("run")
+def run(
+    experience: Annotated[
+        Path, typer.Argument(help="Fichier YAML de l'Expérience à valider puis exécuter.")
+    ],
+) -> None:
+    """Valide une Expérience (sans réseau) ; le runner arrive à l'epic 4."""
+    try:
+        validate_file(experience)
+    except ValidationFailed as echec:
+        typer.echo(f"Expérience invalide : {len(echec.errors)} erreur(s).", err=True)
+        for e in echec.errors:
+            typer.echo(f"  - {e.path} : {e.message}", err=True)
+        raise typer.Exit(2) from echec
+    typer.echo("Validation réussie.")
