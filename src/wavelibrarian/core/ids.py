@@ -38,3 +38,8 @@ def new_run_id(experiment_hash: str) -> str:
     maintenant = datetime.now(UTC)
     suffixe = sha16(experiment_hash, maintenant.isoformat())[:6]
     return f"{maintenant:%Y%m%d-%H%M%S}-{suffixe}"
+
+
+def sha16_bytes(data: bytes) -> str:
+    """16 premiers caracteres hexadecimaux du sha256 d octets bruts (doc_id, AD-5)."""
+    return hashlib.sha256(data).hexdigest()[:16]
