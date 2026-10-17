@@ -160,6 +160,7 @@ protected_modules = ["wavelibrarian.llm.providers", "wavelibrarian.llm.providers
 allowed_importers = [
     "wavelibrarian.llm.gateway",
     "wavelibrarian.llm.preflight",
+    "wavelibrarian.runner.rundir",  # seul `providers.logs.limiter_journaux` (run.log sans secret)
     "wavelibrarian.llm.providers",
     "wavelibrarian.llm.providers.**",
 ]

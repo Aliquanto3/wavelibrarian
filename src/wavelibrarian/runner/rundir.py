@@ -1,0 +1,151 @@
+"""Dossier d'Exécution `runs/<run_id>/` (contracts.md §5, AD-11).
+
+Le runner écrit l'Expérience résolue, son empreinte et `manifest.json` avant tout appel, puis
+ouvre les JSONL en ajout seulement. Seul le runner écrit dans ces fichiers (`traces.jsonl` est
+celui du Tracer).
+"""
+
+import json
+import logging
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Literal, get_args
+
+from wavelibrarian.config.experiment import ResolvedExperiment
+from wavelibrarian.config.resolve import write_resolved
+from wavelibrarian.core.errors import WlError
+from wavelibrarian.core.ids import canonical_json
+from wavelibrarian.corpus.declare import DeclaredCorpus
+from wavelibrarian.corpus.ingest import nom_parser_resolu, parsers_par_format
+from wavelibrarian.llm.providers.logs import limiter_journaux
+from wavelibrarian.ports.components import ComponentSpec
+
+Status = Literal["running", "completed", "budget_exceeded", "failed"]
+JsonlName = Literal["answers.jsonl", "verdicts.jsonl", "panel.jsonl"]
+_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+
+
+def resolve_parsers(experience: ResolvedExperiment, corpus: DeclaredCorpus) -> ResolvedExperiment:
+    """Remplace chaque `parser: auto` par le nom concret lu sur les formats du Corpus
+    (`markdown`, `text`, `html`, `pdf_text`, ou `markdown+pdf_text` si plusieurs), la forme de
+    `CorpusProfile.parser`. À appeler avant `write_resolved` et `RunContext.parser`."""
+    configurations = tuple(
+        c.model_copy(
+            update={
+                "parser": ComponentSpec(
+                    name=nom_parser_resolu(parsers_par_format(corpus.formats, c.parser.name))
+                )
+            }
+        )
+        if c.parser.name == "auto"
+        else c
+        for c in experience.configurations
+    )
+    return experience.model_copy(update={"configurations": configurations})
+
+
+def _modeles(experience: ResolvedExperiment) -> list[str]:
+    vus: list[str] = []
+    sources = [m for c in experience.configurations for m in c.models]
+    sources += list(experience.judges.pool or ())
+    for m in sources:
+        if m not in vus:
+            vus.append(m)
+    return vus
+
+
+def _ecrire_manifest(dossier: Path, donnees: dict[str, Any]) -> None:
+    tmp = dossier / "manifest.json.tmp"
+    tmp.write_text(json.dumps(donnees, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(dossier / "manifest.json")
+
+
+def create_run_dir(
+    wl_home: Path,
+    run_id: str,
+    experience: ResolvedExperiment,
+    *,
+    freeze_sha256: str | None = None,
+) -> Path:
+    """Crée `runs/<run_id>/` avec `experiment.resolved.yaml`, `experiment.sha256` et
+    `manifest.json` (`status: running`) ; refuse un `run_id` déjà initialisé ou une Expérience
+    dont un parser est encore `auto`."""
+    if not _RUN_ID.fullmatch(run_id):
+        raise ValueError(f"run_id invalide : {run_id!r} (lettres, chiffres, - et _)")
+    dossier = wl_home / "runs" / run_id
+    if (dossier / "manifest.json").exists():
+        raise WlError(f"Exécution {run_id} déjà initialisée (reprise : --reprendre)")
+    if any(c.parser.name == "auto" for c in experience.configurations):
+        raise WlError("parser « auto » non résolu : appeler resolve_parsers avant create_run_dir")
+    empreinte = write_resolved(experience, dossier)
+    _ecrire_manifest(
+        dossier,
+        {
+            "run_id": run_id,
+            "experiment_id": experience.experiment_id,
+            "status": "running",
+            "profile": experience.profile,
+            "models_frozen_at": experience.models_frozen_at.isoformat(),
+            "models": _modeles(experience),
+            "experiment_sha256": empreinte,
+            "freeze_sha256": freeze_sha256,
+            "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        },
+    )
+    return dossier
+
+
+def set_status(dossier: Path, status: Status) -> None:
+    """Met à jour `status` du manifeste (fin d'Exécution)."""
+    chemin = dossier / "manifest.json"
+    donnees = json.loads(chemin.read_text(encoding="utf-8"))
+    donnees["status"] = status
+    if status != "running":
+        donnees["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    _ecrire_manifest(dossier, donnees)
+
+
+def attach_run_log(dossier: Path) -> logging.Handler:
+    """Ajoute à la racine un handler vers `run.log` (UTF-8, LF) et limite les journaux réseau.
+    L'appelant le retire avec `detach_run_log`."""
+    handler = logging.FileHandler(dossier / "run.log", mode="a", encoding="utf-8", delay=False)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s : %(message)s"))
+    limiter_journaux(handler)
+    logging.getLogger().addHandler(handler)
+    return handler
+
+
+def detach_run_log(handler: logging.Handler) -> None:
+    logging.getLogger().removeHandler(handler)
+    handler.close()
+
+
+class JsonlWriter:
+    """JSONL en ajout seulement, UTF-8 et LF ; une ligne = un objet JSON canonique, vidée sur
+    disque. Aucune méthode ne relit ni ne réécrit."""
+
+    def __init__(self, dossier: Path, name: JsonlName) -> None:
+        if name not in get_args(JsonlName):
+            raise ValueError(f"{name} n'est pas un fichier écrit par le runner")
+        self.path = dossier / name
+        self._f = open(self.path, "a", encoding="utf-8", newline="\n")  # noqa: SIM115
+
+    def append(self, obj: Any) -> None:
+        self._f.write(canonical_json(obj) + "\n")
+        self._f.flush()
+
+    def close(self) -> None:
+        self._f.close()
+
+    def __enter__(self) -> "JsonlWriter":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
