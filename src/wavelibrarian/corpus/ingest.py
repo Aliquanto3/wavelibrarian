@@ -95,6 +95,12 @@ def _reancrer(parse: ParsedDocument, doc: Document) -> ParsedDocument:
     )
 
 
+def empreinte(documents: Iterable[ParsedDocument]) -> str:
+    """`fingerprint` d'un Corpus : sha256 des (source_path, doc_id) triés, [:16]."""
+    paires = sorted((d.source_path, d.doc_id) for d in documents)
+    return sha16(*(f"{p}\x1e{i}" for p, i in paires))
+
+
 def ingest(
     corpus: DeclaredCorpus, parser: str = "auto", *, wl_home: Path | None = None
 ) -> ParsedCorpus:
@@ -121,10 +127,8 @@ def ingest(
                 continue
             _ecrire_cache(fichier, parse, _version(cls))
         documents.append(_reancrer(parse, doc))
-    paires = sorted((d.source_path, d.doc_id) for d in documents)
-    fingerprint = sha16(*(f"{p}\x1e{i}" for p, i in paires))
     return ParsedCorpus(
         corpus_id=corpus.corpus_id,
-        fingerprint=fingerprint,
+        fingerprint=empreinte(documents),
         documents=tuple(sorted(documents, key=lambda d: d.source_path)),
     )

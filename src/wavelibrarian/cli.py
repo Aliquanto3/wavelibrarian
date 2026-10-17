@@ -1,6 +1,5 @@
 """Commande `wl` : point d'entrée du banc."""
 
-import importlib
 import json
 import os
 import secrets
@@ -25,6 +24,7 @@ from wavelibrarian.core.types import ParsedCorpus
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest, nom_parser_resolu, parsers_par_format
 from wavelibrarian.corpus.profile import profile as profil_corpus
+from wavelibrarian.corpus.scenario import corpus_apres as scenario_corpus_apres
 from wavelibrarian.evalset import check, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
@@ -132,14 +132,7 @@ def _corpus_apres(parsed: ParsedCorpus, scenario: Path) -> ParsedCorpus:
     """Corpus après application du Scénario (story 2.6 ; `ConfigError` tant qu'elle manque)."""
     if not scenario.is_file():
         raise ConfigError(str(scenario), "fichier de Scénario introuvable")
-    try:
-        module = importlib.import_module("wavelibrarian.corpus.scenario")
-    except ImportError as exc:
-        raise ConfigError(
-            "--scenario",
-            "l'application d'un Scénario n'est pas encore disponible dans cette version",
-        ) from exc
-    return module.corpus_apres(parsed, scenario)  # type: ignore[no-any-return]
+    return scenario_corpus_apres(parsed, scenario)
 
 
 @questions_app.command("controler")
