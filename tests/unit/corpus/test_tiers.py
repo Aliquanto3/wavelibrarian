@@ -39,6 +39,17 @@ def test_graine_reproductible_et_variable(minicorpus: ParsedCorpus) -> None:
     t = TiersSpec(seed=42, sizes=(5, 10, 20))
     base = tirer(minicorpus, t, REQUIS)
     assert tirer(minicorpus, t, REQUIS) == base
+    # L'ordre d'entrée ne compte pas, et chaque graine donne son propre Palier 5.
+    assert tirer_chemins(reversed(_chemins(minicorpus)), t, REQUIS) == {
+        k: tuple(_chemins(c)) for k, c in base.items()
+    }
+    attendu_42 = ("atlas-vaelmor.md", "glossaire-maritime.md", "legendes-brumes.md")
+    assert _chemins(base[5])[:3] == list(attendu_42)  # tirage figé : alerte si le RNG change
+    palier5 = {
+        s: frozenset(_chemins(tirer(minicorpus, TiersSpec(seed=s, sizes=(5, 10, 20)), REQUIS)[5]))
+        for s in (1, 2, 7, 42)
+    }
+    assert len(set(palier5.values())) == 4
     autre = tirer(minicorpus, TiersSpec(seed=7, sizes=(5, 10, 20)), REQUIS)
     assert set(_chemins(autre[10])) != set(_chemins(base[10]))
 
@@ -68,6 +79,7 @@ def test_sous_corpus_et_empreinte(minicorpus: ParsedCorpus) -> None:
     assert all(d in minicorpus.documents for d in p[5].documents)
 
 
+@pytest.mark.usefixtures("wl_home")
 def test_commande_paliers() -> None:
     res = CliRunner().invoke(app, ["corpus", "paliers", str(MINI / "corpus.yaml")])
     assert res.exit_code == 0, res.output
@@ -82,6 +94,22 @@ def test_commande_sans_tiers(tmp_path: Path) -> None:
     assert "ne déclare pas de clé `tiers`" in res.output
 
 
+@pytest.mark.usefixtures("wl_home")
+def test_commande_document_illisible_hors_paliers(tmp_path: Path) -> None:
+    # Deux Documents déclarés, un seul lisible : le tirage porte sur le Corpus ingéré.
+    chemin = _petit_corpus(tmp_path, "tiers: {seed: 1, sizes: [1]}\n")
+    (tmp_path / "docs" / "casse.pdf").write_bytes(b"pas un PDF")
+    res = CliRunner().invoke(app, ["corpus", "paliers", str(chemin)])
+    assert res.exit_code == 0, res.output
+    assert "Palier 1 (1 Documents) :\n  a.md" in res.output
+    assert "casse.pdf" not in res.output
+    chemin.write_text(BASE + "tiers: {seed: 1, sizes: [2]}\n", encoding="utf-8")
+    res = CliRunner().invoke(app, ["corpus", "paliers", str(chemin)])
+    assert res.exit_code == 2
+    assert "dépasse le nombre de Documents (1)" in res.output
+
+
+@pytest.mark.usefixtures("wl_home")
 def test_commande_taille_trop_grande(tmp_path: Path) -> None:
     chemin = _petit_corpus(tmp_path, "tiers: {seed: 1, sizes: [3]}\n")
     res = CliRunner().invoke(app, ["corpus", "paliers", str(chemin)])

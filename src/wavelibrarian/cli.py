@@ -336,18 +336,30 @@ def corpus_profiler(
 @corpus_app.command("paliers")
 def corpus_paliers(
     corpus_yaml: Annotated[Path, typer.Argument(help="Fichier `corpus.yaml` du Corpus.")],
+    parser: Annotated[
+        str, typer.Option("--parser", help="Parser à utiliser, ou `auto` (un par format).")
+    ] = "auto",
 ) -> None:
-    """Affiche les Paliers de volume tirés (clé `tiers`), avec leurs Documents."""
+    """Ingère le Corpus et affiche ses Paliers de volume (clé `tiers`), avec leurs Documents.
+
+    Le tirage porte sur les Documents ingérés, comme celui du runner : un Document illisible,
+    écarté par l'ingestion, n'entre dans aucun Palier. Sans `required_paths` (fournis par le
+    runner à partir des Questions).
+    """
     try:
         declare_corpus = declare(corpus_yaml)
         tiers = declare_corpus.spec.tiers
         if tiers is None:
             typer.echo(f"Le Corpus « {declare_corpus.corpus_id} » ne déclare pas de clé `tiers`.")
             return
-        tirage = tirer_chemins((d.source_path for d in declare_corpus.documents), tiers)
+        parse = ingest(declare_corpus, parser)
+        tirage = tirer_chemins((d.source_path for d in parse.documents), tiers)
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
+    except WlError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
     typer.echo(f"Paliers du Corpus « {declare_corpus.corpus_id} » (graine {tiers.seed}) :")
     for taille, chemins in tirage.items():
         typer.echo(f"Palier {taille} ({len(chemins)} Documents) :")
