@@ -120,6 +120,12 @@ def make_env(wl_home: Path, tmp_path: Path) -> Iterator[Callable[..., Env]]:
         e.cache.close()
 
 
+_INPUTS: dict[str, dict[str, Any]] = {
+    "generate": {"question": "q", "blocks": {}},
+    "judge": {"question": "q", "reference_answer": "r", "answer": "a", "criteria": []},
+}
+
+
 def _req(model: str = "fake-llm-a", **kw: Any) -> LLMRequest:
     base: dict[str, Any] = {
         "model_id": model,
@@ -129,6 +135,7 @@ def _req(model: str = "fake-llm-a", **kw: Any) -> LLMRequest:
         "messages": (Message(role="user", content="Quelle est la capitale ?"),),
         "max_tokens": 100,
     }
+    base["inputs"] = _INPUTS[kw.get("role", "generate")]
     return LLMRequest(**{**base, **kw})
 
 

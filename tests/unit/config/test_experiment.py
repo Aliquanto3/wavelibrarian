@@ -32,6 +32,7 @@ def composants_de_test() -> Iterator[None]:
     """Enregistre des Composants de test, puis restaure le registre."""
     sauve = dict(registry._REGISTRE)
     decouvert = registry._decouvert
+    registry._REGISTRE.clear()  # les Composants livrés ne se mêlent pas à ceux du test
     modules = set(sys.modules)
     registry._decouvert = True  # les paquets livrés sont vides ou hors sujet ici
 

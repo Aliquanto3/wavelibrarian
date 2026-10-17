@@ -20,6 +20,7 @@ from wavelibrarian.core.types import Usage
 from wavelibrarian.llm.budget import Ledger
 from wavelibrarian.llm.cache import ResponseCache, cache_key, role_marker
 from wavelibrarian.llm.providers.base import Provider, ProviderResponse
+from wavelibrarian.llm.roles import check_inputs
 from wavelibrarian.ports.gateway import LLMRequest, LLMResult
 from wavelibrarian.ports.measure import EnergyEstimator, Tokenizer, Tracer
 
@@ -155,6 +156,7 @@ class MeteredGateway:
     def _run(
         self, request: LLMRequest, schema: type[T] | None, *, use_cache: bool
     ) -> tuple[T | None, LLMResult]:
+        check_inputs(request)  # clé d'`inputs` manquante : refus avant tout appel (AD-4)
         entry = self._catalog.get(request.model_id)
         nom = entry.provider
         provider = self._providers.get(nom)
