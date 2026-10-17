@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 22:32 |
-| Story en cours | 1.9 |
-| Stories livrées | 8 / 56 |
+| Mis à jour | 2026-10-17 22:46 |
+| Story en cours | 1.10 |
+| Stories livrées | 9 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -63,9 +63,11 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **4.3 / 4.4** : le runner remplace `parser: auto` par le parser concret avant `write_resolved` et `RunContext.parser` (stories 1.2 et 1.5) ; vérifier que `experiment.resolved.yaml` ne contient plus `auto`.
 - **Epic 3 (`wl calibrer`)** : écrire `calibration.json` au format §4.6 retenu en 1.6 (par Juge, `excluded` booléen strict, `criteria`).
 - **1.9 (Passerelle)** : câbler `RunContext.tokenizer_for(model_id, catalog, reference)`, `make_tokenizer(profil.tokenizer)` et le `Tracer` ; appliquer `token_factor` (1,5 pour Haiku) à l'estimation avant appel ; poser `wl.energy_*` via `FakeEstimator` / `EcoLogitsEstimator` (story 1.7).
-- **1.11 (providers)** : lire `response.impacts` (AD-17 : `EcoLogits.init`) et vérifier `llm_impacts` en ecologits 0.11.3 (story 1.7).
+- **1.11 (providers)** : brancher les providers sur le protocole `Provider` (`llm/providers/base.py`, `complete(request, *, timeout_s)` → `ProviderResponse`) ; délai dépassé après envoi → régler à l'estimation au lieu de libérer, à vérifier sur un vrai appel interrompu ; le poids du schéma de sortie dans l'estimation dépend du mode d'envoi (outil ou `format`) (story 1.9).
+- **1.11 (providers, suite)** : lire `response.impacts` (AD-17 : `EcoLogits.init`) et vérifier `llm_impacts` en ecologits 0.11.3 (story 1.7).
 - **Après le pilote, extra `energy`** : vérifier que `gpu_ids=[]` n'initialise pas NVML, les noms `_hardware`/`_mode` de codecarbon 3.3.1, `estimated` sous Windows, et la règle CPU estimé / GPU mesuré (story 1.7).
 - **1.9 (Passerelle)** : calculer `cache_key` après avoir posé `role_marker(role)` (fonction de `llm/cache.py`, `cache_key` lève sinon) ; ne mettre en cache que les succès (story 1.8).
+- **Runner / RunContext (epic 4)** : `RunContext` concret qui expose `tokenizer_for(model_id)` et appelle `runner/wiring.py::build_gateway` ; répartition de l'énergie locale par phase ; refuser à la validation un plafond `ollama` hors EUR (story 1.9).
 - **Runner (epic 4)** : prendre `run.lock` puis ouvrir le `Ledger` avec `recover_orphans=True` ; tester qu'un second `wl run` ne règle pas les réservations du premier (story 1.8).
 - **Gateway (1.9)** : `cache_write_1h` n'est pas facturé, `Usage` n'a pas de poste 1 h (story 1.4).
 - **Story outillage / CI** : lancer `test_socket_tcp_bloque` sous Linux (story 1.1).
@@ -85,6 +87,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 22:05 | 6 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 4 tronq., 21 s/tronq. vs 20 (-4 %) ; think_off reasoning/var-math-fr 1 tronq., 20 s/tronq. (pas de réf.) ; think_off rag/oneruler-fr-cwe 1 tronq., 23 s/tronq. (pas de réf.) ; pire -4 % | 19 % | 14.6 Go | 1 s, 86 Mo, 73 thr (9 proc) | Sous les seuils : on continue (1.7) |
 | 22:19 | 7 tronq. (gemma4:e2b-it-qat) : think_on instructions/ifbench 4 tronq., 20 s/tronq. (pas de réf.) ; think_on extraction/extraction-fr 3 tronq., 20 s/tronq. (pas de réf.) ; pire +0 % | 23 % | 13.9 Go | 1 s, 86 Mo, 69 thr (9 proc) | Sous les seuils : on continue (1.8) |
 | 22:32 | 1 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 1 tronq., 41 s/tronq. (pas de réf.) ; pire +0 % | 24 % | 13.1 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.9) |
+| 22:46 | 9 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 9 tronq., 41 s/tronq. vs 41 (+1 %) ; pire +0 % | 11 % | 12.6 Go | 1 s, 87 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.10) |
 
 ## Journal des stories
 
@@ -98,3 +101,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.6 | 21:53 | 22:05 | cd4de3b219280a0b9b619eaf51c8482c00adac1e | 0 $ | Revue : agrégation complète des erreurs de Params (imbriqués compris), calibration_judge contrôlé au Catalogue, calibration.json validé strictement. 118 tests verts. |
 | 1.7 | 22:08 | 22:19 | 6b98d4adaac09cfb1651f61c859a7bb495b7d247 | 0 $ | Revue : tiktoken sans téléchargement (empreinte SHA-256 du cache), écriture de traces vérifiée (WlError), OTLP en SimpleSpanProcessor, test d'import réel. Vérifs codecarbon reportées après le pilote. 141 tests verts, aucun PID du run sur le GPU. |
 | 1.8 | 22:20 | 22:32 | 0fb2ee81b54cf729cebc96d1962719846b6fd6cb | 0 $ | AC 2 contradictoire (plafond période 2,00 vs 2 × 1,50) : test à 3,00, à arbitrer. Revue : recover_orphans explicite (runner après run.lock), sommes par devise, cache_key exige le marqueur de rôle. 159 tests verts. |
+| 1.9 | 22:33 | 22:46 | 69482b99395300b7d6ec471f97a4d891c803bd25 | 0 $ | Revue : sortie invalide en cache remplacée (replace=True), appel payé toujours tracé avec son coût (réel ou estimé), span écrit avant le cache. 180 tests verts. |
