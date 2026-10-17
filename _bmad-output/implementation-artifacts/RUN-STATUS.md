@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 20:59 |
-| Story en cours | 1.1 (compilation du contexte de l'epic 1) |
-| Stories livrées | 0 / 56 |
+| Mis à jour | 2026-10-17 21:10 |
+| Story en cours | 1.2 |
+| Stories livrées | 1 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -59,8 +59,10 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | Heure | Débit banc (10 min, modèle / piste) | CPU | RAM libre | Run (CPU s, RSS max, threads) | Décision |
 | --- | --- | --- | --- | --- | --- |
 | 20:58 | 8 (lfm2.5-2.6b / reasoning, ~1 réponse/41 s) ; fenêtre précédente sur un autre modèle, référence posée | 9 % | 17,6 Go | 0 s, 86 Mo, 57 thr (aucun pytest) | Mesure de départ, aucune ERROR : on démarre 1.1 |
+| 21:09 | 20 (lfm2.5-2.6b / reasoning) ; 11 sur les 10 min précédentes ; +82 % | 12 % | 16,7 Go | 1 s, 86 Mo, 101 thr (uv/pytest du run) | Sous les seuils : on continue (1.2) |
 
 ## Journal des stories
 
 | Story | Début | Fin | Commit | Dépense | Remarques |
 | --- | --- | --- | --- | --- | --- |
+| 1.1 | 21:00 | 21:09 | 4f3294e21ae06ae43b9c78fefa2887e0c331053c | 0 $ | Revue : 2 high (contrats import-linter inopérants, test lint-imports vide) et 1 medium corrigés ; typer `>=0.26,<1` (conflit docling `<0.27`) ; test socket sous Linux reporté à une story outillage. 14 tests verts. |
