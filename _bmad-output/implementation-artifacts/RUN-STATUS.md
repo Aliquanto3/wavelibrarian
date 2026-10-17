@@ -60,7 +60,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | --- | --- | --- | --- | --- | --- |
 | 20:58 | 8 (lfm2.5-2.6b / reasoning, ~1 réponse/41 s) ; fenêtre précédente sur un autre modèle, référence posée | 9 % | 17,6 Go | 0 s, 86 Mo, 57 thr (aucun pytest) | Mesure de départ, aucune ERROR : on démarre 1.1 |
 | 21:09 | 20 (lfm2.5-2.6b / reasoning) ; 11 sur les 10 min précédentes ; +82 % | 12 % | 16,7 Go | 1 s, 86 Mo, 101 thr (uv/pytest du run) | Sous les seuils : on continue (1.2) |
-| 21:20 | 19 (lfm2.5-2.6b / reasoning) ; 10 min avant : 23 ; -17 % | 16 % | 17.2 Go | 1 s, 86 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.3) |
+| 21:20 | 19 (lfm2.5-2.6b / reasoning) ; 10 min avant : 23 ; -17 % | 16 % | 17,2 Go | 1 s, 86 Mo, 70 thr (9 proc) | Faux signal : la piste reasoning s'est terminée vers 21:19 (passage à rag), fenêtre incomplète ; intervalle par réponse inchangé (~41 s). On continue (1.3). Mesure passée en secondes par réponse. |
+| 21:22 | Indicateur révisé : durée des réponses tronquées (budget de tokens fixe), même modèle / mode / jeu. think_on reasoning/bbeh-mini 42 s vs 41 s (−3 %) | 7 % | 17,0 Go | 0 s, 86 Mo, 54 thr | Pas de ralentissement réel : on continue (1.3). Les comptages bruts par piste mélangent des questions de longueurs très différentes. |
 
 ## Journal des stories
 
