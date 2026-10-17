@@ -44,6 +44,12 @@ def test_forme_longue(texte):
         ("3.50", "environ 3,5 mètres"),
         ("1 412", "en 1412"),
         ("05/03/1412", "le 5/3/1412"),
+        ("-3", "il fait −3 °C"),
+        ("1412000", "1.412.000 habitants"),
+        ("1 412 000", "1,412,000"),
+        ("1412,5", "1 412,5"),
+        ("oeuvre", "Une Œuvre"),
+        ("1412-1413", "de 1412 à 1413, soit 1412-1413"),
     ],
 )
 def test_exact_match_vrai(reference: str, reponse: str) -> None:
@@ -62,6 +68,13 @@ def test_exact_match_vrai(reference: str, reponse: str) -> None:
         ("", "quelque chose"),
         ("   ", ""),
         ("long mot de la référence", "mot"),
+        ("-3", "3"),
+        ("3", "-3"),
+        ("1412", "code A1412"),
+        ("1412", "1412-1413"),
+        ("1412", "1412–1413"),
+        ("5", "le 5e siècle"),
+        ("1412000", "1.412"),
     ],
 )
 def test_exact_match_faux(reference: str, reponse: str) -> None:
