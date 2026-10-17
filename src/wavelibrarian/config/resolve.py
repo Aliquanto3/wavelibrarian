@@ -197,8 +197,12 @@ def resolve_experiment(
 
     juges = experience.judges.model_copy(
         update={
-            "pool": experience.judges.pool or profil.defaults.judge_pool,
-            "panel_size": experience.judges.panel_size or profil.defaults.panel_size,
+            "pool": profil.defaults.judge_pool
+            if experience.judges.pool is None
+            else experience.judges.pool,
+            "panel_size": profil.defaults.panel_size
+            if experience.judges.panel_size is None
+            else experience.judges.panel_size,
             "excluded_from": _chemin_absolu(base, experience.judges.excluded_from),
         }
     )
@@ -242,7 +246,11 @@ def fingerprint(resolue: ResolvedExperiment) -> str:
 
 
 def write_resolved(resolue: ResolvedExperiment, dossier: Path) -> str:
-    """Écrit les deux fichiers de l'Expérience résolue dans `dossier` ; renvoie l'empreinte."""
+    """Écrit les deux fichiers de l'Expérience résolue dans `dossier` ; renvoie l'empreinte.
+
+    L'appelant (runner) remplace d'abord chaque `parser: auto` par les noms concrets lus
+    sur le Corpus (contracts.md §4.4) : ce module ne charge pas le Corpus.
+    """
     dossier.mkdir(parents=True, exist_ok=True)
     empreinte = fingerprint(resolue)
     (dossier / "experiment.resolved.yaml").write_text(to_yaml(resolue), encoding="utf-8")

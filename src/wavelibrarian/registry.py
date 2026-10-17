@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
 from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.core.types import ModelRefMeta
 from wavelibrarian.ports.components import KINDS
 
 T = TypeVar("T", bound=type)
@@ -53,6 +54,12 @@ def _verifier_params(kind: str, name: str, cls: type) -> None:
         raise ConfigError(
             f"{kind}.{name}.Params", '`Params` doit porter extra="forbid" et frozen=True'
         )
+    for champ, info in params.model_fields.items():
+        if ModelRefMeta in info.metadata:  # la classe, pas une instance : `ModelRef` nu
+            raise ConfigError(
+                f"{kind}.{name}.Params.{champ}",
+                "`ModelRef` nu : écrire `Annotated[str | None, ModelRefMeta(role_default, ...)]`",
+            )
 
 
 def register(kind: str, name: str) -> Callable[[T], T]:

@@ -1,7 +1,7 @@
 ---
 story: "1.5"
 title: Chargement et résolution d'une Expérience
-status: review
+status: done
 ---
 
 # Story 1.5 : Chargement et résolution d'une Expérience
@@ -39,3 +39,12 @@ status: review
 - Statut : prêt pour revue.
 - Reports : arbitrer avec 1.6 qui valide quoi (le chargement refuse déjà un nom inconnu) ; `parser: auto` à résoudre par le runner ; le `kind` des champs `ComponentSpec` repose sur une convention de nommage (les Architectures des epics suivants doivent la suivre ou déclarer `json_schema_extra`) ; empreinte liée aux chemins absolus.
 - Aucun appel réseau, ni Ollama, ni GPU (`CUDA_VISIBLE_DEVICES=-1`, threads à 4).
+
+## Revue
+
+- medium, second avis 1 : `ModelRef` nu (classe en métadonnée) ignoré par `resolve`, modèle absent de `models`. Corrigé : `registry.register` refuse un `ModelRef` nu (contracts.md l. 36 impose l'instance `ModelRefMeta(role_default, ...)`) ; fixture `fake` passée à l'instance, `conf.models` vérifié.
+- medium, second avis 2 : `or` écrasait `pool`/`panel_size` explicites faux. Corrigé : test `is None` ; `panel_size >= 1` et `pool` non vide imposés par le schéma.
+- medium, second avis 3 : `seed: "42"` et `seed: true` acceptés par coercition. Corrigé : `seed` (et `max_questions`, `>= 1`) en `strict` ; AC « valeur mal typée refusée » (FR-9).
+- medium, second avis 4 : `parser: auto` non remplacé avant hachage. Reporté : la résolution exige les formats du Corpus (story 2.1) et les parsers du registre (story 2.2) ; le runner (story 4.4) remplace `auto` avant `write_resolved`, consigné dans sa docstring. Vérification : `experiment.resolved.yaml` d'une Exécution ne contient plus `auto`.
+- low, second avis 5 : chemins absolus et `WL_HOME` dans l'empreinte. Rejeté : le contrat attend l'empreinte de l'Expérience telle qu'exécutée sur la machine, stable d'un appel à l'autre, pas une portabilité inter-machines ; `config_id` est l'`id` déclaré, non haché.
+- low, second avis 6-8 : tests (empreinte, `WL_HOME`, cas manquants). Partiellement corrigé : tests ajoutés pour juges explicites, graine stricte, `ModelRef` nu ; le reste écarté (l'empreinte est déjà testée contre un changement de valeur et l'ordre des clés).

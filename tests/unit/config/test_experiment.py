@@ -70,7 +70,7 @@ def composants_de_test() -> Iterator[None]:
         """Faux embedder."""
 
         class Params(_Params):
-            model: ModelRef = None
+            model: Annotated[str | None, ModelRefMeta("embedder")] = None
 
     @registry.register("architecture", "arch_test")
     class Arch:
@@ -267,6 +267,7 @@ def test_embedder_omis_profil_test_fake(ecrire: Callable[..., Path]) -> None:
     assert conf.params["embedder"] == {"name": "fake", "params": {"model": "fake-embedder"}}
     assert conf.params["generator"]["params"]["model"] == "fake-llm-a"
     assert conf.answer_producers == ("fake-llm-a",)
+    assert "fake-embedder" in conf.models
 
 
 def test_embedder_explicite_conserve(ecrire: Callable[..., Path]) -> None:
@@ -313,6 +314,34 @@ def test_defauts_juges_et_date_gel(ecrire: Callable[..., Path]) -> None:
     assert res.models_frozen_at == res.catalog_date
     pose = ecrire(_avec(models_frozen_at="2026-01-02"))
     assert str(resolve_experiment(load_experiment(pose), pose).models_frozen_at) == "2026-01-02"
+
+
+def test_juges_explicites_non_ecrases(ecrire: Callable[..., Path]) -> None:
+    chemin = ecrire(_avec(judges={"pool": ["fake-llm-b"], "panel_size": 1}))
+    res = resolve_experiment(load_experiment(chemin), chemin)
+    assert res.judges.pool == ("fake-llm-b",)
+    assert res.judges.panel_size == 1
+    assert _erreur(ecrire(_avec(judges={"panel_size": 0}))).path == "judges.panel_size"
+    assert _erreur(ecrire(_avec(judges={"pool": []}))).path == "judges.pool"
+
+
+@pytest.mark.parametrize("graine", ["42", True])
+def test_graine_strictement_entiere(ecrire: Callable[..., Path], graine: Any) -> None:
+    assert _erreur(ecrire(_avec(seed=graine))).path == "seed"
+
+
+def test_model_ref_nu_refuse_a_l_enregistrement() -> None:
+    with pytest.raises(ConfigError) as info:
+
+        @registry.register("embedder", "nu_test")
+        class Nu:  # pyright: ignore[reportUnusedClass]
+            """Embedder au ModelRef nu."""
+
+            class Params(BaseModel):
+                model_config = ConfigDict(frozen=True, extra="forbid")
+                model: ModelRef = None
+
+    assert info.value.path == "embedder.nu_test.Params.model"
 
 
 # --- sérialisation et empreinte (AC 4) ---

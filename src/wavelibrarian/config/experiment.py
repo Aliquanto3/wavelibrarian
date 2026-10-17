@@ -26,8 +26,10 @@ class Budget(_Schema):
 
 
 class JudgesSettings(_Schema):
-    pool: tuple[str, ...] | None = None  # None : `profil.defaults.judge_pool`
-    panel_size: int | None = None  # None : `profil.defaults.panel_size`
+    pool: tuple[str, ...] | None = Field(
+        default=None, min_length=1
+    )  # None : `profil.defaults.judge_pool`
+    panel_size: int | None = Field(default=None, ge=1)  # None : `profil.defaults.panel_size`
     passes: int = 1
     calibration_passes: int = 5
     kappa_threshold: float = 0.6
@@ -59,7 +61,7 @@ class Configuration(_Schema):
 
 class Experiment(_Schema):
     experiment_id: str = Field(pattern=ID_PATTERN)
-    seed: int
+    seed: int = Field(strict=True)  # `"42"` ou `true` refusés (FR-9)
     profile: Literal["cpu", "gpu", "test"] = "cpu"
     corpus: str
     questions: str
@@ -70,7 +72,7 @@ class Experiment(_Schema):
     catalog: str | None = None
     costs: str | None = None
     models_frozen_at: Date | None = None  # None : date du Catalogue
-    max_questions: int | None = None
+    max_questions: int | None = Field(default=None, ge=1, strict=True)
     budget: Budget = Budget()
     judges: JudgesSettings = JudgesSettings()
     stats: StatsSettings = StatsSettings()
@@ -81,7 +83,7 @@ class Experiment(_Schema):
 class ResolvedConfiguration(_Schema):
     id: str
     architecture: str
-    parser: ComponentSpec  # `auto` n'est remplacé que par le runner, qui connaît le Corpus
+    parser: ComponentSpec  # `auto` remplacé avant le hachage par le runner (story 2.2 / 4.4)
     reuse_index: str | None
     params: dict[str, Any]
     models: tuple[str, ...]  # tous les modèles de la Configuration, sans doublon
