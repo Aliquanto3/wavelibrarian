@@ -33,5 +33,5 @@ status: review
 
 ## Auto Run Result
 
-- Statut : review. 10 tests de Juge et 14 de `exact_match` ciblés verts ; suite complète 490 verts ; pyright 0 erreur ; ruff propre ; contrôle rapide sans erreur.
+- Statut : review. Tests ciblés verts (Juge, `exact_match`) ; suite complète 490 verts ; pyright 0 erreur ; ruff propre ; contrôle rapide sans erreur.
 - Reports : (1) construction du `JudgeInput` (texte des Ancrages, `context_texts` du Generator) à faire dans le Panel (epic 4) ; (2) le Juge ne fixe pas le Poste `judging` : le Panel et le closed-book (3.5) doivent ouvrir `ctx.scope(post="judging")` ; (3) choix du Juge d'une autre Famille pour le closed-book : story 3.5 (AD-14).
