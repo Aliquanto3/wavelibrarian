@@ -1,7 +1,7 @@
 ---
 story: "3.7"
 title: Jeu d'évaluation de référence du Mini-corpus
-status: review
+status: done
 ---
 
 # Story 3.7 : Jeu d'évaluation de référence du Mini-corpus
@@ -37,3 +37,17 @@ status: review
 ## Auto Run Result
 
 Livré, `status: review`. 11 tests ciblés verts ; suite complète, pyright et contrôle rapide verts (voir rapport). Reports : (1) `tests/conformance/` (story 4.14) importera `CONFORMANCE_QUESTION_ID` par `from conftest import …` ; (2) le Filtre closed-book réel (modèles réels) n'a pas été lancé sur le Jeu, faute de modèle autorisé pendant le run ; à faire avant tout test avec de vrais modèles ; (3) toute modification du fichier après Gel casse l'empreinte : corriger une Question impose un re-Gel avec `--forcer` si une partie change.
+
+## Revue
+
+Revue Opus du 2026-10-18, après rebase sur `main` (caef354). Toutes les Questions sont reposées en phase `after_update` (story 4.7) : une Question sans `scenario_target` doit donc rester juste dans `corpus_after`.
+
+- medium, second avis 1, corrigé : `q-008` (hauteur de la grande marée du dixième jour) devenait fausse après `op-2` ; remplacée par une Question sur un Document non modifié (hauteur du phare de Keld, « Trente-quatre mètres »). `q-022` gardée : le feu à éclats est allumé dans les deux versions du bulletin et la Réponse vient du phare ; le tonnage (40 ou 30 selon la version) est retiré de la Réponse de référence.
+- medium, revue, corrigé : `q-018` (« navire du directeur de la Compagnie ») devenait fausse après `op-1`, la chronique de 1415 nommant Ilsa Marenne directrice ; reformulée sur « la personne qui a pris la direction en l'an 1409 » (Tamsin Orrelle, Cormoran Gris), vraie avant comme après.
+- medium, revue, corrigé : `q-039` ancrait le bulletin (`Consignes`, modifié par `op-2`) et sa Réponse (40 tonneaux) contredisait le bulletin de 1415 ; Ancrage du bulletin retiré, Réponse fondée sur l'atlas et les tarifs des passeurs.
+- medium, second avis 2, corrigé : `q-021` se résolvait avec le seul rapport du chantier ; réécrite pour exiger la lettre (Tamsin Orrelle) et le rapport (quatre mille deniers).
+- low, second avis 3, rejeté : la définition du cadrage (« documents périmés ou versions contradictoires ») est tenue par `q-029`, `q-030`, `q-036`, `q-046` ; `q-031` à `q-033` sont des temporelles faibles (dates, édition fautive de l'almanach) ; les reclasser changerait la répartition stratifiée sans gain.
+- low, second avis 4, rejeté : `q-001` reprend son Ancrage à dessein, c'est la Question de conformité (87,5 % de mots communs, exigés par l'AC et par la story 4.14).
+- low, second avis 5, corrigé : ajout de `test_reponses_factuelles_courtes_presentes_dans_leurs_ancrages` et de `test_questions_hors_scenario_sans_document_modifie_ou_supprime` (liste `stables` explicite pour `q-022`). Le test de répartition reste un contrôle de cohérence avec `nb_dev`, pas un oracle indépendant.
+- low, second avis 6, consigné : `from conftest import` repose sur l'import de `tests/conftest.py` par pytest en mode `prepend` (dossier `tests/` sans `__init__.py`) ; il casserait avec `--import-mode=importlib`. La story 4.14 devra en tenir compte.
+- Re-Gel : `wl questions geler --dev-ratio 0.4 --graine 42` sans `--forcer` (aucune partie ne change), nouvelle empreinte `76fa20b7…`. Un ajout `op-1` qui change un fait existant n'est pas détectable mécaniquement : à relire à chaque nouveau Scénario.

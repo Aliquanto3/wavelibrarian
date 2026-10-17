@@ -167,3 +167,40 @@ def test_modifier_une_question_dans_une_copie_est_refuse(tmp_path: Path) -> None
     copie.write_text(yaml.safe_dump(brut, allow_unicode=True, sort_keys=False), encoding="utf-8")
     with pytest.raises(ConfigError, match="sha256"):
         freeze.verify_frozen(io.load(copie))
+
+
+def test_reponses_factuelles_courtes_presentes_dans_leurs_ancrages(
+    jeu: io.QuestionsFile, minicorpus: ParsedCorpus, apres: ParsedCorpus
+) -> None:
+    """Chaque mot d'une Réponse `short` factuelle (hors interlingue) figure dans ses Ancrages."""
+    for q in jeu.questions:
+        if q.type != "factual" or q.answer_form != "short" or q.cross_lingual:
+            continue
+        cible = q.scenario_target or {}
+        corpus = apres if cible.get("state") == "after" else minicorpus
+        textes = " ".join(
+            corpus.anchor_text(aid)
+            for a in q.reference_anchors
+            if (aid := corpus.resolve(a.doc, a.page, tuple(a.headings))) is not None
+        )
+        manquants = _mots(q.reference_answer) - _mots(textes)
+        assert not manquants, (q.id, manquants)
+
+
+def test_questions_hors_scenario_sans_document_modifie_ou_supprime(
+    jeu: io.QuestionsFile,
+) -> None:
+    """Toutes les Questions sont reposées après mise à jour (story 4.7) : sans `scenario_target`,
+    une Question ne s'appuie sur aucun Document que le Scénario modifie ou supprime."""
+    operations = yaml.safe_load(SCENARIO.read_text(encoding="utf-8"))["operations"]
+    touches = {o["target"] for o in operations if o["op"] in ("modify", "delete")}
+    # q-022 : feu à éclats allumé dans les deux versions du bulletin ; Réponse tirée du phare.
+    stables = {"q-022"}
+    fautives = [
+        q.id
+        for q in jeu.questions
+        if q.scenario_target is None
+        and q.id not in stables
+        and any(a.doc in touches for a in q.reference_anchors)
+    ]
+    assert fautives == []

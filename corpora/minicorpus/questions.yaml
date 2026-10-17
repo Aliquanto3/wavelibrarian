@@ -1,8 +1,8 @@
 corpus_id: minicorpus
 target_count: 40
 freeze:
-  sha256: a9509af2d5bc553ee630f56ec60bf0caca399bea7434f266a43059c28e009641
-  at: '2026-10-17T23:33:15Z'
+  sha256: 76fa20b7cecd248d543ee1bb2765fde73b34a5e05b4229139d7a07854c1bcc07
+  at: '2026-10-17T23:44:19Z'
   seed: 42
   dev_ratio: 0.4
 questions:
@@ -154,15 +154,14 @@ questions:
   type: factual
   follow_up: false
   cross_lingual: false
-  text: Quelle hauteur atteindra la grande marée du dixième jour au Vieux Môle ?
+  text: Quelle hauteur mesure le phare de Keld ?
   lang: fr
-  reference_answer: Quatre mètres vingt
+  reference_answer: Trente-quatre mètres
   answer_form: short
   reference_anchors:
-  - doc: bulletin-maree.md
+  - doc: phare-de-keld.md
     headings:
-    - Bulletin des marées de Port-Ysel
-    - Hauteurs
+    - Le phare de Keld
   status: validated
   split: test
   contaminated_by: []
@@ -364,7 +363,8 @@ questions:
   type: multi_hop
   follow_up: false
   cross_lingual: false
-  text: Quel navire est commandé par le directeur de la Compagnie des Marées Grises ?
+  text: Quel navire commande la personne qui a pris la direction de la Compagnie des Marées Grises en
+    l'an 1409 ?
   lang: fr
   reference_answer: Le Cormoran Gris
   answer_form: short
@@ -436,9 +436,10 @@ questions:
   type: multi_hop
   follow_up: false
   cross_lingual: false
-  text: Combien la Compagnie des Marées Grises paierait-elle pour la seconde cale sèche ?
+  text: Qui a laissé entendre à Maëlis Torvane que la Compagnie financerait la moitié de la seconde cale
+    sèche, et combien coûterait ce projet ?
   lang: fr
-  reference_answer: Deux mille deniers, la moitié des quatre mille deniers du projet.
+  reference_answer: Tamsin Orrelle ; le projet coûterait quatre mille deniers.
   answer_form: free
   reference_anchors:
   - doc: rapport-chantier-ysel.md
@@ -463,7 +464,7 @@ questions:
   text: Quel feu du phare de Keld est allumé d'après le bulletin des marées, et que signale-t-il ?
   lang: fr
   reference_answer: Le feu à éclats, qui annonce la Haute Eau et la fermeture de la passe de l'Ouest aux
-    navires de plus de quarante tonneaux.
+    grands navires.
   answer_form: free
   reference_anchors:
   - doc: bulletin-maree.md
@@ -869,7 +870,7 @@ questions:
     ?
   lang: fr
   reference_answer: La passe de l'Ouest est fermée aux navires de plus de quarante tonneaux, les tarifs
-    des passeurs sont majorés d'un tiers et la Compagnie reste à quai selon le bulletin.
+    des passeurs sont majorés d'un tiers et les passeurs ne sortent pas quand le feu à éclats est allumé.
   answer_form: free
   reference_anchors:
   - doc: atlas-vaelmor.md
@@ -880,10 +881,6 @@ questions:
   - doc: tarifs-passeurs.pdf
     page: 1
     headings: []
-  - doc: bulletin-maree.md
-    headings:
-    - Bulletin des marées de Port-Ysel
-    - Consignes
   status: validated
   split: dev
   contaminated_by: []
