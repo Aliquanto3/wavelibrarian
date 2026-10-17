@@ -41,7 +41,9 @@ def main() -> int:
     echecs = []
     for commande in COMMANDES:
         try:
-            resultat = subprocess.run(commande, capture_output=True, text=True, timeout=120)
+            resultat = subprocess.run(
+                commande, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120
+            )
         except (OSError, subprocess.TimeoutExpired) as erreur:
             echecs.append((commande, str(erreur)))
             continue
