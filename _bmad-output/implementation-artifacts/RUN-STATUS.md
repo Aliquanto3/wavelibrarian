@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 23:02 |
-| Story en cours | 1.11 (voie A, revue) ; 2.1 (voie B) |
-| Stories livrées | 10 / 56 |
+| Mis à jour | 2026-10-17 23:26 |
+| Story en cours | 1.12 (voie A) ; 2.1 (voie B, revue) |
+| Stories livrées | 11 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -73,6 +73,9 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **1.9 (Passerelle)** : calculer `cache_key` après avoir posé `role_marker(role)` (fonction de `llm/cache.py`, `cache_key` lève sinon) ; ne mettre en cache que les succès (story 1.8).
 - **Runner / RunContext (epic 4)** : `RunContext` concret qui expose `tokenizer_for(model_id)` et appelle `runner/wiring.py::build_gateway` ; répartition de l'énergie locale par phase ; refuser à la validation un plafond `ollama` hors EUR (story 1.9).
 - **Runner (epic 4), Faux LLM** : construire `FakeProvider` et le passer à `build_gateway(providers={"fake": ...})` ; isoler le Cache de réponses des runs scénarisés (`script`), sinon une sortie scénarisée persiste dans `WL_HOME` pour le run suivant (story 1.10).
+- **Runner (epic 4), journaux** : créer le handler de `run.log` et y appeler `limiter_journaux(handler)` après l'import du SDK (story 1.11).
+- **Quand Ollama sera libre** : `pytest -m real_local` ; vérifier dans `ollama ps` aucune couche GPU sur le profil CPU et `num_ctx` = 32768 ; surveiller la RAM de `granite4.2:3b` avec cette fenêtre (story 1.11).
+- **Story 4.15 (`real_api`)** : vérifier que l'API accepte `temperature` via `extra_body` et l'outil de sortie imposé (story 1.11).
 - **Runner (epic 4)** : prendre `run.lock` puis ouvrir le `Ledger` avec `recover_orphans=True` ; tester qu'un second `wl run` ne règle pas les réservations du premier (story 1.8).
 - **Gateway (1.9)** : `cache_write_1h` n'est pas facturé, `Usage` n'a pas de poste 1 h (story 1.4).
 - **Story outillage / CI** : lancer `test_socket_tcp_bloque` sous Linux (story 1.1).
@@ -94,6 +97,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 22:32 | 1 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 1 tronq., 41 s/tronq. (pas de réf.) ; pire +0 % | 24 % | 13.1 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.9) |
 | 22:46 | 9 tronq. (gemma4:e2b-it-qat) : think_on reasoning/bbeh-mini 9 tronq., 41 s/tronq. vs 41 (+1 %) ; pire +0 % | 11 % | 12.6 Go | 1 s, 87 Mo, 70 thr (9 proc) | Sous les seuils : on continue (1.10) |
 | 23:01 | 5 tronq. (gemma4:e2b-it-qat) : think_on rag/oneruler-fr-cwe 4 tronq., 24 s/tronq. (pas de réf.) ; think_on reasoning/bbeh-mini 1 tronq., 42 s/tronq. (pas de réf.) ; pire +0 % | 34 % | 12.4 Go | 1 s, 87 Mo, 71 thr (9 proc) | Sous les seuils : on continue (1.11) |
+| 23:26 | 2 tronq. (qwen3.5:4b) : think_off instructions/mifeval-fr 1 tronq., 35 s/tronq. (pas de réf.) ; think_off reasoning/bbeh-mini 1 tronq., 36 s/tronq. (pas de réf.) ; pire +0 % | 20 % | 10.4 Go | 1 s, 86 Mo, 81 thr (12 proc) | Sous les seuils : on continue (1.12) |
 
 ## Journal des stories
 
@@ -109,3 +113,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 1.8 | 22:20 | 22:32 | 0fb2ee81b54cf729cebc96d1962719846b6fd6cb | 0 $ | AC 2 contradictoire (plafond période 2,00 vs 2 × 1,50) : test à 3,00, à arbitrer. Revue : recover_orphans explicite (runner après run.lock), sommes par devise, cache_key exige le marqueur de rôle. 159 tests verts. |
 | 1.9 | 22:33 | 22:46 | 69482b99395300b7d6ec471f97a4d891c803bd25 | 0 $ | Revue : sortie invalide en cache remplacée (replace=True), appel payé toujours tracé avec son coût (réel ou estimé), span écrit avant le cache. 180 tests verts. |
 | 1.10 | 22:47 | 23:02 | 585760d4c83041b407f927b4a350a36a302437ca | 0 $ | Revue : step dans cache_key pour fake (sorties scénarisées), latence 0 du Faux LLM réelle (ProviderResponse.latency_s), tests sans contournement. 227 tests verts. |
+| 1.11 | 23:02 | 23:26 | 42d79297090758716ac153b644a14e9a0dcb2c79 | 0 $ | Revue : httpx2 déclaré, output_schema dans cache_key, pas de relance d'un essai envoyé, num_ctx Ollama = fenêtre du Catalogue, build_providers branché, test ANTHROPIC_LOG en sous-processus. real_* écrits, non exécutés. 274 tests verts. |
