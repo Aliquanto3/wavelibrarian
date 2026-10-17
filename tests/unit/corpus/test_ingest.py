@@ -212,8 +212,7 @@ def test_parsers_par_format_auto():
         parsers_par_format(["html"], "markdown")  # le Parser ne couvre pas le format
     with pytest.raises(ConfigError):
         parsers_par_format(["markdown"], "inconnu")
-    with pytest.raises(ConfigError, match="pdf_text » non encore disponible"):
-        parsers_par_format(["pdf"])  # pdf_text arrive avec la story 2.3
+    assert parsers_par_format(["pdf"]) == {"pdf": "pdf_text"}
 
 
 def test_ingest_trie_fingerprint_et_resolve(tmp_path: Path, wl_home: Path):

@@ -18,7 +18,7 @@ from wavelibrarian.corpus.declare import DeclaredCorpus, Document
 
 log = logging.getLogger(__name__)
 
-# Parser par défaut de chaque format quand `parser: auto` (le PDF arrive avec la story 2.3).
+# Parser par défaut de chaque format quand `parser: auto`.
 AUTO: dict[str, str] = {"markdown": "markdown", "text": "text", "html": "html", "pdf": "pdf_text"}
 
 
