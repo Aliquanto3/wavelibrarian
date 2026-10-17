@@ -38,7 +38,8 @@ def _energie_kwh(response: object) -> float | None:
 def _traduire(exc: anthropic.AnthropicError) -> ProviderError:
     """429, 5xx (529 compris) et réseau : réessayables ; 4xx : non. Jamais d'en-tête ni de clé."""
     if isinstance(exc, anthropic.APITimeoutError):
-        return ProviderError("Anthropic : délai dépassé", retryable=True, sent=True)
+        # Parti sans réponse, peut-être facturé : réglé à l'estimation, jamais relancé (AD-9).
+        return ProviderError("Anthropic : délai dépassé", retryable=False, sent=True)
     if isinstance(exc, anthropic.APIConnectionError):
         return ProviderError("Anthropic : connexion impossible", retryable=True)
     if isinstance(exc, anthropic.APIStatusError):
@@ -101,7 +102,7 @@ class AnthropicProvider:
                 for m in request.messages
             ],
         }
-        if request.cache_system:
+        if request.cache_system and request.system:  # bloc `text` vide : refusé par l'API
             corps["system"] = [{"type": "text", "text": request.system, "cache_control": _CACHE}]
         elif request.system:
             corps["system"] = request.system

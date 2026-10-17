@@ -161,11 +161,18 @@ def make_estimator(settings: EnergySettings) -> EnergyEstimator:
     return EcoLogitsEstimator()
 
 
+_ecologits_initialise = False
+
+
 def init_ecologits(electricity_mix_zone: str | None = None) -> None:
     """`EcoLogits.init(providers=["anthropic"])` (AD-17) : le SDK renvoie alors `response.impacts`.
 
     À appeler une fois au démarrage d'un run qui utilise le provider Anthropic. Sans l'extra
     `energy`, lève `WlError` ; l'adaptateur lit `impacts` s'il existe et ne dépend pas de l'appel.
     """
+    global _ecologits_initialise
+    if _ecologits_initialise:  # une fois par processus : `init` patche le SDK
+        return
     eco: Any = _importer("ecologits")
     eco.EcoLogits.init(providers=["anthropic"], electricity_mix_zone=electricity_mix_zone)
+    _ecologits_initialise = True

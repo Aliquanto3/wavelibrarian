@@ -7,6 +7,8 @@ désélectionnés par défaut (`addopts`) et ne sont jamais lancés par le run a
 import json
 import logging
 import os
+import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from decimal import Decimal
@@ -166,6 +168,11 @@ def test_anthropic_sans_cache_ni_schema_n_envoie_ni_cache_ni_outil() -> None:
     assert "cache_control" not in json.dumps(corps) and "tools" not in corps
 
 
+def test_anthropic_cache_system_avec_system_vide_n_envoie_pas_de_bloc_vide() -> None:
+    corps = AnthropicProvider.native_request(_req(system="", cache_system=True), None)
+    assert "system" not in corps
+
+
 def test_anthropic_usage_sans_champs_de_cache() -> None:
     corps = {**REPONSE_ANTHROPIC, "usage": {"input_tokens": 3, "output_tokens": 1}}
     rep = _anthropic(Transport(_ok(corps))).complete(_req(), timeout_s=30)
@@ -215,7 +222,8 @@ def test_anthropic_erreurs_http(code: int, retryable: bool) -> None:
 def test_anthropic_delai_apres_envoi_et_connexion() -> None:
     with pytest.raises(ProviderError) as exc:
         _anthropic(Transport(Exc("ReadTimeout", "lent"))).complete(_req(), timeout_s=1)
-    assert exc.value.retryable and exc.value.sent  # parti sans réponse : à régler à l'estimation
+    # Parti sans réponse : réglé à l'estimation, jamais relancé (peut-être déjà facturé).
+    assert not exc.value.retryable and exc.value.sent
     with pytest.raises(ProviderError) as exc:
         _anthropic(Transport(Exc("ConnectError", "non"))).complete(_req(), timeout_s=1)
     assert exc.value.retryable and not exc.value.sent
@@ -275,10 +283,13 @@ def test_reponse_sdk_ordinaire_sans_impacts() -> None:
 def test_init_ecologits(monkeypatch: pytest.MonkeyPatch) -> None:
     appels: list[dict[str, Any]] = []
     faux = SimpleNamespace(EcoLogits=SimpleNamespace(init=lambda **kw: appels.append(kw)))
-    monkeypatch.setitem(__import__("sys").modules, "ecologits", faux)
+    monkeypatch.setattr(energy, "_ecologits_initialise", False)
+    monkeypatch.setitem(sys.modules, "ecologits", faux)
     energy.init_ecologits()
+    energy.init_ecologits()  # une seule fois par processus
     assert appels == [{"providers": ["anthropic"], "electricity_mix_zone": None}]
-    monkeypatch.setitem(__import__("sys").modules, "ecologits", None)
+    monkeypatch.setattr(energy, "_ecologits_initialise", False)
+    monkeypatch.setitem(sys.modules, "ecologits", None)
     with pytest.raises(WlError, match="extra energy"):
         energy.init_ecologits()
 
@@ -360,9 +371,8 @@ def passerelle(wl_home: Path, tmp_path: Path) -> Iterator[Callable[..., tuple[An
 
 
 def test_la_cle_ne_fuit_ni_dans_les_traces_ni_dans_les_journaux(
-    passerelle: Callable[..., tuple[Any, Path]], monkeypatch: pytest.MonkeyPatch
+    passerelle: Callable[..., tuple[Any, Path]],
 ) -> None:
-    monkeypatch.setenv("ANTHROPIC_LOG", "debug")  # variable de débogage du SDK
     racine = logging.getLogger()
     capture = _Capture()
     avant = racine.level
@@ -386,19 +396,70 @@ def test_la_cle_ne_fuit_ni_dans_les_traces_ni_dans_les_journaux(
     assert [
         r
         for r in capture.records
-        if r.name.split(".")[0] in ("anthropic", "httpx", "httpcore")
+        if r.name.split(".")[0] in ("anthropic", "httpx", "httpcore", "httpx2", "httpcore2")
         and r.levelno < logging.WARNING
     ] == []
     assert len(texte.splitlines()) == 2  # un span par appel, succès puis erreur
 
 
+_RESEAU = ("anthropic", "httpx", "httpcore", "httpx2", "httpcore2")
+
+_SCRIPT_ANTHROPIC_LOG = """
+import io, logging, sys
+import httpx2
+from pydantic import SecretStr
+from wavelibrarian.llm.providers.anthropic import AnthropicProvider  # SDK importé ici
+from wavelibrarian.llm.providers.logs import limiter_journaux
+from wavelibrarian.ports.gateway import LLMRequest, Message
+
+assert logging.getLogger("anthropic").level == logging.DEBUG  # ANTHROPIC_LOG lu à l'import
+assert logging.getLogger("httpx2").level == logging.DEBUG
+flux = io.StringIO()
+capture = logging.StreamHandler(flux)
+racine = logging.getLogger()
+racine.addHandler(capture)
+racine.setLevel(logging.DEBUG)
+limiter_journaux(capture)
+ok = {"id": "m", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+      "content": [{"type": "text", "text": "oui"}], "stop_reason": "end_turn",
+      "stop_sequence": None, "usage": {"input_tokens": 1, "output_tokens": 1}}
+erreur = {"type": "error", "error": {"type": "invalid_request_error", "message": "non"}}
+reponses = [httpx2.Response(200, json=ok), httpx2.Response(400, json=erreur)]
+client = httpx2.Client(transport=httpx2.MockTransport(lambda r: reponses.pop(0)))
+provider = AnthropicProvider(SecretStr(sys.argv[1]), http_client=client)
+req = LLMRequest(model_id="claude-haiku-5-5", role="generate", step="generate", system="s",
+                 messages=(Message(role="user", content="q"),), max_tokens=8)
+provider.complete(req, timeout_s=5)
+try:
+    provider.complete(req, timeout_s=5)
+except Exception as exc:
+    print(type(exc).__name__)
+logging.getLogger("wavelibrarian").debug("temoin-debug")
+print(flux.getvalue())
+"""
+
+
+def test_anthropic_log_debug_pose_avant_l_import_sans_fuite(tmp_path: Path) -> None:
+    """`ANTHROPIC_LOG=debug` est lu à l'import du SDK : sous-processus où il est posé avant."""
+    env = {**os.environ, "ANTHROPIC_LOG": "debug", "PYTHONIOENCODING": "utf-8"}
+    env.pop("ANTHROPIC_API_KEY", None)
+    script = tmp_path / "script.py"
+    script.write_text(_SCRIPT_ANTHROPIC_LOG, encoding="utf-8")
+    fini = subprocess.run(
+        [sys.executable, str(script), CLE],
+        env=env, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False,
+    )  # fmt: skip
+    assert fini.returncode == 0, fini.stderr[-2000:]
+    sortie = fini.stdout + fini.stderr  # stderr : gestionnaire posé par le SDK (`basicConfig`)
+    assert "ProviderError" in sortie and "temoin-debug" in sortie  # appel en erreur, DEBUG actif
+    assert CLE not in sortie and "x-api-key" not in sortie.lower()
+
+
 def test_les_loggers_reseau_sont_forces_a_warning() -> None:
-    for nom in ("anthropic", "httpx", "httpcore"):
+    for nom in _RESEAU:
         logging.getLogger(nom).setLevel(logging.DEBUG)
     limiter_journaux()
-    assert all(
-        logging.getLogger(n).level == logging.WARNING for n in ("anthropic", "httpx", "httpcore")
-    )
+    assert all(logging.getLogger(n).level == logging.WARNING for n in _RESEAU)
     # Le filtre du gestionnaire tient même si un niveau est relevé après coup.
     capture = _Capture()
     limiter_journaux(capture)
@@ -438,6 +499,31 @@ def test_ollama_corps_du_profil_cpu_avec_schema() -> None:
     assert [m["role"] for m in corps["messages"]] == ["system", "user"]
     assert (rep.usage.input_tokens, rep.usage.output_tokens) == (31, 9)
     assert Sortie.model_validate_json(rep.text).reponse == "Paris"
+
+
+def test_ollama_num_ctx_du_catalogue_sauf_si_le_profil_le_fixe() -> None:
+    t = Transport(Resp(200, json=REPONSE_OLLAMA))
+    profil = load_profile("cpu").ollama
+    p = OllamaProvider(profil, context_windows={MINICPM: 32768}, http_client=t.client(httpx))
+    assert p.native_request(_req(MINICPM), None)["options"]["num_ctx"] == 32768
+    assert "num_ctx" not in p.native_request(_req("autre:1b"), None)["options"]
+    fixe = profil.model_copy(update={"options": {**profil.options, "num_ctx": 8192}})
+    p2 = OllamaProvider(fixe, context_windows={MINICPM: 32768}, http_client=t.client(httpx))
+    assert p2.native_request(_req(MINICPM), None)["options"]["num_ctx"] == 8192
+
+
+def test_ollama_fenetre_remplie_journalisee(caplog: pytest.LogCaptureFixture) -> None:
+    plein = {**REPONSE_OLLAMA, "prompt_eval_count": 4000, "eval_count": 96}
+    t = Transport(Resp(200, json=plein), Resp(200, json=REPONSE_OLLAMA))
+    p = OllamaProvider(
+        load_profile("cpu").ollama, context_windows={MINICPM: 4096}, http_client=t.client(httpx)
+    )
+    with caplog.at_level(logging.WARNING, logger="wavelibrarian.llm.providers.ollama"):
+        p.complete(_req(MINICPM), timeout_s=5)
+        assert any("tronqué" in r.getMessage() for r in caplog.records)
+        caplog.clear()
+        p.complete(_req(MINICPM), timeout_s=5)
+        assert caplog.records == []
 
 
 def test_ollama_sans_schema_ni_graine() -> None:

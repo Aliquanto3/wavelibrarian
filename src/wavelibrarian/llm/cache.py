@@ -21,8 +21,13 @@ def role_marker(role: str) -> str:
     return f"[[wl:role={role}]]\n"
 
 
-def cache_key(request: LLMRequest, provider: str) -> str:
-    """`sha256(canonical_json(model, params, system, messages, pass_id))`.
+def cache_key(
+    request: LLMRequest, provider: str, output_schema: dict[str, Any] | None = None
+) -> str:
+    """`sha256(canonical_json(model, params, system, messages, pass_id[, output_schema]))`.
+
+    `output_schema` (schéma JSON de `complete_structured`) entre dans la clé quand il est
+    donné : il change la requête native (outil imposé, `format` d'Ollama) et donc la réponse.
 
     `step`, `role`, `cache_system`, `Message.cache` et `timeout_s` n'y entrent pas (ils ne
     changent pas la réponse). `inputs` et `step` n'y entrent que pour un provider `fake` : il
@@ -50,6 +55,8 @@ def cache_key(request: LLMRequest, provider: str) -> str:
     if provider == "fake":
         contenu["inputs"] = request.inputs
         contenu["step"] = request.step  # `script(role, step_glob, …)` : sortie selon l'étape
+    if output_schema is not None:
+        contenu["output_schema"] = output_schema
     return hashlib.sha256(canonical_json(contenu).encode("utf-8")).hexdigest()
 
 

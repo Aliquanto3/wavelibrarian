@@ -440,3 +440,60 @@ def test_energie_lue_par_le_provider_prime_sur_l_estimateur(make_env: Callable[.
     env.gw.complete(_req("claude-haiku-5-5"))
     (s,) = env.spans()
     assert s["wl.energy_kwh"] == 0.5 and s["wl.energy_method"] == "estimated"
+
+
+# --- Revue story 1.11 : essai déjà parti, schéma dans la clé, câblage par défaut ----------------
+
+
+def test_un_essai_parti_n_est_jamais_relance(make_env: Callable[..., Env]) -> None:
+    """Même `retryable`, un essai `sent` a pu être facturé : un seul envoi, réglé une fois."""
+    env = make_env(ProviderError("délai", retryable=True, sent=True), "ok", budget=_budget("1.00"))
+    with pytest.raises(ProviderError):
+        env.gw.complete(_req())
+    assert len(env.provider.requests) == 1 and env.sleeps == []
+    (estimation,) = env.reserved
+    assert env.ledger.balance("fake").run_remaining == D("1.00") - estimation
+
+
+def test_le_schema_entre_dans_la_cle_de_cache(make_env: Callable[..., Env]) -> None:
+    class Autre(BaseModel):
+        autre: int
+
+    env = make_env("texte libre", '{"reponse": "x"}', '{"autre": 1}')
+    env.gw.complete(_req())
+    valeur, res = env.gw.complete_structured(_req(), Schema)  # même prompt, autre mode
+    assert not res.from_cache and valeur.reponse == "x"
+    _, res2 = env.gw.complete_structured(_req(), Autre)  # autre schéma : autre clé
+    assert not res2.from_cache
+    _, res3 = env.gw.complete_structured(_req(), Schema)  # même schéma : servi par le cache
+    assert res3.from_cache and len(env.provider.requests) == 3
+
+
+def test_build_gateway_branche_les_providers_du_catalogue(
+    wl_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian.runner import wiring
+
+    appels: list[str] = []
+    monkeypatch.setattr(wiring, "make_estimator", lambda _s: FakeEstimator())
+    monkeypatch.setattr(wiring, "init_ecologits", lambda: appels.append("init"))
+    ledger = Ledger(_budget(), "run-1", wl_home)
+    cache = ResponseCache(wl_home)
+    try:
+        gw = build_gateway(
+            catalog=load_catalog(),
+            profile=load_profile("cpu"),
+            ledger=ledger,
+            cache=cache,
+            tracer=Tracer(_Ctx(), tmp_path / "t.jsonl"),
+        )
+        providers: Any = gw._providers  # type: ignore[attr-defined]
+        assert set(providers) == {"anthropic", "ollama", "fake"}
+        corps = providers["ollama"].native_request(_req("minicpm5:1b-q4_k_m"), None)
+        assert (
+            corps["options"]["num_ctx"] == load_catalog().get("minicpm5:1b-q4_k_m").context_window
+        )
+        assert appels == ["init"]  # profil cpu : estimateur ecologits
+    finally:
+        ledger.close()
+        cache.close()

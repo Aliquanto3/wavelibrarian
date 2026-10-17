@@ -16,6 +16,7 @@ from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_expo
 
 from wavelibrarian.config.catalog import ModelCatalog
 from wavelibrarian.config.experiment import RetrySettings
+from wavelibrarian.config.schemas import OllamaSettings
 from wavelibrarian.core.errors import BudgetExceeded, NonConformantOutput, ProviderError, WlError
 from wavelibrarian.core.types import Usage
 from wavelibrarian.llm.budget import Ledger
@@ -30,6 +31,25 @@ T = TypeVar("T", bound=BaseModel)
 Providers = Mapping[str, Provider]  # nom du Catalogue -> adaptateur ; seul `gateway` les importe
 _DEVISE_LOCALE = "EUR"  # modèle local : coût nul, devise du coût de possession (costs.yaml)
 _Statut = Literal["ok", "error", "budget_refused", "non_conformant"]
+
+
+def build_providers(catalog: ModelCatalog, ollama: OllamaSettings) -> dict[str, Provider]:
+    """Adaptateurs du Catalogue : `anthropic` (clé lue au premier appel), `ollama` (`num_ctx`
+    tiré du `context_window` du Catalogue) et `fake`. Seule la passerelle importe les providers."""
+    from wavelibrarian.llm.providers.anthropic import AnthropicProvider
+    from wavelibrarian.llm.providers.fake import FakeProvider
+    from wavelibrarian.llm.providers.ollama import OllamaProvider
+
+    fenetres = {
+        m.id: m.context_window
+        for m in catalog.models
+        if m.provider == "ollama" and m.context_window is not None
+    }
+    return {
+        "anthropic": AnthropicProvider(),
+        "ollama": OllamaProvider(ollama, context_windows=fenetres),
+        "fake": FakeProvider(),
+    }
 
 
 class MeteredGateway:
@@ -118,7 +138,10 @@ class MeteredGateway:
             wait=wait_exponential(
                 multiplier=self._retries.backoff_s, max=self._retries.max_backoff_s
             ),
-            retry=retry_if_exception(lambda e: isinstance(e, ProviderError) and e.retryable),
+            # Un essai `sent` (parti sans réponse) a pu être facturé : jamais relancé (AD-9).
+            retry=retry_if_exception(
+                lambda e: isinstance(e, ProviderError) and e.retryable and not e.sent
+            ),
             sleep=self._sleep,
             reraise=True,
         ):
@@ -179,7 +202,9 @@ class MeteredGateway:
             raise WlError(f"aucun provider `{nom}` branché pour le modèle {request.model_id!r}")
         devise = entry.pricing.currency if entry.pricing else _DEVISE_LOCALE
         marquee = self._marquer(request)
-        cle = cache_key(marquee, nom)  # après le marquage : le rôle entre dans la clé
+        schema_json = schema.model_json_schema() if schema is not None else None
+        # Après le marquage : le rôle entre dans la clé ; le schéma aussi (il change la requête).
+        cle = cache_key(marquee, nom, schema_json)
 
         cached = self._cache.get(cle) if use_cache else None
         if cached is not None:
@@ -190,7 +215,6 @@ class MeteredGateway:
                 latency_s=0.0, from_cache=True, stocker=None,
             )  # fmt: skip
 
-        schema_json = schema.model_json_schema() if schema is not None else None
         estimation = self._catalog.cost(
             request.model_id, self._estimation(marquee, provider, schema_json)
         )
