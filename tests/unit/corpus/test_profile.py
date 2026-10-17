@@ -167,3 +167,27 @@ def test_cli_corpus_invalide_sort_en_code_2(tmp_path: Path, wl_home: Path) -> No
     )
     assert r.exit_code == 2
     assert not (tmp_path / "corpus_profile.json").exists()
+
+
+def test_entites_apostrophe_typographique_elision_et_initiale() -> None:
+    a = extraire_entites("On cite la Guilde d’Orvane ici.")
+    b = extraire_entites("On cite la Guilde d'Orvane ici.")
+    assert a == b == {"guilde d'orvane"}
+    assert extraire_entites("Il cite l'ONU et l’OTAN, puis qu'Anna part.") == {
+        "onu",
+        "otan",
+        "anna",
+    }
+    assert extraire_entites("Le rapport de M. Durand.") == set()  # « M » seul est écarté
+
+
+def test_cli_resume_en_francais_et_profil_inconnu(tmp_path: Path, wl_home: Path) -> None:
+    yml = _ecrire_corpus(tmp_path)
+    args = ["corpus", "profiler", str(yml), "--sortie", str(tmp_path / "out")]
+    r = runner.invoke(app, [*args, "--profil", "test"])
+    assert r.exit_code == 0, r.output
+    assert "Profondeur de titres : max 2, moyenne 1,50" in r.output
+    assert "Densité de liens : 1,00" in r.output
+    r = runner.invoke(app, [*args, "--profil", "inexistant"])
+    assert r.exit_code == 2
+    assert "Configuration invalide" in r.output

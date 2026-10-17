@@ -171,6 +171,11 @@ def questions_controler(
     typer.echo("Contrôle réussi.")
 
 
+def _fr(valeur: float, decimales: int = 2) -> str:
+    """Nombre à virgule décimale, pour les résumés en français."""
+    return f"{valeur:.{decimales}f}".replace(".", ",")
+
+
 corpus_app = typer.Typer(help="Déclarer, ingérer et profiler un Corpus.", no_args_is_help=True)
 app.add_typer(corpus_app, name="corpus")
 
@@ -201,28 +206,34 @@ def corpus_profiler(
             volatility=declare_corpus.spec.volatility,
         )
     except ConfigError as erreur:
-        typer.echo(f"Corpus invalide : {erreur}", err=True)
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
     except WlError as erreur:
         typer.echo(f"Erreur : {erreur}", err=True)
         raise typer.Exit(1) from erreur
-    sortie.mkdir(parents=True, exist_ok=True)
     fichier = sortie / "corpus_profile.json"
-    fichier.write_text(
-        json.dumps(p.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    try:
+        sortie.mkdir(parents=True, exist_ok=True)
+        fichier.write_text(
+            json.dumps(p.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as erreur:
+        typer.echo(f"Erreur : écriture de {fichier} impossible ({erreur.strerror})", err=True)
+        raise typer.Exit(1) from erreur
     formats = ", ".join(f"{k} : {v}" for k, v in p.formats.items())
     langues = ", ".join(f"{k} : {v}" for k, v in p.langs.items())
     typer.echo(f"Profil du Corpus « {p.corpus_id} » (empreinte {p.fingerprint}) écrit : {fichier}")
     typer.echo(f"  Documents : {p.n_documents} ({formats})")
     typer.echo(
         f"  Tokens : {p.n_tokens} (tokenizer {p.tokenizer}), "
-        f"{p.mean_tokens_per_document:.1f} par Document"
+        f"{_fr(p.mean_tokens_per_document, 1)} par Document"
     )
     typer.echo(
-        f"  Profondeur de titres : max {p.heading_depth_max}, moyenne {p.heading_depth_mean:.2f}"
+        f"  Profondeur de titres : max {p.heading_depth_max}, moyenne {_fr(p.heading_depth_mean)}"
     )
-    typer.echo(f"  Densité de liens : {p.link_density:.2f} ; part tabulaire : {p.table_share:.2f}")
-    typer.echo(f"  Images par Document : {p.images_per_document:.2f}")
+    typer.echo(
+        f"  Densité de liens : {_fr(p.link_density)} ; part tabulaire : {_fr(p.table_share)}"
+    )
+    typer.echo(f"  Images par Document : {_fr(p.images_per_document)}")
     typer.echo(f"  Langue dominante : {p.dominant_lang} ({langues}) ; volatilité : {p.volatility}")

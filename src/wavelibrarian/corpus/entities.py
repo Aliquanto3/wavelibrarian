@@ -9,20 +9,25 @@ import re
 from wavelibrarian.core.types import ParsedCorpus, ParsedDocument
 
 _CAP = r"[A-ZÀ-ÖØ-Þ][\w-]*"
-_LIAISON = r"(?:\s+(?:de la|de|du|des|of|the)\s+|\s+d['’]|\s+)"
-_ENTITE = re.compile(rf"(?<![\w'’-])({_CAP}(?:{_LIAISON}{_CAP})*)")
+_LIAISON = r"(?:\s+(?:de la|de|du|des|of|the)\s+|\s+d'|\s+)"
+# Début de mot, ou juste après une élision (« l'ONU », « d'Orvane », « qu'Anna ») ; les
+# apostrophes typographiques sont ramenées à « ' » avant la recherche.
+_DEBUT = r"(?:(?<=\b[cdjlmnstCDJLMNST]')|(?<=\b[qQ]u')|(?<![\w'-]))"
+_ENTITE = re.compile(rf"{_DEBUT}({_CAP}(?:{_LIAISON}{_CAP})*)")
 _PHRASES = re.compile(r"(?<=[.!?…])\s+|\n+")
 
 
 def extraire_entites(texte: str) -> set[str]:
     """Entités du texte, sous forme normalisée (minuscules, espaces simples)."""
     entites: set[str] = set()
-    for phrase in _PHRASES.split(texte):
+    for phrase in _PHRASES.split(texte.replace("’", "'")):
         morceaux = phrase.strip().split(None, 1)
         if len(morceaux) < 2:
             continue  # le seul mot d'une phrase est son début
         for m in _ENTITE.finditer(morceaux[1]):
-            entites.add(" ".join(m.group(1).split()).casefold())
+            entite = " ".join(m.group(1).split()).casefold()
+            if len(entite) > 1:  # une initiale seule (« M. ») ne nomme rien
+                entites.add(entite)
     return entites
 
 
