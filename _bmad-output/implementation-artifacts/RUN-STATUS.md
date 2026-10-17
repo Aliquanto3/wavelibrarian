@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-17 21:20 |
-| Story en cours | 1.3 |
-| Stories livrées | 2 / 56 |
+| Mis à jour | 2026-10-17 21:30 |
+| Story en cours | 1.4 |
+| Stories livrées | 3 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -62,6 +62,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 21:09 | 20 (lfm2.5-2.6b / reasoning) ; 11 sur les 10 min précédentes ; +82 % | 12 % | 16,7 Go | 1 s, 86 Mo, 101 thr (uv/pytest du run) | Sous les seuils : on continue (1.2) |
 | 21:20 | 19 (lfm2.5-2.6b / reasoning) ; 10 min avant : 23 ; -17 % | 16 % | 17,2 Go | 1 s, 86 Mo, 70 thr (9 proc) | Faux signal : la piste reasoning s'est terminée vers 21:19 (passage à rag), fenêtre incomplète ; intervalle par réponse inchangé (~41 s). On continue (1.3). Mesure passée en secondes par réponse. |
 | 21:22 | Indicateur révisé : durée des réponses tronquées (budget de tokens fixe), même modèle / mode / jeu. think_on reasoning/bbeh-mini 42 s vs 41 s (−3 %) | 7 % | 17,0 Go | 0 s, 86 Mo, 54 thr | Pas de ralentissement réel : on continue (1.3). Les comptages bruts par piste mélangent des questions de longueurs très différentes. |
+| 21:30 | 2 tronq. (lfm2.5-2.6b) : think_on reasoning/bbeh-mini 1 tronq., 42 s/tronq. (pas de réf.) ; think_on tools/bfcl-multi 1 tronq., 25 s/tronq. (pas de réf.) ; pire +0 % | 12 % | 15.5 Go | 1 s, 86 Mo, 76 thr (9 proc) | Sous les seuils : on continue (1.4) |
 
 ## Journal des stories
 
@@ -69,3 +70,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | --- | --- | --- | --- | --- | --- |
 | 1.1 | 21:00 | 21:09 | 4f3294e21ae06ae43b9c78fefa2887e0c331053c | 0 $ | Revue : 2 high (contrats import-linter inopérants, test lint-imports vide) et 1 medium corrigés ; typer `>=0.26,<1` (conflit docling `<0.27`) ; test socket sous Linux reporté à une story outillage. 14 tests verts. |
 | 1.2 | 21:10 | 21:30 | e349d1970419bd0b7d13367023ed0aeca48430a3 | 0 $ | Revue : 2 medium corrigés (index_key lit le parser résolu via RunContext.parser, contracts.md §2.4 mis à jour ; ArchCapabilities gelé + extra=forbid). 33 tests verts. |
+| 1.3 | 21:23 | 21:40 | 3908cf1d4686321c7aa58ba162b2c59230b53789 | 0 $ | Revue : 2 medium corrigés (fuite sys.modules dans la fixture ; register exige Params forbid+frozen, AD-2) et 6 low. 42 tests verts. |
