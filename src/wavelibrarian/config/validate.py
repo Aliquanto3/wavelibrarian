@@ -174,6 +174,11 @@ def validate_experiment(
         except ConfigError as exc:
             pool_connu = False
             erreurs.append(ConfigError(f"judges.pool[{i}]", exc.message))
+    if (juge_calib := resolved.judges.calibration_judge) is not None:
+        try:
+            catalog.get(juge_calib)
+        except ConfigError as exc:
+            erreurs.append(ConfigError("judges.calibration_judge", exc.message))
     excluded: frozenset[str] = frozenset()
     if resolved.judges.excluded_from:
         try:

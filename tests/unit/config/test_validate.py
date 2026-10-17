@@ -415,3 +415,41 @@ def test_validate_experiment_sur_objet(ecrire: Callable[..., Path], wl_home: Pat
     chemin = ecrire(BASE)
     exp = load_experiment(chemin)
     assert validate_experiment(exp, chemin, wl_home).panels
+
+
+# --- Revue : agrégation complète, calibration stricte, juge de calibration ---
+
+
+def test_cles_inconnues_multiples_et_defauts_imbriques_agreges(
+    ecrire: Callable[..., Path], wl_home: Path
+) -> None:
+    gen = {"name": "llm_test", "params": {"model": "ghost", "zz": 0}}
+    chemin = ecrire({**BASE, "configurations": [_conf("a", kk=1, kk2=2, generator=gen)]})
+    assert sorted(_chemins(_echec(chemin, wl_home))) == [
+        "configurations[0].params.generator.params.model",
+        "configurations[0].params.generator.params.zz",
+        "configurations[0].params.kk",
+        "configurations[0].params.kk2",
+    ]
+
+
+def test_calibration_excluded_doit_etre_booleen(tmp_path: Path) -> None:
+    fichier = tmp_path / "cal.json"
+    fichier.write_text('{"judges": {"fake-llm-c": {"excluded": "true"}}}', encoding="utf-8")
+    with pytest.raises(ConfigError, match=r"judges\.fake-llm-c\.excluded"):
+        excluded_judges(fichier)
+    fichier.write_text(
+        '{"judges": {"fake-llm-c": {"excluded": true, "criteria": {}}, '
+        '"fake-llm-b": {"excluded": false}}, "inter_annotator": {}}',
+        encoding="utf-8",
+    )
+    assert excluded_judges(fichier) == {"fake-llm-c"}
+
+
+def test_juge_de_calibration_absent_du_catalogue(
+    ecrire: Callable[..., Path], wl_home: Path
+) -> None:
+    chemin = ecrire({**BASE, "judges": {"calibration_judge": "ghost-cal"}})
+    echec = _echec(chemin, wl_home)
+    assert _chemins(echec) == ["judges.calibration_judge"]
+    assert "ghost-cal" in echec.errors[0].message

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic.fields import FieldInfo
 
 from wavelibrarian import registry
@@ -21,7 +21,7 @@ from wavelibrarian.config.experiment import (
     ResolvedConfiguration,
     ResolvedExperiment,
 )
-from wavelibrarian.config.schemas import ProfileSettings, valider
+from wavelibrarian.config.schemas import ProfileSettings, config_error, valider
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.core.ids import canonical_json
 from wavelibrarian.core.types import ModelRefMeta
@@ -148,11 +148,12 @@ def resoudre_params(
     modele: type[BaseModel], brut: dict[str, Any], chemin: str, col: Collecte
 ) -> dict[str, Any]:
     """Valide `brut` contre `modele` (clés inconnues refusées) puis complète les défauts."""
-    try:
+    if col.erreurs is None:
         inst = valider(modele, brut, prefixe=chemin)
-    except ConfigError as exc:
-        col.signaler(exc)
-        return dict(brut)
+    else:
+        inst = _valider_en_agregeant(modele, brut, chemin, col.erreurs)
+        if inst is None:
+            return dict(brut)
     res = inst.model_dump(mode="python")
     for nom, champ in modele.model_fields.items():
         chem = f"{chemin}.{nom}"
@@ -161,6 +162,28 @@ def resoudre_params(
         except ConfigError as exc:
             col.signaler(exc)
     return res
+
+
+def _valider_en_agregeant(
+    modele: type[BaseModel], brut: dict[str, Any], chemin: str, erreurs: list[ConfigError]
+) -> BaseModel | None:
+    """Note toutes les erreurs de `brut`, puis revalide sans les clés fautives.
+
+    Le parcours des Composants et modèles imbriqués continue ainsi malgré une clé inconnue ou
+    invalide ; None si `brut` reste invalide sans ces clés (champ requis manquant, racine).
+    """
+    try:
+        return modele.model_validate(brut)
+    except ValidationError as exc:
+        details = exc.errors()
+    erreurs.extend(config_error(err, prefixe=chemin) for err in details)
+    fautives = {err["loc"][0] for err in details if err["loc"]}
+    if not fautives:
+        return None
+    try:
+        return modele.model_validate({k: v for k, v in brut.items() if k not in fautives})
+    except ValidationError:
+        return None
 
 
 def _resoudre_champ(

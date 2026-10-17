@@ -160,12 +160,16 @@ def valider[M: BaseModel](modele: type[M], donnees: Any, source: str = "", prefi
     try:
         return modele.model_validate(donnees)
     except ValidationError as exc:
-        err = exc.errors()[0]
-        chemin = _chemin(err)
-        if prefixe:
-            if chemin == "(racine)":
-                chemin = prefixe
-            else:
-                chemin = prefixe + (chemin if chemin.startswith("[") else f".{chemin}")
-        msg = str(err["msg"]).removeprefix("Value error, ")
-        raise ConfigError(chemin, f"{msg} ({source})" if source else msg) from exc
+        raise config_error(exc.errors()[0], source, prefixe) from exc
+
+
+def config_error(err: ErrorDetails, source: str = "", prefixe: str = "") -> ConfigError:
+    """Une erreur pydantic devenue `ConfigError` au chemin pointé, sous `prefixe`."""
+    chemin = _chemin(err)
+    if prefixe:
+        if chemin == "(racine)":
+            chemin = prefixe
+        else:
+            chemin = prefixe + (chemin if chemin.startswith("[") else f".{chemin}")
+    msg = str(err["msg"]).removeprefix("Value error, ")
+    return ConfigError(chemin, f"{msg} ({source})" if source else msg)

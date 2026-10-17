@@ -1,7 +1,7 @@
 ---
 story: "1.6"
 title: Validation statique d'une Expérience et formation du Panel
-status: review
+status: done
 ---
 
 # Story 1.6 : Validation statique d'une Expérience et formation du Panel
@@ -20,9 +20,9 @@ status: review
 - Articulation avec la 1.5 : `load_experiment` reste strict par défaut (première `ConfigError`). `validate_file` le charge avec `verifier_params=False` puis rejoue la résolution en mode agrégation : une erreur de `params`, un Composant ou une Architecture inconnus, un modèle absent du Catalogue sont notés et le parcours continue (au sein d'une Configuration comme d'une Configuration à l'autre). Une Architecture inconnue saute le reste de sa Configuration. Une erreur de schéma, de profil, de Catalogue ou de coûts reste unique (enveloppée dans un `ValidationFailed`).
 - Contrôles : modèle absent du Catalogue (chemin du champ `ModelRef`), `requires_hybrid_store` contre `StoreCapabilities.hybrid` de chaque `vector_store` de la Configuration, `requires_prompt_cache` contre `prompt_cache` de chaque `answer_producer` (le message cite le modèle), dimension de `WL_HOME/index/<clé>/manifest.json` contre `dim` du Catalogue pour chaque embedder, Juge explicite, Panel. Le prix des modèles d'API est déjà exigé au chargement du Catalogue (1.4). Les erreurs sont dédoublonnées sur (chemin, message).
 - `reuse_index` : clé de forme `[A-Za-z0-9_-]+`, manifeste illisible ou absent = refus ; manifeste sans `embedder_dim` ou Configuration sans embedder = rien à comparer. `WL_HOME` : paramètre, sinon variable d'environnement, sinon `./.wl`.
-- Juge « déclaré explicitement » : tout modèle référencé par un `ModelRef` sous un Composant de `kind` `judge` dans la Configuration (suivi par la pile des `kind` de `Collecte`). Un modèle du réservoir de la même Famille est seulement écarté du Panel, pas refusé. `judges.calibration_judge` n'est pas contrôlé (il ne note pas les Réponses d'une Configuration).
+- Juge « déclaré explicitement » : tout modèle référencé par un `ModelRef` sous un Composant de `kind` `judge` dans la Configuration (suivi par la pile des `kind` de `Collecte`). Un modèle du réservoir de la même Famille est seulement écarté du Panel, pas refusé. `judges.calibration_judge` est seulement contrôlé au Catalogue (il ne note pas les Réponses d'une Configuration, donc pas de règle de Famille).
 - Panel (AD-14) : `panel_size` premiers modèles du réservoir, ordre déclaré, hors Famille de chaque `answer_producer` et hors Juges exclus ; moins de 2 = `ConfigError` (`judges.pool`, message préfixé de l'id de la Configuration). Un `panel_size` de 1 est donc toujours refusé.
-- Format de `calibration.json` retenu (le contrat ne le fixe pas) : `{"judges": {"<modèle>": {"excluded": bool, "criteria": {...}}}}`. À respecter par `wl calibrer` (epic 3).
+- Format de `calibration.json` retenu (§4.6 ne fixe que « par Juge et par Critère, `excluded: bool` ») : `{"judges": {"<modèle>": {"excluded": bool, "criteria": {...}}}}`, validé par pydantic (`excluded` booléen strict, autres clés libres). À respecter par `wl calibrer` (epic 3).
 - `closed_book_judge(modèle_testé, réservoir, catalogue)` prend le Catalogue en plus : les Familles ne se lisent que là. `form_panel` et `closed_book_judge` vivent dans `config/` (couche basse), `scoring/` les importera.
 - CLI : erreurs sur stderr en français avec leur chemin, code de sortie 2 ; Expérience valide : « Validation réussie. » (le préflight de la 1.12 et le runner de l'epic 4 s'y insèrent).
 
@@ -40,3 +40,15 @@ status: review
 - Statut : prêt pour revue.
 - Reports : le format de `calibration.json` est à confirmer par `wl calibrer` (epic 3) ; `wl run` ne fait que valider jusqu'à l'epic 4 ; `Architecture.check(profile)` (fenêtre, palier) reste à appeler par le runner après profilage ; `requires_hybrid_store` sans aucun `vector_store` dans la Configuration n'est pas refusé.
 - Aucun appel réseau, ni Ollama, ni GPU (`CUDA_VISIBLE_DEVICES=-1`, threads à 4).
+
+## Revue
+
+Revue Opus du 2026-10-17 sur 31fcb9d, avec la liste du second avis (Haiku).
+
+- medium, second avis 1 : corrigé. En mode agrégation, un Params en échec renvoyait `dict(brut)` sans parcourir ses Composants et modèles imbriqués (erreurs perdues, reproduit). `_valider_en_agregeant` note toutes les erreurs puis revalide sans les clés fautives pour continuer le parcours. Test : `test_cles_inconnues_multiples_et_defauts_imbriques_agreges`.
+- medium, second avis 2 : corrigé avec le 1. Toutes les erreurs pydantic d'un Params sont notées (`config_error` extrait de `valider`, qui reste à la première erreur hors agrégation).
+- medium, second avis 3 : corrigé en partie. `calibration_judge` absent du Catalogue passait la validation (reproduit, contraire à AD-13 « modèles présents au Catalogue »), il est désormais refusé (`test_juge_de_calibration_absent_du_catalogue`). La règle de Famille est écartée : AD-14 ne l'applique qu'au Panel et au Juge closed-book, et le juge de calibration ne note pas les Réponses d'une Configuration.
+- medium, second avis 7 : corrigé. `"excluded": "true"` était ignoré en silence et laissait le Juge dans le Panel. `calibration.json` est validé par un schéma pydantic (`excluded: StrictBool`, autres clés libres jusqu'à `wl calibrer`). Le format reste à confirmer à l'epic 3. Test : `test_calibration_excluded_doit_etre_booleen`.
+- low, second avis 4 : reporté (déjà consigné). Une Architecture `requires_hybrid_store` sans aucun `vector_store` n'est pas refusée : l'AC ne vise que le store `hybrid: false`.
+- low, second avis 5 : rejeté. `closed_book_judge` prend le Catalogue en troisième argument parce que les Familles ne se lisent que là. Écart consigné dans les Design Notes.
+- low, second avis 6 : rejeté. AD-14 ne refuse qu'en dessous de 2 Juges et n'impose pas un Panel de taille exacte `panel_size`. Un Panel plus court est affiché au Rapport (contracts.md, section Juges).

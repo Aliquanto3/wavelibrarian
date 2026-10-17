@@ -4,7 +4,10 @@ import json
 from collections.abc import Collection, Sequence
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict, StrictBool
+
 from wavelibrarian.config.catalog import ModelCatalog
+from wavelibrarian.config.schemas import valider
 from wavelibrarian.core.errors import ConfigError
 
 PANEL_MIN = 2  # moins de deux Juges admissibles : la Configuration est refusée
@@ -18,16 +21,25 @@ def excluded_judges(chemin: Path) -> frozenset[str]:
         raise ConfigError(
             "judges.excluded_from", f"calibration illisible : {chemin.as_posix()} ({exc})"
         ) from exc
-    juges = donnees.get("judges") if isinstance(donnees, dict) else None
-    if not isinstance(juges, dict):
+    try:
+        calibration = valider(_Calibration, donnees)
+    except ConfigError as exc:
         raise ConfigError(
-            "judges.excluded_from", f"{chemin.as_posix()} : clé `judges` (dictionnaire) attendue"
-        )
-    return frozenset(
-        str(modele)
-        for modele, fiche in juges.items()  # pyright: ignore[reportUnknownVariableType]
-        if isinstance(fiche, dict) and fiche.get("excluded") is True  # pyright: ignore[reportUnknownMemberType]
-    )
+            "judges.excluded_from", f"{chemin.as_posix()} : {exc.path} : {exc.message}"
+        ) from exc
+    return frozenset(m for m, fiche in calibration.judges.items() if fiche.excluded)
+
+
+class _FicheJuge(BaseModel):
+    """Fiche d'un Juge : `excluded` booléen strict ; kappas et Critères libres jusqu'à l'epic 3."""
+
+    model_config = ConfigDict(extra="allow", frozen=True)
+    excluded: StrictBool
+
+
+class _Calibration(BaseModel):
+    model_config = ConfigDict(extra="allow", frozen=True)
+    judges: dict[str, _FicheJuge]
 
 
 def form_panel(
