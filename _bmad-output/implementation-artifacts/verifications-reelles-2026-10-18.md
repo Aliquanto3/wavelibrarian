@@ -68,3 +68,38 @@ Commande : `WL_HOME=<scratchpad>/home1 uv run wl run experiments/mini-cpu.yaml`.
 
 - Seuil lazy_graphrag : aucune donnée ; garder 0,4 par défaut jusqu'à mesure (plage à tester 0,3 à 0,5).
 - Generator CPU : `minicpm5:1b` échoue au schéma dans un tiers des appels et sur tous ceux de PageIndex ; prévoir un Generator de 3-4 B (`granite4.2:3b`, 5,1 Go à 32 768) ou des relances, après avoir vérifié le `format` Ollama.
+
+## Troisième série (correctif des sorties structurées)
+
+Code testé : `fix-juges-schema` à `f0762bc` (`inline_refs`, `think: false`, `clean_content`). `OMP_NUM_THREADS=4`, `CUDA_VISIBLE_DEVICES=-1`, un seul serveur Ollama, aucune API Anthropic. Aucun changement de code dans cette série. Run et script d'essai dans le scratchpad, non commités.
+
+### Test express (un appel par rôle, `OllamaProvider`, vrai schéma, 3 Critères pour le Juge)
+
+| Appel | Avant | Après | Tokens (entrée / sortie) |
+|---|---|---|---|
+| Juge `granite4.2:3b` (`JudgeCriteriaOutput`) | KO | OK, 25 s | 209 / 259 |
+| Juge `qwen3.5:4b` | KO | OK, 16 s | 193 / 156 |
+| `minicpm5:1b` `SelectNodesOutput` | KO | OK, 2 s | 74 / 23 |
+| `minicpm5:1b` `GenerateOutput` | KO (33 %) | OK, 1 s | 61 / 30 |
+
+`think: false` est accepté sans erreur HTTP par granite et minicpm (modèles sans réflexion). Les trois Critères reçoivent un verdict.
+
+### Run de bout en bout (`WL_HOME=<neuf> wl run experiments/mini-cpu.yaml`)
+
+| Mesure | Avant (2e série) | Après |
+|---|---|---|
+| Durée | 958 s | 9 min 30 s |
+| Réponses ok / error | 4 / 4 | 7 / 1 |
+| Critères sans verdict | 8 (tous) | 0 (49 lignes de verdicts) |
+| Panel admissible | aucun pour les 4 Configurations | `granite4.2:3b` + `qwen3.5:4b` pour les 4 (égalités : 1 pour rag-naif et raptor) |
+| `GenerateOutput` non conforme | 2 sur 6 appels | 0 |
+| `SelectNodesOutput` non conforme | 2 sur 2 | 2 appels non conformes, une seule Question (q-004) |
+| PageIndex | 0 Réponse | q-002 ok (qualité 1,00), q-004 en erreur |
+| Contexte `ollama ps` de minicpm5 | 4096 | 32768 (le `num_ctx` du Catalogue est maintenant transmis) |
+| `pareto.csv` | non interprétable | lisible (fronts qualité-coût et qualité-énergie ; bm25 et pageindex non dominés, rag-naif et raptor dominés) |
+
+Critères d'acceptation atteints : plus aucun « Critère sans verdict », panel admissible non vide. `scores.csv` porte des scores réels (bm25 0,50 ; rag-naif 0,50 ; raptor 0,50 ; pageindex 1,00 sur n = 1, tous avec n très petit).
+
+Reste : PageIndex q-004. Les deux essais de `minicpm5:1b` à l'étape `pageindex.select.1` s'arrêtent à `output_tokens = 256` = `select_max_tokens` (entrée 1932 tokens) : la sortie est tronquée, très probablement une dégénérescence répétitive de la liste `node_ids` d'un modèle de 1 B, plutôt qu'un défaut de schéma. Non investigué davantage (hors critères) ; pistes : `select_max_tokens` plus haut, `repeat_penalty` dans `ollama.options`, ou un `select_model` de 3-4 B. `wl run` sort toujours avec 0 et `completed` malgré cette erreur (seuil ou avertissement à décider, déjà reporté).
+
+Fin de vérification : `ollama stop` sur les trois modèles, `ollama ps` vide.
