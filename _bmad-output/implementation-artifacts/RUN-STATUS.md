@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 02:21 |
-| Story en cours | 4.5 (voie B) ; 6.2 (voie A) |
-| Stories livrées | 32 / 56 |
+| Mis à jour | 2026-10-18 02:38 |
+| Story en cours | 4.5 (voie B, revue) ; 6.3 (voie A) |
+| Stories livrées | 33 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -148,6 +148,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 02:02 | 6 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 6 tronq., 71 s/tronq. vs 72 (+0 %) ; pire +0 % | 15 % | 11.6 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue |
 | 02:19 | 2 tronq. (qwen3.5:4b) : think_on reasoning/var-math-fr 2 tronq., 70 s/tronq. (pas de réf.) ; pire +0 % | 17 % | 10.8 Go | 7 s, 563 Mo, 122 thr (21 proc) | Sous les seuils : on continue (4.5) |
 | 02:21 | 3 tronq. (qwen3.5:4b) : think_on reasoning/var-math-fr 2 tronq., 70 s/tronq. (pas de réf.) ; think_on abstention/oneruler-fr-none 1 tronq., 43 s/tronq. (pas de réf.) ; pire +0 % | 11 % | 18.1 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (6.2) |
+| 02:38 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 3 tronq., 53 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on reasoning/bbeh-mini 1 tronq., 74 s/tronq. (pas de réf.) ; pire -14 % | 17 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (6.3) |
 
 ## Journal des stories
 
@@ -185,3 +186,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 5.1 | 01:53 | 02:02 | 661f70741198ef4ff1e2efbaa2f60394c74dd0a6 | 0 $ | Revue : fichiers non UTF-8 → ConfigError, dossier sans annotation refusé, verdict yes/no strict (SafeLoader sans booléens implicites), .yml accepté, clés dupliquées refusées. 670 tests verts. |
 | 4.4 | 02:04 | 02:19 | 79a40b2ca7cbe32587993acc10ff7ef6dab576e6 | 0 $ | Dev Opus. Revue : décompte des Réponses au manifeste et code 1 sans Réponse valide, Gel vérifié avant le préflight, écritures atomiques, attach_run_log dans le try, 4 tests (plafond, erreurs, échec de Configuration, failed). 686 tests verts. |
 | 6.1 | 02:07 | 02:21 | 093fbf0833057bc5ce0a7010f2df01ea981a639f | 0 $ | Store numpy exact, retriever dense, naive_rag. Revue : test de mise à jour sur le vrai Scénario via IndexCache et rechargement, dimension fixée après ajout valide, search vide → [], ids.json illisible → WlError. 697 tests verts. |
+| 6.2 | 02:23 | 02:38 | 768c8501a1903f783372738b12dc545b065a8fdb | 0 $ | Retriever hybride (RRF et pondéré), reranker fake, hybrid_rag. Revue : scores non reclassés plafonnés (ordre décroissant), paramètres de fusion contradictoires refusés, test BM25 après update renforcé. 716 tests verts. |
