@@ -14,13 +14,13 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 11:27 |
-| Story en cours | voie A : 8.2 (revue) ; voie B : 8.7 |
-| Stories livrées | 2 / 9 (8.10 hors run) |
+| Mis à jour | 2026-10-18 11:39 |
+| Story en cours | voie A : 8.3 ; voie B : 8.7 |
+| Stories livrées | 3 / 9 (8.10 hors run) |
 | Dépense Anthropic | ~0,0103 $ (SM-4 de 8.2) / plafond 5 $ |
 | Ollama | **disponible** (feu vert d'Anaël, 2026-10-18) ; profil `cpu`, `num_gpu: 0`, `CUDA_VISIBLE_DEVICES=-1` ; un seul serveur |
 | Attentes envers Anaël | aucune |
-| À arbitrer par Anaël | aucun |
+| À arbitrer par Anaël | **8.2 (non bloquant)** : en profil `test`, la part matérielle de la possession locale (secondes CPU réelles des spans `local` : index, BM25) est classée fictive avec l'énergie factice, pour que `cost_eur_real` = 0 exactement (AC 2 littéral) ; une énergie `measured` reste réelle. Alternative : garder la part matérielle dans le réel et relire l'AC 2 comme « 0 hors possession ». Choix du run : le premier (spec 8-2, section « Revue »). |
 
 ## Stories livrées
 
@@ -28,6 +28,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | --- | --- | --- | --- | --- | --- |
 | 8.1 | — | 10:45 | d9d285c | 0 $ | Liste blanche SPDX exacte, message nommant la licence ; Mini-corpus CC-BY-4.0 inchangé. Revue : AC 2 couvert (licence restrictive hors dépôt ou ignorée : declare puis ingest), refus d'une licence ignorée mais suivie. 1172 tests verts. |
 | 8.4 | — | 11:27 | aef57dd | 0 $ | `think: bool \| None = False` au Catalogue, posé par la passerelle, clé de cache Ollama. Réel : real_local 2/2 ; mini-cpu 7 ok / 1 error, 49 verdicts, 9 min 11 (= référence). Revue : contracts.md aligné, test direct de cache_key. Une reprise d'un run d'avant v0.2.0 est refusée (catalog_fingerprint change) : relancer de zéro. 1177 tests verts. |
+| 8.2 | — | 11:39 | e43fdbd | ~0,0103 $ | cost_eur_real sans les spans fake, colonne cost_eur_fake ; SM-4 réel vert (cost_eur_real = Registre converti). Revue : possession des spans local à énergie factice classée fictive (cost_eur_real = 0 exactement en Faux LLM), Faux LLM pur détecté par l'absence de span réel, coût par requête et point mort sur le fictif, mention du fictif exclu en run mixte. 1181 tests verts. Arbitrage non bloquant soumis. |
 
 ## Reports entre stories
 

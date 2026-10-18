@@ -1,7 +1,7 @@
 ---
 story: "8.2"
 title: "Coûts factices hors du coût réel"
-status: review
+status: done
 ---
 
 # Story 8.2 : Coûts factices hors du coût réel
