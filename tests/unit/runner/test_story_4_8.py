@@ -179,7 +179,7 @@ def test_reprise_saute_les_cles_presentes_et_ne_fait_que_les_appels_manquants(
     payes = [s for s in spans if s["wl.status"] == "ok" and not s["wl.llm_cache_hit"]]
     assert len(payes) == 2 * N
     statuts = [s for s, _, _ in _reservations(wl_home)]
-    assert set(statuts) == {"settled"} and len(statuts) >= 2 * N  # appels des Juges compris
+    assert statuts == ["settled"] * (3 * 2 * N)  # 2 * N Réponses, 2 Juges par Réponse
     # Somme des wl.cost = dépense réelle du registre pour ce run_id.
     total = sum(Decimal(s["wl.cost"]) for s in _lignes(dossier, "traces.jsonl"))
     reel = sum(Decimal(r or "0") for _, _, r in _reservations(wl_home, dossier.name))

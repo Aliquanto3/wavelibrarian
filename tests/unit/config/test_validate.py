@@ -409,7 +409,7 @@ def test_cli_experience_valide(
 
     # Validation seule : l'Exécution (story 4.4) est testée dans `test_story_4_4.py`.
     issue = SimpleNamespace(
-        run_id="r", status="completed", n_answers=0, run_dir=wl_home, all_failed=False
+        run_id="r", status="completed", n_answers=0, run_dir=wl_home, all_failed=False, unjudged=0
     )
     monkeypatch.setattr(cli, "load_questions", lambda _r: None)
     monkeypatch.setattr(cli, "verifier_paliers", lambda *_a: None)

@@ -102,3 +102,12 @@ def test_abstention_correctness() -> None:
 
     assert ac(True, unanswerable=True) and ac(False, unanswerable=False)
     assert not ac(False, unanswerable=True) and not ac(True, unanswerable=False)
+
+
+def test_citation_correctness_citation_invalide_hors_corpus() -> None:
+    from wavelibrarian.scoring.answer import citation_correctness
+
+    ref, corpus = {"d#a1"}, {"d#a1", "d#a2"}
+    assert citation_correctness(["d#a1"], ref, corpus, unanswerable=False)
+    assert not citation_correctness(["d#a1"], ref, corpus, unanswerable=False, invalid=1)
+    assert not citation_correctness([], ref, corpus, unanswerable=True, invalid=1)

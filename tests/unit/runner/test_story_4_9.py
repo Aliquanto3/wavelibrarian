@@ -277,3 +277,57 @@ def test_reprise_apres_arret_pendant_le_jugement_ne_demande_que_les_cles_absente
     # Relancer une Exécution terminée ne juge plus rien.
     _wl(str(chemin), "--reprendre", dossier.name, code=0)
     assert len(appels) == 2 * n - 3
+
+
+def _juges_scenarises(monkeypatch: pytest.MonkeyPatch, sortie: Callable[[str], Any]) -> None:
+    """`LLMJudge.judge` remplacé : `sortie(modele)` rend le verdict (bool) ou lève."""
+
+    def juge(self: LLMJudge, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int) -> Any:
+        oui = sortie(self.model_id)
+        return {c: (oui, f"{self.model_id} {c}") for c in criteria}
+
+    monkeypatch.setattr(LLMJudge, "judge", juge)
+
+
+def test_juges_contradictoires_egalite_no_et_tie_dans_panel(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _juges_scenarises(monkeypatch, lambda m: m == "fake-llm-b")  # b : oui, c : non
+    _wl(str(_experience(tmp_path, max_questions=3)))
+    dossier = _un_run(wl_home)
+    jugees = [p for p in read_panel(dossier).values() if p.judges]
+    assert jugees and all(p.tie and not p.verdict for p in jugees)
+    assert all(set(p.judges) == PANEL for p in jugees)
+    automatiques = [p for p in read_panel(dossier).values() if not p.judges]
+    assert automatiques and not any(p.tie for p in automatiques)
+
+
+def test_juge_en_echec_compte_au_manifeste_puis_repris(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def sortie(modele: str) -> bool:
+        if modele == "fake-llm-c":
+            raise RuntimeError("Juge en panne simulée")
+        return True
+
+    _juges_scenarises(monkeypatch, sortie)
+    chemin = _experience(tmp_path, max_questions=2)
+    res = _wl(str(chemin))
+    dossier = _un_run(wl_home)
+    manifeste = json.loads((dossier / "manifest.json").read_text("utf-8"))
+    questions = _questions()
+    attendu = sum(
+        len(JUGES) - (questions[a.question_id].answer_form == "short")
+        for a in read_answers(dossier).values()
+    )
+    assert manifeste["status"] == "completed" and manifeste["unjudged"] == attendu
+    assert "sans verdict de panel" in res.output
+    assert not [p for p in read_panel(dossier).values() if p.judges]
+
+    _juges_scenarises(monkeypatch, lambda m: True)
+    _wl(str(chemin), "--reprendre", dossier.name)  # completed mais non jugé : rejugé
+    manifeste = json.loads((dossier / "manifest.json").read_text("utf-8"))
+    assert manifeste["status"] == "completed" and manifeste["unjudged"] == 0
+    assert len([p for p in read_panel(dossier).values() if p.judges]) == attendu
+    res = _wl(str(chemin), "--reprendre", dossier.name)  # désormais rien à reprendre
+    assert "rien à reprendre" in res.output

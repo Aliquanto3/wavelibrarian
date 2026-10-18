@@ -68,7 +68,7 @@ from wavelibrarian.runner.rundir import (
     resolve_parsers,
     set_status,
 )
-from wavelibrarian.scoring.panel import construire_juges, juger_reponse
+from wavelibrarian.scoring.panel import construire_juges, criteres_juges, juger_reponse
 
 log = logging.getLogger(__name__)
 
@@ -320,15 +320,19 @@ class _Runner:
 
     # --- jugement (story 4.9) --------------------------------------------------------------
 
-    def _corpus_de_phase(self, conf: ResolvedConfiguration, phase: Phase) -> ParsedCorpus:
+    def _corpus_de_phase(self, conf: ResolvedConfiguration, phase: Phase) -> ParsedCorpus | None:
         """Corpus dont les Ancrages servent à noter une Réponse de la phase (après mise à jour :
-        le Corpus du Scénario ; s'il ne s'applique plus, celui de la base)."""
+        le Corpus du Scénario). `None` si le Scénario ne s'applique plus : les Réponses de la
+        phase restent non jugées (jamais notées sur le Corpus de base), comptées et journalisées."""
         parser = conf.parser.name
-        if phase == "after_update" and self.scenario is not None:
+        if phase == "after_update":
             try:
                 return self.apres_mise_a_jour(parser)[1]
+            except BudgetExceeded:
+                raise
             except Exception as erreur:
                 log.warning("Corpus après mise à jour indisponible pour le jugement : %s", erreur)
+                return None
         return self.preparer(parser)[0]
 
     def juger(self, experience: ResolvedExperiment, panels: dict[str, tuple[str, ...]]) -> None:
@@ -344,7 +348,7 @@ class _Runner:
             par_reponse.setdefault(cle[0], {})[cle] = v
         deja_panel = set(read_panel(self.dossier))
         juges: dict[tuple[str, ...], Any] = {}
-        corpus_de: dict[tuple[str, str], tuple[ParsedCorpus, set[str]]] = {}
+        corpus_de: dict[tuple[str, str], tuple[ParsedCorpus, set[str]] | None] = {}
         self.non_jugees = 0
         reponses = read_answers(self.dossier)
         log.info("étape jugement : %d Réponses", len(reponses))
@@ -359,9 +363,16 @@ class _Runner:
                         continue
                     if (conf.id, a.phase) not in corpus_de:
                         parse = self._corpus_de_phase(conf, a.phase)
-                        tout = {i for d in parse.documents for i in d.anchors}
-                        corpus_de[(conf.id, a.phase)] = (parse, tout)
-                    parse, tout = corpus_de[(conf.id, a.phase)]
+                        corpus_de[(conf.id, a.phase)] = (
+                            None
+                            if parse is None
+                            else (parse, {i for d in parse.documents for i in d.anchors})
+                        )
+                    corpus_phase = corpus_de[(conf.id, a.phase)]
+                    if corpus_phase is None:
+                        self.non_jugees += len(criteres_juges(q))
+                        continue
+                    parse, tout = corpus_phase
                     ancres = [
                         i
                         for r in q.reference_anchors
@@ -915,8 +926,13 @@ def run_experiment(
                     log.warning("Plafond atteint pendant le jugement : %s", erreur)
                     statut = "budget_exceeded"
             runner.compter()
-            set_status(dossier, statut, answers=dict(runner.counts))
+            set_status(dossier, statut, answers=dict(runner.counts), unjudged=runner.non_jugees)
             log.info("Exécution %s : %s, Réponses %s", run_id, statut, runner.counts)
+            if runner.non_jugees:
+                log.warning(
+                    "%d Critère(s) jugé(s) sans verdict de panel ; reprise : --reprendre",
+                    runner.non_jugees,
+                )
         except BaseException:
             log.exception("Exécution %s en échec", run_id)
             set_status(dossier, "failed")

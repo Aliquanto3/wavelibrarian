@@ -145,6 +145,12 @@ def run(
     if issue.status == "budget_exceeded":
         typer.echo("Plafond de dépense atteint : Exécution arrêtée.", err=True)
         raise typer.Exit(3)
+    if issue.unjudged:
+        typer.echo(
+            f"{issue.unjudged} Critère(s) sans verdict de panel (Juge en échec) : "
+            "relancer avec --reprendre.",
+            err=True,
+        )
     if issue.all_failed:
         typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
         raise typer.Exit(1)

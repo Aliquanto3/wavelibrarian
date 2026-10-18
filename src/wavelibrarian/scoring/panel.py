@@ -76,7 +76,11 @@ def verdicts_automatiques(
     cites = [c.anchor_id for c in answer.citations]
     oui: dict[Criterion, bool] = {
         "citation_correctness": citation_correctness(
-            cites, reference_anchor_ids, corpus_anchor_ids, unanswerable=inconnue
+            cites,
+            reference_anchor_ids,
+            corpus_anchor_ids,
+            unanswerable=inconnue,
+            invalid=answer.invalid_citations,
         ),
         "abstention_correctness": abstention_correctness(answer.abstained, unanswerable=inconnue),
     }
@@ -154,6 +158,9 @@ def juger_reponse(
                 log.warning("Juge %s en échec sur %s : %s", modele, answer.answer_id, exc)
                 continue
             for c in manquants:
+                if c not in notes:  # Critère absent de la sortie : clé laissée absente (reprise)
+                    log.warning("Juge %s sans verdict %s sur %s", modele, c, answer.answer_id)
+                    continue
                 oui, justification = notes[c]
                 ecrire(
                     Verdict(

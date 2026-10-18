@@ -106,14 +106,23 @@ def create_run_dir(
     return dossier
 
 
-def set_status(dossier: Path, status: Status, *, answers: dict[str, int] | None = None) -> None:
+def set_status(
+    dossier: Path,
+    status: Status,
+    *,
+    answers: dict[str, int] | None = None,
+    unjudged: int | None = None,
+) -> None:
     """Met à jour `status` du manifeste (fin d'Exécution) ; `answers` : décompte des Réponses
-    par statut (`ok`, `error`, `inapplicable`), pour que les erreurs se voient au manifeste."""
+    par statut (`ok`, `error`, `inapplicable`), pour que les erreurs se voient au manifeste ;
+    `unjudged` : Critères jugés restés sans verdict de panel (Juge en échec), à reprendre."""
     chemin = dossier / "manifest.json"
     donnees = json.loads(chemin.read_text(encoding="utf-8"))
     donnees["status"] = status
     if answers is not None:
         donnees["answers"] = answers
+    if unjudged is not None:
+        donnees["unjudged"] = unjudged
     if status != "running":
         donnees["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _ecrire_manifest(dossier, donnees)
@@ -128,6 +137,7 @@ def reopen_run_dir(dossier: Path, budget: Budget) -> None:
     donnees["status"] = "running"
     donnees.pop("finished_at", None)
     donnees.pop("answers", None)
+    donnees.pop("unjudged", None)
     reprises = donnees.setdefault("resumptions", [])
     reprises.append(
         {

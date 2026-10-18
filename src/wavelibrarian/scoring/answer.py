@@ -88,9 +88,14 @@ def citation_correctness(
     corpus_anchor_ids: Collection[str],
     *,
     unanswerable: bool,
+    invalid: int = 0,
 ) -> bool:
     """Oui si au moins une Citation désigne un Ancrage de référence et qu'aucune n'est hors du
-    Corpus ; pour une Question `unanswerable`, oui si la Réponse ne cite rien."""
+    Corpus ; pour une Question `unanswerable`, oui si la Réponse ne cite rien. `invalid` : Citations
+    écartées par le Generator faute de désigner un Ancrage (`Answer.invalid_citations`) ; elles
+    sont hors du Corpus, donc une seule suffit à rendre le Critère faux."""
+    if invalid:
+        return False
     if unanswerable:
         return not cited
     corpus = set(corpus_anchor_ids)

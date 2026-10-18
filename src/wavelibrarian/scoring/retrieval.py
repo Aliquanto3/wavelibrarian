@@ -5,9 +5,10 @@ soit le Découpage. Fonctions pures, sans entrée-sortie.
 
 - rappel@k : part des Ancrages de référence recouverts par les k premiers Passages ;
 - MRR : inverse du rang du premier Passage pertinent de la liste entière (0 s'il n'y en a pas) ;
-- nDCG@k : gain binaire, décompte `1 / log2(rang + 1)` ; l'idéal place `min(k, nb d'Ancrages de
-  référence)` Passages pertinents en tête, et la valeur est plafonnée à 1 (plusieurs Passages
-  peuvent recouvrir le même Ancrage).
+- nDCG@k : gain binaire, décompte `1 / log2(rang + 1)` ; un Passage ne rapporte un gain que s'il
+  recouvre un Ancrage de référence encore non couvert par les rangs précédents (un doublon ne
+  compte pas) ; l'idéal place `min(k, nb d'Ancrages de référence)` gains en tête, donc nDCG ≤ 1.
+  Un seul Passage qui recouvre deux Ancrages vaut 1 / (1 + 1/log2 3) ≈ 0,613.
 
 La méthode (`ranked`, `provided`, `cited`, `none`) est reportée telle quelle. `none` et une
 Question sans Ancrage de référence (`unanswerable`) ne produisent aucune métrique.
@@ -53,12 +54,17 @@ def retrieval_metrics(
     pertinents = [est_pertinent(s.passage, reference) for s in classes]
     couverts = {a for s in classes[:k] for a in s.passage.anchor_ids if a in reference}
     premier = next((i for i, p in enumerate(pertinents, start=1) if p), None)
-    dcg = sum(1 / math.log2(i + 1) for i, p in enumerate(pertinents[:k], start=1) if p)
+    dcg, vus = 0.0, set[str]()
+    for i, s in enumerate(classes[:k], start=1):
+        nouveaux = (set(s.passage.anchor_ids) & reference) - vus
+        if nouveaux:
+            dcg += 1 / math.log2(i + 1)
+            vus |= nouveaux
     ideal = sum(1 / math.log2(i + 1) for i in range(1, min(k, len(reference)) + 1))
     return RetrievalScores(
         method=method,
         k=k,
         recall=len(couverts) / len(reference),
         mrr=0.0 if premier is None else 1 / premier,
-        ndcg=min(1.0, dcg / ideal),
+        ndcg=dcg / ideal,
     )

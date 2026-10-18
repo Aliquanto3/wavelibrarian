@@ -132,7 +132,7 @@ def _jeu_gele(monkeypatch: pytest.MonkeyPatch) -> None:
 def _sans_execution(monkeypatch: pytest.MonkeyPatch) -> None:
     """Préflight seul : l'Exécution (story 4.4) est testée dans `test_story_4_4.py`."""
     issue = SimpleNamespace(
-        run_id="r", status="completed", n_answers=0, run_dir=Path("r"), all_failed=False
+        run_id="r", status="completed", n_answers=0, run_dir=Path("r"), all_failed=False, unjudged=0
     )
     monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
 

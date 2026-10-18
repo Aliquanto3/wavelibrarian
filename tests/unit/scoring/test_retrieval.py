@@ -60,3 +60,10 @@ def test_methodes_reportees_et_none_sans_metrique() -> None:
 def test_question_sans_ancrage_de_reference_sans_metrique() -> None:
     m = retrieval_metrics(CLASSES, set(), "ranked")
     assert m.method == "ranked" and m.recall is None
+
+
+def test_doublon_d_ancrage_sans_gain() -> None:
+    """Rangs 1 et 2 sur le même Ancrage A1 : le rang 2 n'apporte rien, A2 reste absent."""
+    m = retrieval_metrics([_sp(1, "d#a1"), _sp(2, "d#a1")], REFERENCE, "ranked")
+    assert m.recall == 0.5
+    assert m.ndcg is not None and round(m.ndcg, 4) == 0.6131  # 1 / (1 + 1/log2 3)

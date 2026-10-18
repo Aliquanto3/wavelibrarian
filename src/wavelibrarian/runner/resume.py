@@ -118,8 +118,10 @@ def verifier_reprise(
 
 
 def deja_terminee(wl_home: Path, run_id: str) -> bool:
-    """Exécution `completed` : une reprise n'a rien à refaire (code 0 dans la CLI)."""
-    return lire_manifeste(wl_home, run_id).get("status") == "completed"
+    """Exécution `completed` sans Critère resté non jugé (`unjudged`, story 4.9) : une reprise
+    n'a rien à refaire (code 0 dans la CLI). Avec des Critères non jugés, la reprise rejuge."""
+    manifeste = lire_manifeste(wl_home, run_id)
+    return manifeste.get("status") == "completed" and not manifeste.get("unjudged")
 
 
 def cles_tracees(dossier: Path) -> set[Cle]:
