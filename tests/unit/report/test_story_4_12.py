@@ -353,3 +353,38 @@ def test_cout_par_requete_compte_les_echecs_payes(run_dir: Path, tmp_path: Path)
     (lat,) = calculer_couts(ex, _res()).latences
     assert lat.n == 1
     assert lat.cout_requete == Decimal("0.20") * USD
+
+
+# --- Story 8.2 : coûts factices hors du coût réel ----------------------------------------------
+
+
+def test_cout_reel_exclut_les_spans_fake(run_dir: Path, tmp_path: Path) -> None:
+    spans = [
+        _span("a", "query", **{"wl.cost": "1.00", "gen_ai.provider.name": "anthropic"}),
+        _span("a", "query", **{"wl.cost": "0.20", "gen_ai.provider.name": "ollama"}),
+        _span("a", "judging", **{"wl.cost": "5.00", "gen_ai.provider.name": "fake"}),
+        _span("a", "query", **{"wl.cost": "0.50", "gen_ai.provider.name": "fake"}),
+    ]
+    couts = calculer_couts(_ex(run_dir, tmp_path, spans, {"a": 1}), _res())
+    assert couts.total_api() == Decimal("1.20") * USD
+    assert couts.total_fake() == Decimal("5.50") * USD
+    assert not couts.faux_llm_pur
+    requete = next(x for x in couts.lignes if x.cle[4] == "query")
+    assert requete.api_fake == Decimal("0.50") * USD and requete.real == Decimal("1.20") * USD
+    assert requete.uncached == Decimal("0")  # le fake n'entre pas non plus dans le hors-cache
+    # le front de coût reste sur le coût réel quand un fournisseur réel est présent
+    assert couts.total_configuration("a", "standard", None) == Decimal("1.20") * USD
+
+
+def test_costs_csv_colonne_fake_separee_et_faux_llm_pur(run_dir: Path) -> None:
+    generer_rapport(run_dir)
+    with (run_dir / "report" / "costs.csv").open(encoding="utf-8", newline="") as f:
+        lignes = list(csv.DictReader(f))
+    assert "cost_eur_fake" in lignes[0]
+    assert all(Decimal(x["cost_eur_real"]) == Decimal(x["possession_eur"]) for x in lignes)
+    assert sum((Decimal(x["cost_eur_fake"]) for x in lignes), Decimal(0)) > 0
+    md = (run_dir / "report" / "report.md").read_text(encoding="utf-8")
+    assert "Faux LLM pur" in md and "cost_eur_fake" in md
+    with (run_dir / "report" / "pareto.csv").open(encoding="utf-8", newline="") as f:
+        x_cout = [float(r["x"]) for r in csv.DictReader(f) if r["front"].startswith("qualite-cout")]
+    assert x_cout and max(x_cout) > 0  # le front se calcule sur le coût fictif, non nul

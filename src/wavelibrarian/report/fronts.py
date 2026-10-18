@@ -101,7 +101,11 @@ def construire_fronts(ex: Execution, res: Resultats, couts: Couts | None) -> lis
         presentes = [c for c in configs if (c, condition, tier, QUALITE) in taux]
         total: dict[str, float] = {}
         if avec_couts and couts is not None:
-            total = {c: float(couts.total_configuration(c, condition, tier)) for c in presentes}
+            fictif = couts.faux_llm_pur  # Faux LLM pur : le front se calcule sur `cost_eur_fake`
+            total = {
+                c: float(couts.total_configuration(c, condition, tier, fictif=fictif))
+                for c in presentes
+            }
             ajouter(
                 FRONT_REFERENCE,
                 g,

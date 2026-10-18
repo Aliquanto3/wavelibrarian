@@ -93,20 +93,19 @@ def _verifier_run(experience: Path, wl_home: Path) -> list[dict[str, Any]]:
     print(f"SM-4 registre réglé {regle} USD, écart {abs(Decimal(str(regle)) - total_spans)}")
     assert abs(Decimal(str(regle)) - total_spans) <= CENTIME
 
-    # 3. Rapport : somme de `cost_eur_real` de costs.csv == somme de TOUS les spans facturés (les
-    #    Juges factices ont un prix au Catalogue, non nul), chacun converti au taux de sa devise.
+    # 3. Rapport (story 8.2) : `cost_eur_real` (hors possession) == dépense du Registre Anthropic
+    #    convertie en euros ; les Juges factices sont dans `cost_eur_fake`, hors du coût réel.
     taux = load_costs(wl_home).fx.rates_to_eur
-    total_tous = sum(
-        (
-            Decimal(s["wl.cost"]) * (taux[s["wl.currency"]] if s["wl.currency"] != "EUR" else 1)
-            for s in _lignes(dossier / "traces.jsonl")
-            if "wl.cost" in s and s.get("wl.currency")
-        ),
+    with (dossier / "report" / "costs.csv").open(encoding="utf-8", newline="") as f:
+        lignes_csv = list(csv.DictReader(f))
+    total_rapport = sum(
+        (Decimal(r["cost_eur_real"]) - Decimal(r["possession_eur"]) for r in lignes_csv),
         Decimal(0),
     )
-    with (dossier / "report" / "costs.csv").open(encoding="utf-8", newline="") as f:
-        total_rapport = sum((Decimal(r["cost_eur_real"]) for r in csv.DictReader(f)), Decimal(0))
-    assert abs(total_rapport - total_tous) <= CENTIME
+    registre_eur = Decimal(str(regle)) * taux["USD"]
+    print(f"SM-4 cost_eur_real {total_rapport} EUR, registre converti {registre_eur} EUR")
+    assert abs(total_rapport - registre_eur) <= CENTIME
+    assert total_rapport > 0 and "cost_eur_fake" in lignes_csv[0]
 
     # 4. Ni la clé ni l'en-tête `x-api-key` dans un fichier de l'Exécution.
     cle = os.environ["ANTHROPIC_API_KEY"]

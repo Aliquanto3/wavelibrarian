@@ -10,7 +10,7 @@ from wavelibrarian.report.scores import etiquette_palier
 ENTETE_POSTES = [
     "Configuration", "Condition", "Palier", "Phase", "Poste", "€ réel", "€ sans cache",
     "dont possession (€)", "kWh mesurés", "kWh estimés", "CO2e mesuré (g)", "CO2e estimé (g)",
-    "Appels",
+    "Appels", "€ fictif (fake)",
 ]  # fmt: skip
 ENTETE_LATENCE = [
     "Configuration", "Condition", "Palier", "Phase", "n", "p50 (s)", "p95 (s)", "Débit (Q/min)",
@@ -42,7 +42,7 @@ def _ligne_poste(ligne: LigneCout) -> list[str]:
         f"`{config}`", condition, etiquette_palier(tier), phase, post, _eur(ligne.real),
         _eur(ligne.uncached), _eur(ligne.possession), f"{ligne.kwh_measured:.6f}",
         f"{ligne.kwh_estimated:.6f}", _nb(float(ligne.co2e_measured_g), 3),
-        _nb(float(ligne.co2e_estimated_g), 3), str(ligne.n_calls),
+        _nb(float(ligne.co2e_estimated_g), 3), str(ligne.n_calls), _eur(ligne.fake),
     ]  # fmt: skip
 
 
@@ -61,9 +61,18 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
         "n'est pas dans les fichiers de l'Exécution).",
         f"- Intensité carbone ({c.carbon.region}, {c.carbon.date.isoformat()}) : "
         f"{_nb(float(c.carbon.gco2e_per_kwh), 1)} g CO2e/kWh.",
-        f"- **Somme des `wl.cost` des spans, convertie en euros : {_eur(couts.total_api())} €** "
+        f"- **Somme des `wl.cost` des spans d'un fournisseur réel (hors `fake`), en euros : "
+        f"{_eur(couts.total_api())} €** "
         f"(possession en plus : {_eur(couts.total_possession())} €), dont {_eur(hors)} € hors "
         "Configuration (`judging`, `evalset`).",
+        f"- Coûts **fictifs** (spans `fake`, jamais dépensés, colonne `cost_eur_fake`) : "
+        f"{_eur(couts.total_fake())} €, hors `cost_eur_real`."
+        + (
+            " Faux LLM pur : `cost_eur_real` vaut 0, les fronts de Pareto se calculent sur "
+            "`cost_eur_fake`."
+            if couts.faux_llm_pur
+            else ""
+        ),
         "- **Avertissement** : les kWh `measured` (compteur matériel) et `estimated` (modèle "
         "d'estimation) restent dans deux colonnes, jamais additionnées : leurs périmètres "
         "ne se comparent pas. Le CO2e suit la même séparation.",

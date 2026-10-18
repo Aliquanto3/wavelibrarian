@@ -78,8 +78,19 @@ def section_pareto(
             "communes).",
             "",
         ]
+    mention = (
+        [
+            "**Coûts fictifs** : Exécution en Faux LLM pur, `cost_eur_real` vaut 0. Ce front se "
+            "calcule sur `cost_eur_fake` (coût factice, jamais dépensé) : il ne dit rien d'une "
+            "dépense réelle.",
+            "",
+        ]
+        if couts.faux_llm_pur
+        else []
+    )
     return [
         *titre,
+        *mention,
         f"Front `{front.nom}` ({libelle_groupe(front)}) : {len(front.points)} Configuration(s) "
         f"non dominée(s) sur {n}. Une Configuration est dominée si une autre a une Qualité au "
         "moins égale pour un coût au plus égal, l'un des deux strictement. Aucun score global ni "
@@ -109,7 +120,12 @@ def section_paliers(res: Resultats, couts: Couts | None) -> list[str]:
         cout = (
             "n/a"
             if couts is None or not couts.traces_presentes
-            else _nb(float(couts.total_configuration(config, condition, tier)), 4)
+            else _nb(
+                float(
+                    couts.total_configuration(config, condition, tier, fictif=couts.faux_llm_pur)
+                ),
+                4,
+            )
         )
         latence = p95.get((config, condition, tier, "base"))
         lignes.append(

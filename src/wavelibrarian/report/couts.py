@@ -30,6 +30,7 @@ LOCAUX = frozenset({"local", "embed", "rerank"})
 ENTETE_COUTS = [
     "config_id", "post", "cost_eur_real", "cost_eur_uncached", "kwh_measured", "kwh_estimated",
     "co2e_g", "n_calls", "condition", "tier", "phase", "possession_eur", "co2e_g_estimated",
+    "cost_eur_fake",
 ]  # fmt: skip
 _MICRO = Decimal("0.000001")
 _ZERO = Decimal(0)
@@ -43,7 +44,8 @@ class LigneCout:
     """Un Poste d'une Configuration dans un groupe. `real` et `uncached` incluent la possession."""
 
     cle: CleCout
-    api_real: Decimal = _ZERO  # somme des `wl.cost` convertie, sans possession (FR-29)
+    api_real: Decimal = _ZERO  # `wl.cost` hors `fake`, converti, sans possession
+    api_fake: Decimal = _ZERO  # `wl.cost` des spans `fake` (fictif, jamais dépensé), converti
     api_uncached: Decimal = _ZERO
     possession: Decimal = _ZERO
     kwh_measured: Decimal = _ZERO
@@ -57,6 +59,11 @@ class LigneCout:
     @property
     def real(self) -> Decimal:
         return self.api_real + self.possession
+
+    @property
+    def fake(self) -> Decimal:
+        """Coût fictif (spans `fake`) ; hors `real`, hors `uncached` (FR-29)."""
+        return self.api_fake
 
     @property
     def uncached(self) -> Decimal:
@@ -95,18 +102,30 @@ class Couts:
     valeurs_invalides: int = 0  # `wl.cost` ou `wl.cost_uncached` illisibles, comptés 0 (FR-29)
 
     def total_api(self) -> Decimal:
-        """Somme des `wl.cost` de tous les spans, convertie en euros (FR-29)."""
+        """Somme des `wl.cost` des spans d'un fournisseur réel (hors `fake`), en euros (FR-29)."""
         return sum((ligne.api_real for ligne in self.lignes), _ZERO)
+
+    def total_fake(self) -> Decimal:
+        """Somme des `wl.cost` des spans `fake`, en euros : fictive, jamais dépensée."""
+        return sum((ligne.api_fake for ligne in self.lignes), _ZERO)
+
+    @property
+    def faux_llm_pur(self) -> bool:
+        """Exécution sans aucun coût réel mais avec des coûts factices (profil `test`)."""
+        return self.total_api() == _ZERO and self.total_fake() > _ZERO
 
     def total_possession(self) -> Decimal:
         return sum((ligne.possession for ligne in self.lignes), _ZERO)
 
-    def total_configuration(self, config: str, condition: str, tier: int | None) -> Decimal:
+    def total_configuration(
+        self, config: str, condition: str, tier: int | None, *, fictif: bool = False
+    ) -> Decimal:
         """Coût total d'une Configuration (indexation + mise à jour + requête, possession
-        comprise), `judging` et `evalset` exclus ; réutilisé par les fronts de Pareto (4.13)."""
+        comprise), `judging` et `evalset` exclus ; réutilisé par les fronts de Pareto (4.13).
+        `fictif` : les coûts `fake` à la place des coûts réels (Faux LLM pur, story 8.2)."""
         return sum(
             (
-                ligne.real
+                (ligne.fake + ligne.possession if fictif else ligne.real)
                 for ligne in self.lignes
                 if ligne.cle[:3] == (config, condition, tier)
                 and ligne.cle[4] in POSTES_CONFIGURATION
@@ -183,12 +202,20 @@ def _agreger(
         )
         ligne = lignes.setdefault(cle, LigneCout(cle))
         taux = taux_vers_euro(costs, str(s.get("wl.currency", "EUR")))
-        ligne.api_real += _decimal(s.get("wl.cost", 0), couts) * taux
+        factice = s.get("gen_ai.provider.name") == "fake"
+        cout = _decimal(s.get("wl.cost", 0), couts) * taux
+        if factice:
+            ligne.api_fake += cout
+        else:
+            ligne.api_real += cout
         if s.get("wl.resumed") is True:
             # Appel refait à la reprise : ni appel, ni latence, ni énergie, et son coût hors
             # cache est déjà porté par le span de l'appel d'origine.
             continue
-        ligne.api_uncached += _decimal(s.get("wl.cost_uncached", s.get("wl.cost", 0)), couts) * taux
+        if not factice:
+            ligne.api_uncached += (
+                _decimal(s.get("wl.cost_uncached", s.get("wl.cost", 0)), couts) * taux
+            )
         hit = s.get("wl.llm_cache_hit") is True
         if s.get("wl.kind") != "local":
             ligne.n_calls += 1
@@ -320,5 +347,5 @@ def ligne_csv(ligne: LigneCout) -> list[Any]:
         config, post, _q(ligne.real), _q(ligne.uncached), f"{ligne.kwh_measured:.9f}",
         f"{ligne.kwh_estimated:.9f}", f"{ligne.co2e_measured_g:.6f}", ligne.n_calls, condition,
         "all" if tier is None else tier, phase, _q(ligne.possession),
-        f"{ligne.co2e_estimated_g:.6f}",
+        f"{ligne.co2e_estimated_g:.6f}", _q(ligne.fake),
     ]  # fmt: skip

@@ -236,7 +236,13 @@ def test_cout_du_rapport_egal_au_cout_trace(home: Path, run_dir: Path) -> None:
     api = sum(
         (Decimal(x["cost_eur_real"]) - Decimal(x["possession_eur"]) for x in couts), Decimal(0)
     )
-    assert abs(api - trace * taux) < Decimal("0.01")
+    reel = sum(
+        (Decimal(s.get("wl.cost", "0")) for s in traces if s.get("gen_ai.provider.name") != "fake"),
+        Decimal(0),
+    )
+    assert abs(api - reel * taux) < Decimal("0.01")  # story 8.2 : le fake est hors du coût réel
+    factice = sum((Decimal(x["cost_eur_fake"]) for x in couts), Decimal(0))
+    assert abs(factice - (trace - reel) * taux) < Decimal("0.01")
 
 
 def test_front_exporte_relance_par_wl_run(home: Path, run_dir: Path, tmp_path: Path) -> None:
