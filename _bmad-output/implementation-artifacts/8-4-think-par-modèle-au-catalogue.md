@@ -1,7 +1,7 @@
 ---
 story: "8.4"
 title: "`think` par modèle au Catalogue"
-status: review
+status: done
 ---
 
 # Story 8.4 : `think` par modèle au Catalogue
