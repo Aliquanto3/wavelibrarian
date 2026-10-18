@@ -1,6 +1,7 @@
 """Story 4.8 : arrêt au plafond et reprise d'une Exécution (profil `test`, Faux LLM)."""
 
 import json
+import shutil
 import sqlite3
 from decimal import Decimal
 from pathlib import Path
@@ -257,7 +258,8 @@ def test_arret_brutal_reservation_orpheline_reglee_puis_running_et_completed(
         s for s in _lignes(dossier, "traces.jsonl")[len(appels_traces) :] if s["wl.kind"] == "llm"
     ]
     rejoues = [s for s in spans if s.get("wl.resumed")]
-    assert len(rejoues) == 3  # Questions 1 à 3, payées avant l'arrêt
+    # Questions 1 à 4 : la 4e, payée puis interrompue au règlement, est sortie du cache.
+    assert len(rejoues) == 4
     assert all(s["wl.llm_cache_hit"] and Decimal(s["wl.cost"]) == 0 for s in rejoues)
     assert [s["wl.question_id"] for s in rejoues] == sorted(s["wl.question_id"] for s in rejoues)
     # Les appels réellement nouveaux (Questions 4 à N) ne sont pas marqués.
@@ -296,9 +298,82 @@ def test_reprise_d_une_execution_inconnue_ou_terminee_refusee_code_2(
     relevee = _experience(tmp_path, "releve", plafond * 100)
     res = _wl(str(relevee), "--reprendre", "run-inconnu", code=2)
     assert "introuvable" in res.output
+    res = _wl(str(relevee), "--reprendre", "../x", code=2)
+    assert "run_id invalide" in res.output
     _wl(str(relevee), "--reprendre", dossier.name, code=0)
+    avant = (dossier / "traces.jsonl").read_bytes()
+    # Reprise d'une Exécution terminée : rien à refaire, code 0 (run de nuit relancé).
+    res = _wl(str(relevee), "--reprendre", dossier.name, code=0)
+    assert "rien à reprendre" in res.output
+    assert (dossier / "traces.jsonl").read_bytes() == avant
+
+
+def test_arret_brutal_reel_manifeste_failed_puis_reprise_sans_repayer(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chemin réel (sans état fabriqué) : l'interruption pendant le règlement du 4e appel passe
+    par `set_status("failed")`, puis la reprise termine sans repayer aucun appel."""
+    from wavelibrarian.llm.budget import Ledger
+
+    regler = Ledger.settle
+    appels: list[int] = []
+
+    def settle_puis_mort(self: Ledger, reservation: int, actual: Decimal) -> None:
+        appels.append(reservation)
+        if len(appels) == 4:
+            raise _Kill
+        regler(self, reservation, actual)
+
+    monkeypatch.setattr(Ledger, "settle", settle_puis_mort)
+    chemin = _experience(tmp_path, configurations=[SANS_CONTEXTE])
+    resolue = validate_file(chemin).resolved
+    with pytest.raises(_Kill):
+        run_experiment(resolue, load_questions(resolue), wl_home=wl_home)
+    monkeypatch.setattr(Ledger, "settle", regler)
+    dossier = _un_run(wl_home)
+    assert _manifest(dossier)["status"] == "failed"
+
+    _wl(str(chemin), "--reprendre", dossier.name, code=0)
+    assert _manifest(dossier)["status"] == "completed"
+    assert {a.status for a in read_answers(dossier).values()} == {"ok"}
+    assert len(read_answers(dossier)) == N
+    # Un appel payé par Question, le 4e compris : aucun n'est repayé à la reprise.
+    lignes = _reservations(wl_home)
+    assert [s for s, _, _ in lignes] == ["settled"] * N
+    spans = [s for s in _lignes(dossier, "traces.jsonl") if s["wl.kind"] == "llm"]
+    assert len([s for s in spans if not s["wl.llm_cache_hit"]]) == N
+
+
+def test_reprise_refusee_si_le_contenu_du_corpus_change(tmp_path: Path, wl_home: Path) -> None:
+    copie = tmp_path / "mini"
+    shutil.copytree(RACINE, copie)
+    champs: dict[str, Any] = {
+        "corpus": str(copie / "corpus.yaml"),
+        "questions": str(copie / "questions.yaml"),
+    }
+    _wl(str(_experience(tmp_path, "c", Decimal("0.000001"), **champs)), code=3)
+    dossier = _un_run(wl_home)
+    doc = copie / "docs" / "glossaire-maritime.md"
+    doc.write_bytes(doc.read_bytes() + b"\nAjout.\n")
+    relevee = _experience(tmp_path, "r", Decimal(100), **champs)
     res = _wl(str(relevee), "--reprendre", dossier.name, code=2)
-    assert "déjà terminée" in res.output
+    assert "Corpus" in res.output and "corpus_fingerprint" in res.output
+    assert _manifest(dossier)["status"] == "budget_exceeded"
+
+
+def test_reprise_refusee_si_un_tarif_du_catalogue_change(tmp_path: Path, wl_home: Path) -> None:
+    from wavelibrarian.config.defaults import defaults_dir
+
+    catalogue = tmp_path / "models.yaml"
+    shutil.copy(defaults_dir() / "models.yaml", catalogue)
+    _wl(str(_experience(tmp_path, "c", Decimal("0.000001"), catalog=str(catalogue))), code=3)
+    dossier = _un_run(wl_home)
+    texte = catalogue.read_text(encoding="utf-8")
+    assert 'input: "1.00"' in texte
+    catalogue.write_text(texte.replace('input: "1.00"', 'input: "1.50"', 1), encoding="utf-8")
+    relevee = _experience(tmp_path, "r", Decimal(100), catalog=str(catalogue))
+    res = _wl(str(relevee), "--reprendre", dossier.name, code=2)
+    assert "Catalogue" in res.output
 
 
 def test_reprise_apres_degel_du_jeu_refusee_code_2(

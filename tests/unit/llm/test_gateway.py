@@ -497,3 +497,34 @@ def test_build_gateway_branche_les_providers_du_catalogue(
     finally:
         ledger.close()
         cache.close()
+
+
+# --- Règlement interrompu (story 4.8) ---------------------------------------------------------
+
+
+class _Arret(BaseException):
+    """Arrêt brutal simulé pendant `settle`."""
+
+
+@pytest.mark.parametrize(("texte", "en_cache"), [('{"reponse": "Paris"}', True), ("non", False)])
+def test_reglement_interrompu_ne_cache_que_les_succes_de_schema(
+    make_env: Callable[..., Env], monkeypatch: pytest.MonkeyPatch, texte: str, en_cache: bool
+) -> None:
+    env = make_env(texte)
+
+    def arret(*_: object, **__: object) -> None:
+        raise _Arret
+
+    monkeypatch.setattr(env.ledger, "settle", arret)
+    with pytest.raises(_Arret):
+        env.gw.complete_structured(_req(), Schema)
+    (span,) = env.spans()
+    assert span["wl.status"] == "error" and D(span["wl.cost"]) > 0
+    monkeypatch.undo()
+    if en_cache:  # la reprise est servie par le cache, sans repayer
+        _, res = env.gw.complete_structured(_req(), Schema)
+        assert res.from_cache and len(env.provider.requests) == 1
+    else:  # sortie non conforme : jamais en cache, l'appel est refait
+        with pytest.raises(NonConformantOutput):
+            env.gw.complete_structured(_req(), Schema)
+        assert len(env.provider.requests) > 1

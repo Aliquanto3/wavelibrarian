@@ -48,7 +48,12 @@ from wavelibrarian.ports.architecture import Applicability, ArchitectureBase, Co
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.index_cache import IndexCache, index_key
-from wavelibrarian.runner.resume import cles_tracees, verifier_reprise
+from wavelibrarian.runner.resume import (
+    cles_tracees,
+    deja_terminee,
+    empreintes_entrees,
+    verifier_reprise,
+)
 from wavelibrarian.runner.rundir import (
     JsonlWriter,
     attach_run_log,
@@ -640,6 +645,7 @@ class _Runner:
                 **({} if taille is None else {"tier": taille}),
                 **({} if maj is None else {"phase": "after_update"}),
             }
+            self.ecrire_applicabilite()  # au fil de l'Exécution : un arrêt brutal ne la perd pas
             self._vides(writer, conf, methode, "inapplicable", raison, questions)
             return
         cle = "-"
@@ -755,9 +761,16 @@ def run_experiment(
     scenario = Path(experience.scenario) if experience.scenario else None
     if scenario is not None:  # Scénario invalide : refus (code 2) avant le dossier d'Exécution
         charger(scenario, ingest(corpus, experience.configurations[0].parser.name, wl_home=wl_home))
+    entrees: dict[str, str] | None = None
     if reprendre is not None:
         verifier_reprise(experience, wl_home, reprendre, questions.freeze_sha256)
+        if deja_terminee(wl_home, reprendre):
+            raise ConfigError(
+                "reprendre", f"Exécution {reprendre} déjà terminée : rien à reprendre"
+            )
         run_id = reprendre
+    else:  # contenu du Corpus, du Scénario et du Catalogue, comparé à une reprise
+        entrees = empreintes_entrees(experience, wl_home)
     if run_id is None:
         run_id = new_run_id(sha16(canonical_json(experience.model_dump(mode="json"))))
     # Le verrou est pris d'abord, puis les réservations orphelines sont réglées à leur estimation
@@ -767,7 +780,7 @@ def run_experiment(
     ) as ctx:
         if reprendre is None:
             dossier = create_run_dir(
-                wl_home, run_id, experience, freeze_sha256=questions.freeze_sha256
+                wl_home, run_id, experience, freeze_sha256=questions.freeze_sha256, inputs=entrees
             )
         else:
             dossier = wl_home / "runs" / run_id

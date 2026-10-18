@@ -1,7 +1,7 @@
 ---
 story: "4.8"
 title: Arrêt au plafond et reprise d'une Exécution
-status: review
+status: done
 ---
 
 # Story 4.8 : Arrêt au plafond et reprise d'une Exécution
@@ -22,7 +22,9 @@ status: review
 - Les Réponses d'une cellule sont écrites à la fin de sa phase (4.5). Un plafond atteint les écrit avant l'arrêt ; un arrêt brutal les perd avec les spans locaux retenus, et la reprise repose alors toute la cellule depuis le Cache de réponses (coût 0). Les appels payés d'une Question non terminée restent dans `traces.jsonl` (source des coûts) ; leur rejeu porte `wl.resumed: true` (cache hit sur une Question tracée sans Réponse). Le Rapport (4.11, 4.12) compte alors cet appel et sa latence une seule fois : il ignore les spans `wl.resumed` hors coût (qui est de 0).
 - Verrou puis registre : `Context(execution=True)` prend `run.lock` puis règle toute réservation ouverte à l'estimé (`recover_orphans`), avant `reopen_run_dir`. Une reprise concurrente sort en 1 (« Exécution <run_id> en cours ») sans toucher au dossier.
 - Ordre de la CLI : validation, Gel, Paliers, contrôle de la reprise (code 2), préflight (code 4), exécution (codes 1 et 3).
-- Écart assumé : après un arrêt brutal, la réservation orpheline est réglée à l'estimé dans le registre, mais aucun span de `traces.jsonl` ne la porte (l'appel n'a pas fini). La somme des `wl.cost` égale la dépense du registre pour un arrêt au plafond (AC 2), pas pour un arrêt brutal.
+- Écart assumé (AC 3 contre AC 2) : après un arrêt brutal, la réservation orpheline est réglée à l'estimé dans le registre. Si l'arrêt tombe pendant l'appel, aucun span ne la porte ; s'il tombe pendant le règlement, le span porte le coût réel. Dans les deux cas la somme des `wl.cost` diffère du registre de l'écart estimé moins tracé, pour cet appel seulement. Elle égale la dépense du registre pour un arrêt au plafond (AC 2). Une réponse reçue et conforme au schéma est mise en cache même si le règlement est interrompu (`MeteredGateway._cacher_si_conforme`) : la reprise ne la repaie pas.
+- Empreintes d'entrée (revue) : `experiment.sha256` ne couvre que les chemins. Le manifeste porte donc `inputs` (`corpus_fingerprint` du Corpus ingéré, `scenario_fingerprint` du Corpus après Scénario, `catalog_fingerprint` du Catalogue entier, tarifs compris), comparé à la reprise : tout écart sort en code 2.
+- Reprise d'une Exécution `completed` : code 0 et « rien à reprendre » (la CLI vérifie d'abord Gel, empreinte et entrées ; une Expérience différente sort toujours en 2). `run_experiment` appelé directement refuse encore (`ConfigError`).
 
 ## Tâches et critères
 
@@ -43,3 +45,18 @@ status: review
 - Reports non traités : libération manuelle d'une réservation `hors_execution` orpheline (ne relève pas de la reprise : elle compte déjà à l'estimé et ne fait jamais dépasser un plafond) ; reprise de `verdicts.jsonl` et de `panel.jsonl` : story 4.9 ; Rapport partiel avant le code 3 : story 4.11.
 - Convention à reprendre par 4.9 et 4.11 : lire les Réponses par `read_answers` (la dernière ligne d'une clé fait foi, `budget_exceeded` jamais jugé) ; ignorer les spans `wl.resumed` pour les appels et la latence.
 - Risque : la reprise est refusée si l'Expérience résolue change d'un détail sans rapport avec le plafond (par exemple une mise à jour du Catalogue qui change `catalog_date` ou `models_frozen_at`) : c'est voulu, mais à signaler à Anaël si le cas se présente.
+
+## Revue
+
+Revue Opus du 2026-10-18, après rebase sur `main` (7.1), sans conflit.
+
+- medium, second avis 1 (règlement interrompu) : corrigé. Une réponse payée dont le `settle` échoue est mise en cache si elle est conforme au schéma ; la 4e Question n'est plus repayée à la reprise. L'écart registre / traces de l'appel orphelin (estimé contre réel) est inhérent à AC 3 et documenté. Tests : `test_arret_brutal_reel_manifeste_failed_puis_reprise_sans_repayer`, `test_reglement_interrompu_ne_cache_que_les_succes_de_schema`.
+- medium, second avis 2 (contenu du Corpus et du Scénario) : corrigé. `inputs.corpus_fingerprint` et `inputs.scenario_fingerprint` au manifeste, comparés à la reprise (code 2). Test : `test_reprise_refusee_si_le_contenu_du_corpus_change`.
+- medium, second avis 3 (Catalogue) : corrigé. `catalog_date` et `models_frozen_at` étaient couverts, pas les tarifs ; `inputs.catalog_fingerprint` couvre le Catalogue entier. Test : `test_reprise_refusee_si_un_tarif_du_catalogue_change`.
+- low, second avis 4 (`experiment.sha256` hors `try`, `--reprendre ../x`) : corrigé, code 2 dans les deux cas (`run_id` validé par `RUN_ID`).
+- low, second avis 5 (dernière ligne tronquée de `answers.jsonl` / `traces.jsonl`) : reporté. Ignorer la ligne ne suffit pas : l'ajout suivant se collerait à la ligne tronquée faute de saut de ligne final, et le contrat (§5, append-only) ne dit rien. À traiter avec les lecteurs du Rapport (4.11) : tolérer une ligne invalide non terminée et terminer le fichier par `
+` avant d'ajouter.
+- low, second avis 6 (`budget_exceeded` sur des cellules jamais vérifiées) : rejeté. Une cellule non atteinte n'a pas été traitée faute de budget ; la reprise la vérifie et l'écrit `inapplicable` si besoin (la dernière ligne fait foi).
+- low, second avis 7 (`applicability.json` écrit seulement en `finally`) : corrigé, réécrit dès qu'une Configuration est jugée inapplicable.
+- low, second avis 8 (reprise d'un run `completed`) : corrigé, code 0 et « rien à reprendre » ; §8 ne fixe rien, et une relance de run de nuit doit être idempotente.
+- low, second avis 9 (test d'arrêt brutal qui fabrique son état) : corrigé, test du chemin réel (`set_status("failed")` puis reprise).

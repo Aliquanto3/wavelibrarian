@@ -10,18 +10,58 @@ from pathlib import Path
 
 import yaml
 
+from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.experiment import ResolvedExperiment
 from wavelibrarian.config.resolve import fingerprint
 from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.core.ids import canonical_json, sha16
 from wavelibrarian.corpus.declare import declare
-from wavelibrarian.runner.rundir import resolve_parsers
+from wavelibrarian.corpus.ingest import ingest
+from wavelibrarian.corpus.scenario import corpus_apres
+from wavelibrarian.runner.rundir import RUN_ID, resolve_parsers
 
 # (config_id, condition, tier, phase, question_id) : la clé d'un `Answer` sans le run_id.
 Cle = tuple[str, str, int | None, str, str]
 
 
+# Libellés des empreintes d'entrée du manifeste (`inputs`), pour le message de refus.
+_ENTREES = {
+    "corpus_fingerprint": "le Corpus",
+    "scenario_fingerprint": "le Scénario",
+    "catalog_fingerprint": "le Catalogue de modèles",
+}
+
+
 def dossier_de(wl_home: Path, run_id: str) -> Path:
+    if not RUN_ID.fullmatch(run_id):  # `--reprendre ../x` : jamais hors de runs/
+        raise ConfigError("reprendre", f"run_id invalide : {run_id!r} (lettres, chiffres, - et _)")
     return wl_home / "runs" / run_id
+
+
+def empreintes_entrees(experience: ResolvedExperiment, wl_home: Path) -> dict[str, str]:
+    """Empreintes du contenu que l'empreinte de l'Expérience ne couvre pas (elle ne porte que
+    les chemins) : Corpus ingéré, Corpus après Scénario, Catalogue de modèles (tarifs compris).
+    Écrites au manifeste (`inputs`) au départ, comparées à la reprise. `experience` a ses
+    parsers résolus (`resolve_parsers`)."""
+    parser = experience.configurations[0].parser.name
+    parse = ingest(declare(Path(experience.corpus)), parser, wl_home=wl_home)
+    catalogue = load_catalog(Path(experience.catalog) if experience.catalog else None)
+    entrees = {
+        "corpus_fingerprint": parse.fingerprint,
+        "catalog_fingerprint": sha16(canonical_json(catalogue.model_dump(mode="json"))),
+    }
+    if experience.scenario:
+        apres = corpus_apres(parse, Path(experience.scenario), parser=parser)
+        entrees["scenario_fingerprint"] = apres.fingerprint
+    return entrees
+
+
+def lire_manifeste(wl_home: Path, run_id: str) -> dict[str, object]:
+    dossier = dossier_de(wl_home, run_id)
+    try:
+        return json.loads((dossier / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ConfigError("reprendre", f"Exécution {run_id} introuvable ou illisible") from exc
 
 
 def charger_resolue(dossier: Path) -> ResolvedExperiment:
@@ -48,18 +88,16 @@ def verifier_reprise(
     Gel du Jeu doit aussi être celle du manifeste.
     """
     dossier = dossier_de(wl_home, run_id)
-    try:
-        manifeste = json.loads((dossier / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise ConfigError("reprendre", f"Exécution {run_id} introuvable ou illisible") from exc
-    if manifeste.get("status") == "completed":
-        raise ConfigError("reprendre", f"Exécution {run_id} déjà terminée : rien à reprendre")
+    manifeste = lire_manifeste(wl_home, run_id)
     if manifeste.get("freeze_sha256") != freeze_sha256:
         raise ConfigError(
             "reprendre", f"le Jeu de Questions n'est plus celui de l'Exécution {run_id} (Gel)"
         )
     stockee = charger_resolue(dossier)
-    attendue = (dossier / "experiment.sha256").read_text(encoding="utf-8").strip()
+    try:
+        attendue = (dossier / "experiment.sha256").read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ConfigError("reprendre", f"experiment.sha256 illisible : {exc}") from exc
     resolue = resolve_parsers(experience, declare(Path(experience.corpus)))
     if fingerprint(resolue.model_copy(update={"budget": stockee.budget})) != attendue:
         raise ConfigError(
@@ -67,7 +105,21 @@ def verifier_reprise(
             f"l'Expérience diffère de celle de l'Exécution {run_id} "
             "(empreinte différente de experiment.sha256, plafonds exceptés)",
         )
+    stockees = manifeste.get("inputs")
+    if isinstance(stockees, dict):  # contenu du Corpus, du Scénario et du Catalogue
+        actuelles = empreintes_entrees(resolue, wl_home)
+        for cle in sorted(set(stockees) | set(actuelles)):
+            if stockees.get(cle) != actuelles.get(cle):
+                quoi = _ENTREES.get(cle, cle)
+                raise ConfigError(
+                    "reprendre", f"{quoi} n'est plus celui de l'Exécution {run_id} ({cle})"
+                )
     return dossier
+
+
+def deja_terminee(wl_home: Path, run_id: str) -> bool:
+    """Exécution `completed` : une reprise n'a rien à refaire (code 0 dans la CLI)."""
+    return lire_manifeste(wl_home, run_id).get("status") == "completed"
 
 
 def cles_tracees(dossier: Path) -> set[Cle]:

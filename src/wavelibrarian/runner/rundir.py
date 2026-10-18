@@ -26,6 +26,7 @@ from wavelibrarian.ports.components import ComponentSpec
 Status = Literal["running", "completed", "budget_exceeded", "failed"]
 JsonlName = Literal["answers.jsonl", "verdicts.jsonl", "panel.jsonl"]
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+RUN_ID = _RUN_ID  # forme d'un run_id, aussi contrôlée par `--reprendre`
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
@@ -70,6 +71,7 @@ def create_run_dir(
     experience: ResolvedExperiment,
     *,
     freeze_sha256: str,
+    inputs: dict[str, str] | None = None,
 ) -> Path:
     """Crée `runs/<run_id>/` avec `experiment.resolved.yaml`, `experiment.sha256` et
     `manifest.json` (`status: running`, empreinte du Gel `freeze_sha256` exigée par §5) ;
@@ -96,6 +98,7 @@ def create_run_dir(
             "models": _modeles(experience),
             "experiment_sha256": empreinte,
             "freeze_sha256": freeze_sha256,
+            **({} if inputs is None else {"inputs": inputs}),
             "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
         },
     )

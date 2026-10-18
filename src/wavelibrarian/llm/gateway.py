@@ -5,6 +5,7 @@ coût par le Catalogue, règlement, mise en cache, span. Seule la passerelle ém
 """
 
 import json
+import logging
 import time
 from collections.abc import Callable, Mapping
 from decimal import Decimal
@@ -30,6 +31,8 @@ from wavelibrarian.ports.gateway import LLMRequest, LLMResult
 from wavelibrarian.ports.measure import EnergyEstimator, Tokenizer, Tracer
 
 T = TypeVar("T", bound=BaseModel)
+
+log = logging.getLogger(__name__)
 
 Providers = Mapping[str, Provider]  # nom du Catalogue -> adaptateur ; seul `gateway` les importe
 _DEVISE_LOCALE = "EUR"  # modèle local : coût nul, devise du coût de possession (costs.yaml)
@@ -257,6 +260,9 @@ class MeteredGateway:
             self._ledger.settle(reservation, cout)
         except BaseException:
             self._trace_paye_en_erreur(marquee, nom, devise, reponse.usage, cout, latence)
+            # Arrêt pendant le règlement : la réponse est payée (réservation réglée à l'estimé à
+            # la reprise) ; conforme, elle va au cache pour que la reprise ne la repaie pas.
+            self._cacher_si_conforme(schema, cle, reponse.text, reponse.usage, latence, use_cache)
             raise
         if panne is not None:
             self._trace_paye_en_erreur(marquee, nom, devise, reponse.usage, cout, latence)
@@ -266,6 +272,24 @@ class MeteredGateway:
             cost=cout, cost_uncached=cout, latency_s=latence, from_cache=False, stocker=cle,
             remplacer=not use_cache, energy_kwh=reponse.energy_kwh,
         )  # fmt: skip
+
+    def _cacher_si_conforme(
+        self,
+        schema: type[BaseModel] | None,
+        cle: str,
+        texte: str,
+        usage: Usage,
+        latence: float,
+        use_cache: bool,
+    ) -> None:
+        """Mise en cache au mieux d'une réponse payée dont le règlement a échoué : seulement un
+        succès de schéma, et sans jamais masquer l'exception en cours."""
+        try:
+            if schema is not None:
+                schema.model_validate_json(texte)
+            self._cache.put(cle, texte, usage, replace=not use_cache, latency_s=latence)
+        except Exception:
+            log.warning("réponse payée non mise en cache après un règlement interrompu")
 
     def _trace_paye_en_erreur(
         self, request: LLMRequest, nom: str, devise: str, usage: Usage, cout: Decimal, lat: float

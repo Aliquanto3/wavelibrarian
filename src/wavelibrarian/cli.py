@@ -32,7 +32,7 @@ from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.execute import load_questions, run_experiment, verifier_paliers
-from wavelibrarian.runner.resume import verifier_reprise
+from wavelibrarian.runner.resume import deja_terminee, verifier_reprise
 
 app = typer.Typer(
     name="wl",
@@ -104,14 +104,19 @@ def run(
         raise typer.Exit(2) from echec
     typer.echo("Validation réussie.")
     wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    termine = False
     try:  # Gel vérifié à la validation, avant le préflight et tout appel (AD-11, AD-15)
         questions = load_questions(resultat.resolved)
         verifier_paliers(resultat.resolved, questions)  # Palier non déclaré : code 2
         if reprendre is not None:  # Expérience ou Gel différents de l'Exécution : code 2
             verifier_reprise(resultat.resolved, wl_home, reprendre, questions.freeze_sha256)
+            termine = deja_terminee(wl_home, reprendre)
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
+    if reprendre is not None and termine:  # reprise idempotente d'un run de nuit
+        typer.echo(f"Exécution {reprendre} déjà terminée : rien à reprendre.")
+        raise typer.Exit(0)
     modeles = {m for c in resultat.resolved.configurations for m in c.models}
     modeles |= set(resultat.resolved.judges.pool or ())
     if resultat.resolved.judges.calibration_judge is not None:
