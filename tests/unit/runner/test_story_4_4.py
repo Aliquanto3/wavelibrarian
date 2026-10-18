@@ -286,3 +286,121 @@ def test_conditions_et_paliers_refuses_explicitement(
     assert res.exit_code == 2, res.output
     assert "story 4.6" in res.output
     assert not (wl_home / "runs").exists()
+
+
+# --- Revue : Gel avant préflight, plafond, échecs de Configuration et d'Exécution ---------------
+
+
+def _manifest(dossier: Path) -> dict[str, Any]:
+    return json.loads((dossier / "manifest.json").read_text(encoding="utf-8"))
+
+
+def _wl_run_scenarise(monkeypatch: pytest.MonkeyPatch, chemin: Path, sortie: Any) -> Any:
+    """`wl run` par la CLI, avec un Faux LLM scénarisé injecté dans `run_experiment`."""
+    from wavelibrarian import cli
+
+    def avec_faux(*a: Any, **k: Any) -> Any:
+        faux = FakeProvider()
+        faux.script("generate", "*", sortie)
+        return run_experiment(*a, providers={"fake": faux}, **k)
+
+    monkeypatch.setattr(cli, "run_experiment", avec_faux)
+    return _wl_run(chemin)
+
+
+def test_jeu_non_gele_refuse_en_2_avant_le_preflight(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian import cli
+
+    chemin = _questions_copiees(tmp_path)
+    doc = yaml.safe_load(chemin.read_text(encoding="utf-8"))
+    doc["freeze"] = None
+    chemin.write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+
+    def preflight_interdit(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("préflight appelé avant le contrôle du Gel")
+
+    monkeypatch.setattr(cli, "preflight", preflight_interdit)
+    res = _wl_run(_experience(tmp_path, questions=str(chemin)))
+    assert res.exit_code == 2, res.output
+    assert "Préflight" not in res.output
+
+
+def test_plafond_atteint_code_3_et_manifeste_budget_exceeded(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian.core.errors import BudgetExceeded
+
+    appels: list[str] = []
+
+    def sortie(request: LLMRequest) -> str:
+        appels.append(request.inputs["question"])
+        if len(appels) == 2:
+            raise BudgetExceeded("plafond fake atteint")
+        return default_output("generate", request.inputs)
+
+    exp = _experience(tmp_path, configurations=BASELINES[2:], max_questions=3)
+    res = _wl_run_scenarise(monkeypatch, exp, sortie)
+    assert res.exit_code == 3, res.output
+    dossier = _un_run(wl_home)
+    manifest = _manifest(dossier)
+    assert manifest["status"] == "budget_exceeded" and "finished_at" in manifest
+    assert manifest["answers"] == {"ok": 1, "error": 0, "inapplicable": 0}
+    assert [a.status for a in _answers(dossier)] == ["ok"]  # arrêt : la 3e n'est pas posée
+    assert len(appels) == 2
+    assert json.loads((dossier / "applicability.json").read_text(encoding="utf-8")) == {}
+
+
+def test_toutes_les_reponses_en_erreur_code_1_et_decompte_au_manifeste(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exp = _experience(tmp_path, configurations=BASELINES[2:], max_questions=2)
+    res = _wl_run_scenarise(monkeypatch, exp, "pas du JSON")
+    assert res.exit_code == 1, res.output
+    assert "Aucune Réponse valide" in res.output
+    dossier = _un_run(wl_home)
+    manifest = _manifest(dossier)
+    assert manifest["status"] == "completed"
+    assert manifest["answers"] == {"ok": 0, "error": 2, "inapplicable": 0}
+
+
+def test_configuration_en_echec_ses_questions_en_erreur_les_autres_s_executent(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian.architectures.bm25_only import Bm25Only
+
+    def check_en_panne(self: Any, profile: Any) -> Any:
+        raise RuntimeError("check en panne")
+
+    monkeypatch.setattr(Bm25Only, "check", check_en_panne)
+    confs = [BASELINES[0], BASELINES[2]]
+    res = _wl_run(_experience(tmp_path, configurations=confs, max_questions=2))
+    assert res.exit_code == 0, res.output
+    dossier = _un_run(wl_home)
+    reponses = _answers(dossier)
+    bm25 = [a for a in reponses if a.config_id == "bm25"]
+    assert len(bm25) == 2
+    assert all(
+        a.status == "error" and "RuntimeError : check en panne" in (a.error or "") for a in bm25
+    )
+    assert [a.status for a in reponses if a.config_id == "sans-contexte"] == ["ok", "ok"]
+    assert _manifest(dossier)["answers"] == {"ok": 2, "error": 2, "inapplicable": 0}
+
+
+def test_exception_non_rattrapee_manifeste_failed(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian.runner import execute
+
+    def profil_en_panne(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("profilage en panne")
+
+    monkeypatch.setattr(execute, "profil_corpus", profil_en_panne)
+    resolue = validate_file(_experience(tmp_path, configurations=BASELINES[2:]), wl_home).resolved
+    with pytest.raises(RuntimeError, match="profilage en panne"):
+        run_experiment(resolue, load_questions(resolue), wl_home=wl_home)
+    dossier = _un_run(wl_home)
+    assert _manifest(dossier)["status"] == "failed"
+    assert "profilage en panne" in (dossier / "run.log").read_text(encoding="utf-8")
+    RunLock(wl_home, "suivant").acquire()  # le verrou est libéré

@@ -1,7 +1,7 @@
 ---
 story: "4.4"
 title: Exécution d'une Expérience par `wl run`
-status: review
+status: done
 ---
 
 # Story 4.4 : Exécution d'une Expérience par `wl run`
@@ -52,5 +52,19 @@ status: review
   - Scénario (`lang` et `parser` passés à `corpus_apres`) : story 4.7.
   - Rapport enchaîné par `cli.py` : story 4.11.
   - Libération manuelle d'une réservation `hors_execution` orpheline, plafond `ollama` hors EUR à la validation, contrôle du réservoir de Juges au préflight (déjà fait en 1.12 pour `wl run`) : non traités.
-- Écart : AD-11 place le Gel dans « chargement, validation ». Il est vérifié après le préflight, mais avant tout appel payant, avant `run.lock` et avant le dossier d'Exécution. Les tests du préflight, qui utilisent des Expériences factices, gardent ainsi leur sens.
+- Écart levé à la revue : le Gel est désormais vérifié juste après la validation, avant le préflight (AD-11). Les tests du préflight neutralisent ce contrôle par une fixture.
 - Risque : abaisser le niveau du logger `wavelibrarian` est une modification globale. Elle est restaurée en fin d'Exécution, mais un appelant concurrent (hors AD-11) la verrait.
+
+## Revue
+
+Revue Opus en une passe, après rebase sur `main` (115ec3e). Liste du second avis (Haiku) reprise point par point.
+
+- medium, second avis 1 (`corpus_profile.json` du seul parser de `configurations[0]`) : rejeté. contracts.md §5 prévoit un fichier unique « Profil de corpus (FR-7) », sans forme par parser ; `check()` reçoit bien le Profil de son propre parser (`preparer`, en mémoire par parser). À revoir si une Expérience mêle des parsers et que le Rapport doit afficher chaque Profil.
+- medium, second avis 2 (Exécution `completed` en code 0 alors que toutes les Réponses sont en `error`) : corrigé. §5 ne prévoit pas `completed_with_errors`, donc le statut reste `completed`, mais le manifeste porte désormais `answers: {ok, error, inapplicable}`, et `wl run` sort en 1 (« Aucune Réponse valide ») quand aucune Réponse n'est `ok` et qu'au moins une est en `error`. Une Exécution entièrement inapplicable reste en 0.
+- medium, second avis 3 (tests manquants) : corrigé. Ajout de `test_plafond_atteint_code_3_et_manifeste_budget_exceeded`, `test_toutes_les_reponses_en_erreur_code_1_et_decompte_au_manifeste`, `test_configuration_en_echec_ses_questions_en_erreur_les_autres_s_executent` et `test_exception_non_rattrapee_manifeste_failed` (verrou libéré compris).
+- low, second avis 4 (écritures non atomiques) : corrigé. `corpus_profile.json` et `applicability.json` passent par un fichier temporaire puis `replace`, en LF.
+- low, second avis 5 (Gel vérifié après le préflight : code 4 au lieu de 2 si Ollama est coupé) : corrigé, `load_questions` est appelé juste après la validation. Ce point contredisait aussi le critère « refusée avant tout appel » d'AC 2, puisque le préflight interroge Ollama. Test : `test_jeu_non_gele_refuse_en_2_avant_le_preflight`.
+- low, second avis 6 et 7 (cache jetable limité au Cache de réponses, `IndexCache` partagé) : reporté à l'epic 7. Vérification à faire : une Architecture qui appelle le LLM à l'indexation, exécutée avec un Faux LLM scénarisé, ne doit pas laisser dans `WL_HOME/index/` un index construit sur une sortie scénarisée (clé d'index distincte ou cache d'index jetable).
+- low, second avis 8 (`except Exception` attrape les erreurs de programmation) : rejeté. AD-11 veut qu'une erreur sur une Question donne `status: error` sans arrêter l'Exécution ; le type et le message sont consignés dans `error`, et la pile complète va dans `run.log` (`log.exception`) pour les erreurs de Configuration.
+- low, second avis 9 (`attach_run_log` hors du `try`) : corrigé. Un échec à l'ouverture de `run.log` passe maintenant le manifeste à `failed`.
+- low, revue (ingestion d'un parser propre à une Configuration hors du `try` de la Configuration) : reporté. Un échec d'ingestion pour la 2e Configuration passe toute l'Exécution en `failed` au lieu de mettre ses seules Questions en `error`. Sans effet tant que toutes les Baselines partagent le parser résolu.

@@ -121,10 +121,18 @@ def _resultat(modeles: list[str], profil: str = "cpu", juge_calibration: str | N
     return SimpleNamespace(resolved=resolu, catalog=load_catalog())
 
 
+@pytest.fixture(autouse=True)
+def _jeu_gele(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Les Expériences factices de ces tests n'ont pas de Jeu : le contrôle du Gel, fait avant
+    le préflight, est neutralisé (testé dans `test_story_4_4.py`)."""
+    monkeypatch.setattr(cli, "load_questions", lambda _r: None)
+
+
 def _sans_execution(monkeypatch: pytest.MonkeyPatch) -> None:
     """Préflight seul : l'Exécution (story 4.4) est testée dans `test_story_4_4.py`."""
-    issue = SimpleNamespace(run_id="r", status="completed", n_answers=0, run_dir=Path("r"))
-    monkeypatch.setattr(cli, "load_questions", lambda _r: None)
+    issue = SimpleNamespace(
+        run_id="r", status="completed", n_answers=0, run_dir=Path("r"), all_failed=False
+    )
     monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
 
 

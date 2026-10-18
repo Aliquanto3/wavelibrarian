@@ -93,6 +93,11 @@ def run(
             typer.echo(f"  - {e.path} : {e.message}", err=True)
         raise typer.Exit(2) from echec
     typer.echo("Validation réussie.")
+    try:  # Gel vérifié à la validation, avant le préflight et tout appel (AD-11, AD-15)
+        questions = load_questions(resultat.resolved)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
     modeles = {m for c in resultat.resolved.configurations for m in c.models}
     modeles |= set(resultat.resolved.judges.pool or ())
     if resultat.resolved.judges.calibration_judge is not None:
@@ -108,7 +113,6 @@ def run(
     typer.echo("Préflight réussi.")
     wl_home = Path(os.environ.get("WL_HOME") or ".wl")
     try:
-        questions = load_questions(resultat.resolved)  # Gel vérifié avant tout appel (AD-15)
         issue = run_experiment(resultat.resolved, questions, wl_home=wl_home)
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
@@ -123,6 +127,9 @@ def run(
     if issue.status == "budget_exceeded":
         typer.echo("Plafond de dépense atteint : Exécution arrêtée.", err=True)
         raise typer.Exit(3)
+    if issue.all_failed:
+        typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
+        raise typer.Exit(1)
 
 
 @app.command("installer")

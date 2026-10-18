@@ -408,7 +408,9 @@ def test_cli_experience_valide(
     from wavelibrarian import cli
 
     # Validation seule : l'Exécution (story 4.4) est testée dans `test_story_4_4.py`.
-    issue = SimpleNamespace(run_id="r", status="completed", n_answers=0, run_dir=wl_home)
+    issue = SimpleNamespace(
+        run_id="r", status="completed", n_answers=0, run_dir=wl_home, all_failed=False
+    )
     monkeypatch.setattr(cli, "load_questions", lambda _r: None)
     monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
     res = CliRunner().invoke(app, ["run", str(ecrire(BASE))])

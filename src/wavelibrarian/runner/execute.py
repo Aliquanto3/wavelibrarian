@@ -63,6 +63,12 @@ class RunOutcome:
     run_dir: Path
     status: RunStatus
     n_answers: int
+    counts: dict[str, int]
+
+    @property
+    def all_failed(self) -> bool:
+        """Aucune Réponse `ok` et au moins une en `error` : l'Exécution n'a rien produit."""
+        return self.counts.get("ok", 0) == 0 and self.counts.get("error", 0) > 0
 
 
 def load_questions(experience: ResolvedExperiment) -> FrozenQuestions:
@@ -94,6 +100,14 @@ def _question_input(q: Question) -> QuestionInput:
     return QuestionInput(question_id=q.id, text=q.text, lang=q.lang, history=q.history)
 
 
+def _ecrire_json(chemin: Path, donnees: Any) -> None:
+    """Écriture atomique (fichier temporaire puis `replace`), comme `manifest.json`."""
+    tmp = chemin.with_name(chemin.name + ".tmp")
+    texte = json.dumps(donnees, ensure_ascii=False, indent=2) + "\n"
+    tmp.write_text(texte, encoding="utf-8", newline="\n")
+    tmp.replace(chemin)
+
+
 class _Runner:
     def __init__(
         self,
@@ -110,7 +124,15 @@ class _Runner:
         self._parses: dict[str, ParsedCorpus] = {}
         self._profils: dict[str, CorpusProfile] = {}
         self.inapplicables: dict[str, dict[str, Any]] = {}
-        self.n_answers = 0
+        self.counts: dict[str, int] = {"ok": 0, "error": 0, "inapplicable": 0}
+
+    @property
+    def n_answers(self) -> int:
+        return sum(self.counts.values())
+
+    def _ecrire(self, writer: JsonlWriter, answer: Answer) -> None:
+        writer.append(answer.model_dump(mode="json"))
+        self.counts[answer.status] += 1
 
     # --- ingestion et profilage ------------------------------------------------------------
 
@@ -130,15 +152,10 @@ class _Runner:
         return self._parses[parser], self._profils[parser]
 
     def ecrire_profil(self, profil: CorpusProfile) -> None:
-        (self.dossier / "corpus_profile.json").write_text(
-            json.dumps(profil.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        _ecrire_json(self.dossier / "corpus_profile.json", profil.model_dump(mode="json"))
 
     def ecrire_applicabilite(self) -> None:
-        (self.dossier / "applicability.json").write_text(
-            json.dumps(self.inapplicables, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        _ecrire_json(self.dossier / "applicability.json", self.inapplicables)
 
     # --- Réponses --------------------------------------------------------------------------
 
@@ -177,8 +194,7 @@ class _Runner:
     ) -> None:
         vide = ArchAnswer(text="", abstained=False, retrieval_method=methode)
         for q in self.questions:
-            writer.append(self._answer(conf, q, vide, status, message).model_dump(mode="json"))
-            self.n_answers += 1
+            self._ecrire(writer, self._answer(conf, q, vide, status, message))
 
     def configuration(self, writer: JsonlWriter, conf: ResolvedConfiguration) -> None:
         ctx = self.ctx
@@ -232,8 +248,7 @@ class _Runner:
                 log.warning("Question %s (%s) en erreur : %s", q.id, conf.id, erreur)
                 vide = ArchAnswer(text="", abstained=False, retrieval_method=methode)
                 answer = self._answer(conf, q, vide, "error", f"{type(erreur).__name__} : {erreur}")
-            writer.append(answer.model_dump(mode="json"))
-            self.n_answers += 1
+            self._ecrire(writer, answer)
 
 
 def run_experiment(
@@ -259,12 +274,13 @@ def run_experiment(
         experience, wl_home=wl_home, run_id=run_id, providers=providers, execution=True
     ) as ctx:
         dossier = create_run_dir(wl_home, run_id, experience, freeze_sha256=questions.freeze_sha256)
-        handler = attach_run_log(dossier)
+        handler: logging.Handler | None = None
         paquet = logging.getLogger("wavelibrarian")
         niveau = paquet.level
-        if paquet.getEffectiveLevel() > logging.INFO:  # les étapes du runner vont dans run.log
-            paquet.setLevel(logging.INFO)
         try:
+            handler = attach_run_log(dossier)
+            if paquet.getEffectiveLevel() > logging.INFO:  # étapes du runner dans run.log
+                paquet.setLevel(logging.INFO)
             log.info("Exécution %s : %d Questions posées", run_id, len(questions.questions))
             runner = _Runner(ctx, dossier, corpus, questions.questions)
             _, profil = runner.preparer(experience.configurations[0].parser.name)
@@ -279,13 +295,20 @@ def run_experiment(
                 statut = "budget_exceeded"
             finally:
                 runner.ecrire_applicabilite()
-            set_status(dossier, statut)
-            log.info("Exécution %s : %s, %d Réponses", run_id, statut, runner.n_answers)
+            set_status(dossier, statut, answers=dict(runner.counts))
+            log.info("Exécution %s : %s, Réponses %s", run_id, statut, runner.counts)
         except BaseException:
             log.exception("Exécution %s en échec", run_id)
             set_status(dossier, "failed")
             raise
         finally:
             paquet.setLevel(niveau)
-            detach_run_log(handler)
-    return RunOutcome(run_id=run_id, run_dir=dossier, status=statut, n_answers=runner.n_answers)
+            if handler is not None:
+                detach_run_log(handler)
+    return RunOutcome(
+        run_id=run_id,
+        run_dir=dossier,
+        status=statut,
+        n_answers=runner.n_answers,
+        counts=dict(runner.counts),
+    )

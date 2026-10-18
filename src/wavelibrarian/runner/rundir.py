@@ -101,11 +101,14 @@ def create_run_dir(
     return dossier
 
 
-def set_status(dossier: Path, status: Status) -> None:
-    """Met à jour `status` du manifeste (fin d'Exécution)."""
+def set_status(dossier: Path, status: Status, *, answers: dict[str, int] | None = None) -> None:
+    """Met à jour `status` du manifeste (fin d'Exécution) ; `answers` : décompte des Réponses
+    par statut (`ok`, `error`, `inapplicable`), pour que les erreurs se voient au manifeste."""
     chemin = dossier / "manifest.json"
     donnees = json.loads(chemin.read_text(encoding="utf-8"))
     donnees["status"] = status
+    if answers is not None:
+        donnees["answers"] = answers
     if status != "running":
         donnees["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _ecrire_manifest(dossier, donnees)
