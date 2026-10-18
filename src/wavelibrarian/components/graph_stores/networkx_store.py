@@ -8,27 +8,31 @@ from typing import Any
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from wavelibrarian.components.graph.fusion import (
+    KIND_GENERIQUE,
+    meilleur_kind,
+    meilleur_texte,
+    nom_canonique,
+)
 from wavelibrarian.core.errors import WlError
-from wavelibrarian.core.ids import slug
+from wavelibrarian.core.ids import slug_entite
 from wavelibrarian.registry import register
 
 _FICHIER = "graph.json"
 
 
-def _meilleur(a: str, b: str) -> str:
-    """Description conservée : la plus longue, ex æquo la plus petite (indépendant de l'ordre)."""
-    return min(a, b, key=lambda t: (-len(t), t)) if a and b else (a or b)
-
-
 @register("graph_store", "networkx")
 class NetworkxGraphStore:
-    """Entités fusionnées par `slug` (insensible à la casse et aux accents).
+    """Entités fusionnées par `slug_entite` (insensible à la casse, aux accents, à la forme de
+    l'apostrophe et aux ligatures œ/æ).
 
-    Un nœud porte `name`, `kind`, `description`, `passage_ids` ; une arête non orientée porte
-    `description`, `weight`, `passage_ids`. Fusion indépendante de l'ordre des mentions : nom et
-    type = plus petite valeur, description = la plus longue, poids = le plus grand, Passages =
-    union.
-    Une relation dont une extrémité est inconnue crée cette entité (nom = identifiant donné).
+    Un nœud porte `name`, `kind`, `description`, `passage_ids` et `noms` (forme -> nombre de
+    mentions) ; une arête non orientée porte `description`, `weight`, `passage_ids`. Fusion
+    indépendante de l'ordre des mentions (`components/graph/fusion.py`) : nom = forme la plus
+    mentionnée (ex æquo la plus accentuée, puis la plus petite), type extrait prioritaire sur le
+    type générique `entity` (sinon le plus petit), description = la plus longue, poids = le plus
+    grand, Passages = union. Une relation dont une extrémité est inconnue crée cette entité (forme
+    donnée, sans mention comptée, type `entity`). `remove_passages` ne recompte pas `noms`.
     """
 
     class Params(BaseModel):
@@ -45,19 +49,36 @@ class NetworkxGraphStore:
         description: str,
         passage_ids: Sequence[str],
     ) -> None:
-        cle = slug(entity_id) or slug(name)
+        self._upsert(entity_id, name, kind, description, passage_ids, mention=True)
+
+    def _upsert(
+        self,
+        entity_id: str,
+        name: str,
+        kind: str,
+        description: str,
+        passage_ids: Sequence[str],
+        mention: bool,
+    ) -> None:
+        cle = slug_entite(entity_id) or slug_entite(name)
         if not cle:
             raise WlError(f"entité sans identifiant exploitable : {entity_id!r}")
+        forme = name or entity_id
         if cle in self._g:
             n = self._g.nodes[cle]
-            n["name"] = min(n["name"], name) if name else n["name"]
-            n["kind"] = min(n["kind"], kind) if kind else n["kind"]
-            n["description"] = _meilleur(n["description"], description)
+            noms: dict[str, int] = dict(n.get("noms") or {n["name"]: 0})
+            if mention or forme not in noms:
+                noms[forme] = noms.get(forme, 0) + int(mention)
+            n["noms"] = noms
+            n["name"] = nom_canonique(noms)
+            n["kind"] = meilleur_kind(n["kind"], kind)
+            n["description"] = meilleur_texte(n["description"], description)
             n["passage_ids"] = sorted(set(n["passage_ids"]) | set(passage_ids))
         else:
             self._g.add_node(
                 cle,
-                name=name or entity_id,
+                name=forme,
+                noms={forme: int(mention)},
                 kind=kind,
                 description=description,
                 passage_ids=sorted(set(passage_ids)),
@@ -71,20 +92,20 @@ class NetworkxGraphStore:
         weight: float,
         passage_ids: Sequence[str],
     ) -> None:
-        a, b = slug(source), slug(target)
+        a, b = slug_entite(source), slug_entite(target)
         if not a or not b:
             raise WlError(f"relation sans extrémité exploitable : {source!r} -> {target!r}")
         if a == b:
             return  # pas de boucle : une entité ne se relie pas à elle-même
         for cle, brut in ((a, source), (b, target)):
             if cle not in self._g:
-                self.upsert_entity(cle, brut, "entity", "", passage_ids)
+                self._upsert(cle, brut, KIND_GENERIQUE, "", passage_ids, mention=False)
             else:  # l'extrémité est mentionnée par les mêmes Passages
                 n = self._g.nodes[cle]
                 n["passage_ids"] = sorted(set(n["passage_ids"]) | set(passage_ids))
         if self._g.has_edge(a, b):
             e = self._g.edges[a, b]
-            e["description"] = _meilleur(e["description"], description)
+            e["description"] = meilleur_texte(e["description"], description)
             e["weight"] = max(float(e["weight"]), float(weight))
             e["passage_ids"] = sorted(set(e["passage_ids"]) | set(passage_ids))
         else:

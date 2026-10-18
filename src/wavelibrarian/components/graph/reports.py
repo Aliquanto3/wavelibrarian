@@ -54,6 +54,14 @@ class CommunityReporter:
         self, graph: "nx.Graph[Any]", community: Community, passages: Mapping[str, Passage]
     ) -> list[Passage]:
         ids = {p for m in community.members for p in graph.nodes[m]["passage_ids"]}
+        absents = sorted(ids - passages.keys())
+        if absents:
+            _log.warning(
+                "communauté %s : %d Passage(s) source(s) inconnu(s) écarté(s) : %s",
+                community.community_id,
+                len(absents),
+                ", ".join(absents[:5]),
+            )
         return [passages[i] for i in sorted(ids) if i in passages]
 
     def report(

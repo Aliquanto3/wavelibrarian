@@ -118,7 +118,7 @@ def test_fusion_par_slug_casse_et_accents(ctx: RunCtx) -> None:
     n = g.nodes["eric-muller"]
     assert n["passage_ids"] == ["p1", "p2", "p3"]
     assert n["description"] == "description plus longue"
-    assert n["name"] == "ERIC MULLER"  # plus petite valeur : indépendant de l'ordre
+    assert n["name"] == "Éric Müller"  # ex æquo de mentions : la forme accentuée
 
 
 def test_fusion_independante_de_l_ordre(ctx: RunCtx) -> None:
@@ -197,6 +197,8 @@ def test_extraction_scenarisee_fusionne_par_slug(ctx: RunCtx, passages: list[Pas
     with ctx.scope(post="indexing"):
         (x,) = EntityExtractor(ctx).extract_into(store, passages[:1])
     assert [e[0] for e in x.entities] == ["eric", "lyon"]
+    # dans un Passage, mêmes règles que le store : forme accentuée, description la plus longue
+    assert x.entities[0][1:] == ("Éric", "personne", "doublon")
     assert len(x.relations) == 1
     assert store.graph().has_edge("eric", "lyon")
 
@@ -248,9 +250,8 @@ def test_communautes_deterministes(ctx: RunCtx, passages: list[Passage]) -> None
     assert a == b
     membres = [m for c in a for m in c.members]
     assert sorted(membres) == sorted(g.nodes)  # partition
-    assert [c.members[0] for c in a if len(c.members) == len(a[0].members)] == sorted(
-        c.members[0] for c in a if len(c.members) == len(a[0].members)
-    )
+    cles = [(-len(c.members), c.community_id) for c in a]
+    assert cles == sorted(cles)  # taille décroissante, ex æquo par id
 
 
 def test_communautes_independantes_de_l_ordre_d_insertion() -> None:
@@ -262,7 +263,8 @@ def test_communautes_independantes_de_l_ordre_d_insertion() -> None:
     for u, v in reversed(aretes):
         g2.add_edge(v, u, weight=1.0)
     assert detect_communities(g1, 7) == detect_communities(g2, 7)
-    assert [c.members for c in detect_communities(g1, 7)] == [("a", "b", "c"), ("d", "e", "f")]
+    membres = sorted(c.members for c in detect_communities(g1, 7))
+    assert membres == [("a", "b", "c"), ("d", "e", "f")]
 
 
 def test_graine_derivee_de_l_experience() -> None:
@@ -349,3 +351,104 @@ def test_contexte_du_rapport_borne_a_la_fenetre(
         r = CommunityReporter(ctx).reports(g, c, {passages[0].passage_id: passages[0]})
     assert len(r) == 1
     assert "tronqué" in caplog.text
+
+
+# -- Revue ---------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("relation_d_abord", [True, False])
+def test_kind_et_nom_extraits_l_emportent_sur_la_relation(
+    ctx: RunCtx, relation_d_abord: bool
+) -> None:
+    s = _store(ctx)
+    ops = [
+        lambda: s.upsert_relation("eric", "Paris", "vit", 0.5, ["p1"]),
+        lambda: s.upsert_entity("Éric", "Éric", "personne", "desc", ["p2"]),
+    ]
+    for op in ops if relation_d_abord else reversed(ops):
+        op()
+    n = s.graph().nodes["eric"]
+    assert (n["kind"], n["name"]) == ("personne", "Éric")
+    assert s.graph().nodes["paris"]["kind"] == "entity"
+
+
+def test_nom_canonique_le_plus_frequent(ctx: RunCtx) -> None:
+    mentions = [("eric", "p1"), ("Éric", "p2"), ("eric", "p3")]
+    for ordre in (mentions, list(reversed(mentions))):
+        s = _store(ctx)
+        for nom, p in ordre:
+            s.upsert_entity(nom, nom, "personne", "", [p])
+        assert s.graph().nodes["eric"]["name"] == "eric"
+
+
+def test_slug_entite_apostrophes_et_ligatures() -> None:
+    from wavelibrarian.core.ids import slug, slug_entite
+
+    assert slug_entite("L’Oréal") == slug_entite("L'Oréal") == "l-oreal"
+    assert slug_entite("Œuvre et Æther") == "oeuvre-et-aether"
+    assert slug("Œuvre") == "uvre"  # `slug` des Ancrages inchangé (Jeux gelés)
+
+
+def test_save_load_garde_les_noms(ctx: RunCtx, tmp_path: Path) -> None:
+    s = _store(ctx)
+    s.upsert_entity("L’Oréal", "L’Oréal", "org", "", ["p1"])
+    s.upsert_relation("L'Oréal", "Paris", "siège", 1.0, ["p1"])
+    s.save(tmp_path / "g")
+    t = _store(ctx)
+    t.load(tmp_path / "g")
+    assert _egal(s.graph(), t.graph())
+    assert t.graph().nodes["l-oreal"]["name"] == "L’Oréal"
+
+
+def test_borner_reserve_le_schema(ctx: RunCtx) -> None:
+    from wavelibrarian.components.graph._texte import SURCOUT_SCHEMA, borner, reserve_schema
+    from wavelibrarian.llm.roles import ExtractEntitiesOutput
+
+    modele = EntityExtractor(ctx).model_id
+    fenetre = ctx.catalog.get(modele).context_window
+    if fenetre is None:
+        pytest.skip("pas de fenêtre au Catalogue")
+    reserve = reserve_schema(ctx, modele, ExtractEntitiesOutput)
+    assert reserve > SURCOUT_SCHEMA
+    sortie = fenetre - 128 - 10  # tient sans réserve, plus avec
+    assert borner(ctx, modele, "", "x", sortie, "t") == "x"
+    with pytest.raises(ConfigError):
+        borner(ctx, modele, "", "x", sortie, "t", reserve=reserve)
+
+
+def test_sources_absentes_signalees(
+    ctx: RunCtx, passages: list[Passage], caplog: pytest.LogCaptureFixture
+) -> None:
+    g = nx.Graph()
+    g.add_node(
+        "a", name="A", kind="k", description="", passage_ids=["inconnu", passages[0].passage_id]
+    )
+    (c,) = detect_communities(g, 1)
+    with caplog.at_level("WARNING"):
+        sources = CommunityReporter(ctx).sources(g, c, {passages[0].passage_id: passages[0]})
+    assert sources == [passages[0]]
+    assert "inconnu" in caplog.text
+
+
+def test_communautes_identiques_entre_processus() -> None:
+    import os
+    import subprocess
+    import sys
+
+    script = (
+        "import random, networkx as nx\n"
+        "from wavelibrarian.components.graph.communities import detect_communities\n"
+        "r = random.Random(3); g = nx.Graph()\n"
+        "noms = [f'e{i}' for i in range(40)]\n"
+        "for _ in range(120):\n"
+        "    a, b = r.sample(noms, 2); g.add_edge(a, b, weight=r.random())\n"
+        "print([c.community_id for c in detect_communities(g, 42)])\n"
+    )
+    sorties = set()
+    for graine in ("0", "1", "12345"):
+        env = {**os.environ, "PYTHONHASHSEED": graine}
+        res = subprocess.run(
+            [sys.executable, "-c", script], env=env, capture_output=True, text=True, check=True
+        )
+        sorties.add(res.stdout)
+    assert len(sorties) == 1

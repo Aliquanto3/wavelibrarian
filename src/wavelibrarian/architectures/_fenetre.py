@@ -8,20 +8,15 @@ from collections.abc import Sequence
 from typing import Any
 
 from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.core.fenetre import couper
 from wavelibrarian.core.types import Passage, QuestionInput
 
 _log = logging.getLogger(__name__)
 
+__all__ = ["MARGE_GENERATE", "borner_passages", "couper"]
+
 # Réserve pour le system du générateur et l'habillage du message (« Contexte : », « Question : »).
 MARGE_GENERATE = 256
-
-
-def couper(texte: str, tokenizer: Any, limite: int) -> str:
-    """Raccourcit `texte` (par pas de 20 %) jusqu'à tenir dans `limite` tokens."""
-    coupe = texte
-    while coupe and tokenizer.count(coupe) > limite:
-        coupe = coupe[: int(len(coupe) * 0.8)]
-    return coupe
 
 
 def borner_passages(

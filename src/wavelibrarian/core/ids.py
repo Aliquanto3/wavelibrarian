@@ -33,6 +33,15 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", sans_accents.lower()).strip("-")
 
 
+_ENTITE = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE"})
+
+
+def slug_entite(text: str) -> str:
+    """`slug` d'un nom d'entité : apostrophes typographiques unifiées (« L’Oréal » = « L'Oréal »)
+    et ligatures œ/æ développées. Distinct de `slug`, qui fixe les Ancrages gelés des Jeux."""
+    return slug(text.translate(_ENTITE))
+
+
 def new_run_id(experiment_hash: str) -> str:
     """Identifiant d'Exécution `YYYYMMDD-HHMMSS-<6 hex>` en UTC."""
     maintenant = datetime.now(UTC)

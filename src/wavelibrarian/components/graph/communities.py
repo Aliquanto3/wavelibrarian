@@ -23,7 +23,8 @@ def louvain_seed(experiment_seed: int) -> int:
 
 def detect_communities(graph: "nx.Graph[Any]", seed: int, min_size: int = 1) -> list[Community]:
     """Louvain sur une copie canonique (nœuds et arêtes triés), graine fixée ; communautés triées
-    par taille décroissante puis plus petit membre. Deux appels donnent les mêmes communautés."""
+    par taille décroissante puis `community_id` (ex æquo par id). Deux appels donnent les mêmes
+    communautés."""
     if graph.number_of_nodes() == 0:
         return []
     g: nx.Graph[Any] = nx.Graph()
@@ -40,5 +41,5 @@ def detect_communities(graph: "nx.Graph[Any]", seed: int, min_size: int = 1) -> 
         for p in parts
         if len(p) >= min_size
     ]
-    communautes.sort(key=lambda c: (-len(c.members), c.members[0]))
+    communautes.sort(key=lambda c: (-len(c.members), c.community_id))
     return communautes

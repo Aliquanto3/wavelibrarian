@@ -5,8 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from wavelibrarian.components.graph._texte import borner
-from wavelibrarian.core.ids import slug
+from wavelibrarian.components.graph._texte import borner, reserve_schema
+from wavelibrarian.components.graph.fusion import meilleur_kind, meilleur_texte, nom_canonique
+from wavelibrarian.core.ids import slug_entite
 from wavelibrarian.core.types import Passage
 from wavelibrarian.llm.roles import ExtractEntitiesOutput
 from wavelibrarian.ports.components import GraphStore
@@ -46,7 +47,13 @@ class EntityExtractor:
 
     def extract_passage(self, passage: Passage) -> Extraction:
         texte = borner(
-            self._ctx, self.model_id, _SYSTEM, passage.text, self._max_tokens, "extract_entities"
+            self._ctx,
+            self.model_id,
+            _SYSTEM,
+            passage.text,
+            self._max_tokens,
+            "extract_entities",
+            reserve=reserve_schema(self._ctx, self.model_id, ExtractEntitiesOutput),
         )
         requete = LLMRequest(
             model_id=self.model_id,
@@ -59,17 +66,25 @@ class EntityExtractor:
             inputs={"text": texte},
         )
         sortie, _ = self._ctx.gateway.complete_structured(requete, ExtractEntitiesOutput)
-        entites: dict[str, tuple[str, str, str, str]] = {}
+        # mentions d'une même entité dans le Passage : mêmes règles de fusion que le GraphStore
+        noms: dict[str, dict[str, int]] = {}
+        kinds: dict[str, str] = {}
+        descriptions: dict[str, str] = {}
         for e in sortie.entities:
-            cle = slug(e.name)
-            if cle and cle not in entites:
-                entites[cle] = (cle, e.name, e.kind, e.description)
+            cle = slug_entite(e.name)
+            if not cle:
+                continue
+            compte = noms.setdefault(cle, {})
+            compte[e.name] = compte.get(e.name, 0) + 1
+            kinds[cle] = meilleur_kind(kinds.get(cle, ""), e.kind)
+            descriptions[cle] = meilleur_texte(descriptions.get(cle, ""), e.description)
+        entites = [(c, nom_canonique(noms[c]), kinds[c], descriptions[c]) for c in noms]
         relations = []
         for r in sortie.relations:
-            a, b = slug(r.source), slug(r.target)
+            a, b = slug_entite(r.source), slug_entite(r.target)
             if a and b and a != b:
                 relations.append((a, b, r.description, float(r.weight)))
-        return Extraction(passage.passage_id, tuple(entites.values()), tuple(relations))
+        return Extraction(passage.passage_id, tuple(entites), tuple(relations))
 
     def extract(self, passages: Sequence[Passage]) -> list[Extraction]:
         return [self.extract_passage(p) for p in passages]
