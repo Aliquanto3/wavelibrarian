@@ -35,3 +35,17 @@ def test_desaccord_total() -> None:
 def test_longueurs_differentes() -> None:
     with pytest.raises(ValueError, match="longueurs"):
         cohen_kappa([True], [True, False])
+
+
+def test_evaluateur_constant_face_a_mixte() -> None:
+    # p_o = 2/4 ; p_e = (4*2 + 0*2)/16 = 0,5 ; kappa = 0
+    assert cohen_kappa([True] * 4, [True, True, False, False]) == 0.0
+
+
+def test_deux_classes_constantes_opposees() -> None:
+    # p_o = 0 ; p_e = (n*0 + 0*n)/n² = 0 ; kappa = 0
+    assert cohen_kappa([True] * 3, [False] * 3) == 0.0
+
+
+def test_un_seul_item() -> None:
+    assert cohen_kappa([True], [True]) is None

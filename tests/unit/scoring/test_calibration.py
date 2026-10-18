@@ -55,17 +55,54 @@ def test_erreurs_au_chemin(tmp_path: Path, lignes: list[str], chemin: str) -> No
     assert exc.value.path == chemin
 
 
-def test_verdict_yes_no_non_guillemete_et_autre_type(tmp_path: Path) -> None:
-    # `yes` / `no` nus (comme dans le contrat §4.6) sont lus en booléens par YAML : acceptés.
-    entete = "annotator: a@annotations:@  - answer_id: x@    criterion: correctness@".replace(
-        "@", "\n"
-    )
-    (tmp_path / "a.yaml").write_text(entete + "    verdict: no\n", encoding="utf-8")
-    assert charger_dossier(tmp_path).verdicts == {("a", "x", "correctness"): False}
-    (tmp_path / "a.yaml").write_text(entete + "    verdict: 1\n", encoding="utf-8")
+ENTETE = "annotator: a\nannotations:\n  - answer_id: x\n    criterion: correctness\n"
+
+
+@pytest.mark.parametrize(
+    ("verdict", "attendu"), [("yes", True), ("no", False), ('"yes"', True), ("'no'", False)]
+)
+def test_verdict_yes_no_nu_ou_guillemete(tmp_path: Path, verdict: str, attendu: bool) -> None:
+    (tmp_path / "a.yaml").write_text(ENTETE + f"    verdict: {verdict}\n", encoding="utf-8")
+    assert charger_dossier(tmp_path).verdicts == {("a", "x", "correctness"): attendu}
+
+
+@pytest.mark.parametrize("verdict", ["1", "on", "off", "Yes", "NO", "true", '"Yes"', "~"])
+def test_verdict_autre_que_yes_no_refuse(tmp_path: Path, verdict: str) -> None:
+    (tmp_path / "a.yaml").write_text(ENTETE + f"    verdict: {verdict}\n", encoding="utf-8")
     with pytest.raises(ConfigError) as exc:
         charger_dossier(tmp_path)
     assert exc.value.path == "annotations[0].verdict"
+    assert "a.yaml" in exc.value.message
+
+
+def test_cle_dupliquee_refusee(tmp_path: Path) -> None:
+    corps = ENTETE + "    verdict: yes\n    verdict: no\n"
+    (tmp_path / "a.yaml").write_text(corps, encoding="utf-8")
+    with pytest.raises(ConfigError, match="dupliquée"):
+        charger_dossier(tmp_path)
+
+
+def test_fichier_non_utf8(tmp_path: Path) -> None:
+    corps = ENTETE + '    verdict: yes\n    note: "é"\n'
+    (tmp_path / "a.yaml").write_bytes(corps.encode("cp1252"))
+    with pytest.raises(ConfigError) as exc:
+        charger_dossier(tmp_path)
+    assert exc.value.path.endswith("a.yaml")
+    f = tmp_path / "answers.jsonl"
+    f.write_bytes('{"answer_id": "é"}\n'.encode("cp1252"))
+    with pytest.raises(ConfigError):
+        answer_ids_de_answers_jsonl(f)
+
+
+def test_extension_yml_acceptee(tmp_path: Path) -> None:
+    (tmp_path / "a.yml").write_text(ENTETE + "    verdict: yes\n", encoding="utf-8")
+    assert charger_dossier(tmp_path).verdicts == {("a", "x", "correctness"): True}
+
+
+def test_dossier_sans_aucune_annotation(tmp_path: Path) -> None:
+    (tmp_path / "a.yaml").write_text("annotator: a\nannotations: []\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="aucune annotation"):
+        charger_dossier(tmp_path)
 
 
 def test_dossier_vide_ou_absent(tmp_path: Path) -> None:
