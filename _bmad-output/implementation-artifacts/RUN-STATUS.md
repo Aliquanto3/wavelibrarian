@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 07:02 |
-| Story en cours | 5.2 (voie A) ; 4.13 en dev (voie B) |
-| Stories livrées | 52 / 56 |
+| Mis à jour | 2026-10-18 07:27 |
+| Story en cours | 4.14 (voie B) ; 5.2 en revue (voie A) |
+| Stories livrées | 53 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -129,6 +129,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Story 7.8 (de 7.7)** : pour un poids d'arête cumulé, ajouter un paramètre au GraphStore plutôt que recompter hors du store comme lazy_graphrag.
 - **Story 4.13 (de 4.12)** : Couts.total_configuration (config, condition, tier, phases cumulées) et Couts.latences (p95) alimentent pareto.csv ; le point mort ne regarde que la phase base.
 - **Story 4.14 (de 4.12)** : vérifier sur mini-test.yaml que le total du Rapport égale le coût tracé (SM-4) ; index_gb à compter si la taille de l'index entre au manifeste.
+- **Story 4.14 (de 4.13)** : sur mini-test.yaml, pareto.csv contient au moins qualite-cout, fronts lisibles à coût fake nul ; la liste de --exporter-front qualite-cout relancée par wl run passe la validation ; wl run refuse un reuse_index dont le manifeste manque sur un autre WL_HOME.
+- **Story 4.14 (de 5.2)** : vérification réelle de wl calibrer sur Ollama (instabilité, durée, mémoire GPU) si des annotations existent, et seuil 0,6 ; sinon à faire avec Anaël.
 
 ## Journal de surveillance
 
@@ -242,3 +244,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.7 | 06:10 | 06:30 | 5f7a26824beb1ad7c4513fe352fb00938376ac9c | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : notation par le Decider (step paramétrable, défaut crag inchangé), relevance_threshold 0.1 strict, mots outils écartés des concepts, preuve sans appel LLM à l'indexation et à update par un provider qui lève. 1023 tests verts. |
 | 4.12 | 06:20 | 06:46 | 1662b20fca8c038e5b7dc45ee7edde1615783463 | 0 $ | Revue : cost_uncached des spans wl.resumed non recompté, valeurs de coût invalides signalées en Anomalie au Rapport (NaN compris), coût par requête = Poste query (échecs payés inclus) ÷ Réponses ok, documenté. 1040 tests verts. |
 | 7.8 | 06:32 | 07:02 | 929a9b1c38e8e3dbdcac48c2ce8790fe230c7247 | 0 $ | Livrée sous réserve de la conformité 4.14 (SM-3, 15 Architectures). Revue : toutes les descriptions distinctes d'une paire et d'une entité encodées (lues dans extractions.json), cache d'extraction factorisé (components/graph/cache.py) et dédoublonné dans un lot, tests niveau haut et réembarquement exacts. 1058 tests verts. |
+| 4.13 | 06:47 | 07:27 | 30ff4bd0f9e36a7a6a736080a9e38235ee2ad6fa | 0 $ | Revue : reuse_index exporté tel quel (clé d'index, pas config_id), avertissement quand les n d'un front diffèrent, front calculé sur les valeurs écrites (x à 9 décimales), --exporter-front vide en code 2, aller-retour d'export avec params imbriqués testé. 1073 tests verts. |
