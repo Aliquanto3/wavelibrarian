@@ -18,8 +18,8 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | Story en cours | 8.6 (mesure CPU locale) ; 8.9 (revue du code) |
 | Stories livrées | 6 / 9 (8.10 hors run) |
 | Dépense Anthropic | ~0,0103 $ (SM-4 de 8.2) / plafond 5 $ |
-| Ollama | **rendu à Anaël** (13:12, après la vérif. de 8.7) : ne plus l'appeler avant un nouveau « Ollama disponible ». En attente : 8.8, paquet 8.9 |
-| Attentes envers Anaël | « Ollama disponible » pour 8.8 (run split dev, ~1-2 h CPU) puis le paquet 8.9 |
+| Ollama | **disponible** (13:24) ; réservé à 8.8 et au paquet 8.9, lancés après la mesure de 8.6 |
+| Attentes envers Anaël | aucune (arbitrages non bloquants 8.2 et 8.3 ouverts) |
 | À arbitrer par Anaël | **8.2 (non bloquant)** : en profil `test`, la part matérielle de la possession locale (secondes CPU réelles des spans `local` : index, BM25) est classée fictive avec l'énergie factice, pour que `cost_eur_real` = 0 exactement (AC 2 littéral) ; une énergie `measured` reste réelle. Alternative : garder la part matérielle dans le réel et relire l'AC 2 comme « 0 hors possession ». Choix du run : le premier (spec 8-2, section « Revue »). **8.7 : tranché par Anaël, option (c)** (granite4.2:3b en select_model, sans repeat_penalty). Rappel : `repeat_penalty: 1.15` global au profil `cpu` remplit l'AC (8/8 ok, 0 sortie tronquée, 56 verdicts, Juges intacts) mais fait passer la qualité de PageIndex de 1,00 à 0,00 sur q-002 (n = 1 ; contre-essai sans pénalité : même nœud, Réponse « 1297 » au lieu de « More than 2000 », le Generator est dégradé). Choix : (b) garder la pénalité globale ; (c) `select_model: granite4.2:3b` sans pénalité (sélection 18-20 s, 5,1 Go) ; (d) étendre le schéma pour réserver `repeat_penalty` au rôle `select_nodes` ou à un modèle. Spec 8-7, section « Revue ». **8.3 (non bloquant)** : voir spec 8-3, section « À arbitrer par Anaël » (`all_failed` et `--tolerer-erreurs`, Configuration seulement `inapplicable`, reprise d'une Exécution d'avant 8.3). |
 
 ## Stories livrées
@@ -51,3 +51,4 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 - 2026-10-18 13:12 : vérif. réelle 8.7 (c) faite (run 20261018-110209-a8262d), 8.7 close ; Ollama rendu à Anaël ; 8.6 lancée.
 - 2026-10-18 13:18 : code de 8.9 approuvé (34d03df, wl annotations exporter avec --ecraser, contexte des Juges dans le paquet, section Calibration des Juges) ; intégration différée après la mesure de 8.6 (pas de suite complète pendant la mesure). Report : longueur du paquet (~8 000 tokens par Réponse) et tirage non stratifié, à voir avec Anaël sur le paquet réel.
 - 2026-10-18 13:22 : à la demande d'Anaël, topic GitHub repassé de status-test à status-dev pendant le lot v0.2.0 ; à remettre à status-test avec la release v0.2.0.
+- 2026-10-18 13:24 : « Ollama de nouveau disponible ». 8.8 démarre après la mesure de 8.6 et l'intégration de 8.6 et 8.9.
