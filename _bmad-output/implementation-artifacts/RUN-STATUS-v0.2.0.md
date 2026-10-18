@@ -15,7 +15,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | Champ | Valeur |
 | --- | --- |
 | Mis à jour | 2026-10-18 11:39 |
-| Story en cours | voie A : 8.3 ; voie B : 8.7 |
+| Story en cours | voie A : 8.3 (Opus) et 8.5 ; voie B : 8.7 |
 | Stories livrées | 3 / 9 (8.10 hors run) |
 | Dépense Anthropic | ~0,0103 $ (SM-4 de 8.2) / plafond 5 $ |
 | Ollama | **disponible** (feu vert d'Anaël, 2026-10-18) ; profil `cpu`, `num_gpu: 0`, `CUDA_VISIBLE_DEVICES=-1` ; un seul serveur |
