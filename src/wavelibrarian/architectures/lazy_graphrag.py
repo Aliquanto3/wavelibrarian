@@ -12,11 +12,13 @@ Passages qui réunissent ses deux concepts. Dossier d'index : `passages.jsonl` (
 Requête : les concepts de la Question (même heuristique, la Question étant précédée d'un mot
 neutre pour que son premier mot compte) classent les communautés par nombre de concepts de la
 Question qu'elles contiennent (deux concepts se correspondent si les mots de l'un sont inclus dans
-ceux de l'autre) ; les Passages des meilleures communautés, un Passage une seule fois, sont notés
-par le rôle `grade_relevance` (step `lazygraphrag.grade.<n>`) dans la limite de `relevance_budget`
-Passages au total, borne vérifiée avant chaque appel. Les Passages notés strictement au-dessus de
-`relevance_threshold` passent au Generator (`k` au plus, les mieux notés d'abord). Aucun Passage
-pertinent, ou aucune communauté qui touche la Question : abstention sans appel `generate`.
+ceux de l'autre, mots outils et interrogatifs exclus) ; les Passages des meilleures communautés,
+un Passage une seule fois, sont notés par le Decider (rôle `grade_relevance`, step
+`lazygraphrag.grade.<n>`) dans la limite de `relevance_budget` Passages au total, borne vérifiée
+avant chaque appel. Les Passages notés strictement au-dessus de `relevance_threshold` (0.1 : une
+note nulle ou quasi nulle écarte le Passage) passent au Generator (`k` au plus, les mieux notés
+d'abord). Aucun Passage pertinent, ou aucune communauté qui touche la Question : abstention sans
+appel `generate`.
 
 Simplifications documentées : concepts par heuristique (rate les noms en début de phrase et les
 noms communs), un seul niveau de communautés, pas de rapport de communauté ; les Passages au-delà
@@ -31,21 +33,20 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Annotated, Any, ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from wavelibrarian.architectures._fenetre import borner_passages
 from wavelibrarian.architectures._passages import ecrire_passages, lire_passages
 from wavelibrarian.components.context import build_arch_answer
-from wavelibrarian.components.deciders.llm import schema_scores
+from wavelibrarian.components.deciders.llm import SYSTEM
 from wavelibrarian.components.graph._texte import MARGE, borner, reserve_schema
 from wavelibrarian.components.graph.communities import detect_communities, louvain_seed
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import slug_entite
 from wavelibrarian.core.types import (
     ArchAnswer,
-    ModelRefMeta,
     ParsedCorpus,
     Passage,
     QuestionInput,
@@ -55,7 +56,6 @@ from wavelibrarian.corpus.entities import extraire_entites
 from wavelibrarian.llm.roles import GradeRelevanceOutput
 from wavelibrarian.ports.architecture import ArchCapabilities, ArchitectureBase, CorpusChange
 from wavelibrarian.ports.components import ComponentSpec, GenerationResult
-from wavelibrarian.ports.gateway import LLMRequest, Message
 from wavelibrarian.registry import register
 
 _log = logging.getLogger(__name__)
@@ -63,11 +63,12 @@ _log = logging.getLogger(__name__)
 _GRAPHE = "graph"
 _COMMUNAUTES = "communities.json"
 _KIND = "concept"
-_SYSTEM = (
-    "Pour chaque passage numéroté, donne un score de pertinence entre 0 (sans rapport) et 1 "
-    "(répond directement) au regard de la question. Réponds en JSON, un score par passage, dans "
-    "l'ordre reçu : "
-    '{"scores": [0.0, 0.0]}.'
+# Mots outils et interrogatifs : un concept réduit à eux (« Que », « Le ») ne rattache rien, et
+# « Pourquoi Port Ysel » se lit « Port Ysel ».
+_OUTILS = frozenset(
+    "que qui quoi quel quelle quels quelles lequel laquelle lesquels lesquelles pourquoi comment "
+    "combien quand où est sont le la les l un une des du de d au aux et ou en the a an of and or "
+    "what who whom which why how when where is are".split()
 )
 
 
@@ -76,8 +77,8 @@ def _spec(nom: str) -> Any:
 
 
 def _mots(nom: str) -> frozenset[str]:
-    """Mots d'un concept (espaces, traits d'union et apostrophes séparent)."""
-    return frozenset(m for m in re.split(r"[\s'-]+", nom.casefold()) if m)
+    """Mots d'un concept (espaces, traits d'union et apostrophes séparent), sans mots outils."""
+    return frozenset(m for m in re.split(r"[\s'-]+", nom.casefold()) if m and m not in _OUTILS)
 
 
 def _correspond(a: frozenset[str], b: frozenset[str]) -> bool:
@@ -112,8 +113,7 @@ class LazyGraphRag(ArchitectureBase):
             "relevance_threshold",
             "k",
             "grade_batch",
-            "grade_model",
-            "grade_max_tokens",
+            "decider",
         }
     )
 
@@ -124,14 +124,13 @@ class LazyGraphRag(ArchitectureBase):
         graph_store: ComponentSpec = _spec("networkx")
         context_builder: ComponentSpec = _spec("labeled")
         generator: ComponentSpec = _spec("llm")
+        decider: ComponentSpec = _spec("llm")  # notation `grade_relevance` (modèle, max_tokens)
         min_community_size: int = Field(default=1, ge=1)
         # -- paramètres de requête ------------------------------------------------------------
         relevance_budget: int = Field(default=20, gt=0)  # Passages notés au plus, par Question
-        relevance_threshold: float = Field(default=0.0, ge=0.0, le=1.0)  # pertinent : note >
+        relevance_threshold: float = Field(default=0.1, ge=0.0, le=1.0)  # pertinent : note >
         k: int = Field(default=5, gt=0)  # Passages pertinents envoyés au Generator
         grade_batch: int = Field(default=5, gt=0)  # Passages par appel `grade_relevance`
-        grade_model: Annotated[str | None, ModelRefMeta("generator_models[0]")] = None
-        grade_max_tokens: int = Field(default=256, gt=0)
 
     def __init__(self, params: Any, ctx: Any) -> None:
         super().__init__(params, ctx)
@@ -139,7 +138,9 @@ class LazyGraphRag(ArchitectureBase):
         self.chunker = ctx.build("chunker", params.chunker)
         self.context_builder = ctx.build("context_builder", params.context_builder)
         self.generator = ctx.build("generator", params.generator)
-        self._grade_model: str = params.grade_model or ctx.profile.defaults.generator_models[0]
+        self.decider = ctx.build("decider", params.decider)
+        self._grade_model: str = self.decider.model_id or ctx.profile.defaults.generator_models[0]
+        self._grade_max_tokens = int(getattr(self.decider, "max_tokens", 256))
         self._passages: dict[str, Passage] = {}
         self._graphe: Any = None
         self._communautes: list[dict[str, Any]] = []
@@ -297,9 +298,9 @@ class LazyGraphRag(ArchitectureBase):
         tok = self.ctx.tokenizer_for(self._grade_model)  # type: ignore[attr-defined]
         libre = (
             fenetre
-            - int(tok.count(_SYSTEM))
+            - int(tok.count(SYSTEM))
             - int(tok.count(question.text))
-            - self.p.grade_max_tokens
+            - self._grade_max_tokens
             - reserve_schema(self.ctx, self._grade_model, GradeRelevanceOutput)
             - MARGE
         )
@@ -308,34 +309,18 @@ class LazyGraphRag(ArchitectureBase):
         return lot
 
     def _appeler(self, question: QuestionInput, n: int, lot: list[Passage]) -> list[float]:
-        textes = [q.text for q in lot]
         if len(lot) == 1:
-            textes = [
-                borner(
-                    self.ctx,
-                    self._grade_model,
-                    f"{_SYSTEM}\nQuestion : {question.text}",
-                    textes[0],
-                    self.p.grade_max_tokens,
-                    "lazy_graphrag.grade",
-                    reserve=reserve_schema(self.ctx, self._grade_model, GradeRelevanceOutput),
-                )
-            ]
-        contenu = f"Question : {question.text}\n\n{_numerotes(textes)}"
-        requete = LLMRequest(
-            model_id=self._grade_model,
-            role="grade_relevance",
-            step=f"lazygraphrag.grade.{n}",
-            system=_SYSTEM,
-            messages=(Message(role="user", content=contenu),),
-            max_tokens=self.p.grade_max_tokens,
-            seed=self.ctx.seed,  # type: ignore[attr-defined]
-            inputs={"question": question.text, "passages": textes},
-        )
-        sortie, _ = self.ctx.gateway.complete_structured(  # type: ignore[attr-defined]
-            requete, schema_scores(len(textes))
-        )
-        return [float(s) for s in sortie.scores]
+            texte = borner(
+                self.ctx,
+                self._grade_model,
+                f"{SYSTEM}\nQuestion : {question.text}",
+                lot[0].text,
+                self._grade_max_tokens,
+                "lazy_graphrag.grade",
+                reserve=reserve_schema(self.ctx, self._grade_model, GradeRelevanceOutput),
+            )
+            lot = [lot[0].model_copy(update={"text": texte})]
+        return list(self.decider.grade(question, lot, step=f"lazygraphrag.grade.{n}"))
 
     def _vide(self) -> ArchAnswer:
         tokenizer = self.ctx.tokenizer_for(self.generator.model_id)  # type: ignore[attr-defined]

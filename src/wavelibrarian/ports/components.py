@@ -170,9 +170,15 @@ class Generator(Protocol):
 class Decider(Protocol):
     model_id: str | None
 
-    # `loop` : rang de la boucle de l'Architecture, qui nomme l'étape de la Trace (`….loopN`).
+    # `loop` : rang de la boucle de l'Architecture, qui nomme l'étape de la Trace (`….loopN`) ;
+    # `step`, s'il est donné, remplace ce nom (Architecture autre que `corrective_rag`).
     def grade(
-        self, question: QuestionInput, passages: Sequence[Passage], loop: int = 0
+        self,
+        question: QuestionInput,
+        passages: Sequence[Passage],
+        loop: int = 0,
+        *,
+        step: str | None = None,
     ) -> list[float]: ...  # dans [0, 1]
 
 

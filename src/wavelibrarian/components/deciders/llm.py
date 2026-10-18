@@ -11,7 +11,7 @@ from wavelibrarian.llm.roles import GradeRelevanceOutput
 from wavelibrarian.ports.gateway import LLMRequest, Message
 from wavelibrarian.registry import register
 
-_SYSTEM = (
+SYSTEM = (
     "Pour chaque passage numéroté, donne un score de pertinence entre 0 (sans rapport) et 1 "
     "(répond directement) au regard de la question. Réponds en JSON, un score par passage, dans "
     "l'ordre reçu : "
@@ -31,13 +31,11 @@ def _schema_pour(n: int) -> type[GradeRelevanceOutput]:
     )
 
 
-schema_scores = _schema_pour  # public : réutilisé par `lazy_graphrag`
-
-
 @register("decider", "llm")
 class LLMDecider:
     """Un appel `grade_relevance` par lot de Passages. L'étape de la Trace est `crag.grade.loopN`
-    (`loop` passé par l'Architecture) ; le nombre de scores doit égaler celui des Passages."""
+    (`loop` passé par l'Architecture), ou `step` si l'Architecture la nomme ; le nombre de scores
+    doit égaler celui des Passages."""
 
     class Params(BaseModel):
         model_config = ConfigDict(extra="forbid", frozen=True)
@@ -47,11 +45,16 @@ class LLMDecider:
 
     def __init__(self, params: "LLMDecider.Params", ctx: Any) -> None:
         self._ctx = ctx
-        self._max_tokens = params.max_tokens
+        self.max_tokens = params.max_tokens
         self.model_id: str | None = params.model or ctx.profile.defaults.generator_models[0]
 
     def grade(
-        self, question: QuestionInput, passages: Sequence[Passage], loop: int = 0
+        self,
+        question: QuestionInput,
+        passages: Sequence[Passage],
+        loop: int = 0,
+        *,
+        step: str | None = None,
     ) -> list[float]:
         if not passages:
             return []
@@ -60,10 +63,10 @@ class LLMDecider:
         requete = LLMRequest(
             model_id=self.model_id or "",
             role="grade_relevance",
-            step=f"crag.grade.loop{loop}",
-            system=_SYSTEM,
+            step=step or f"crag.grade.loop{loop}",
+            system=SYSTEM,
             messages=(Message(role="user", content=f"Question : {question.text}\n\n{numerotes}"),),
-            max_tokens=self._max_tokens,
+            max_tokens=self.max_tokens,
             seed=self._ctx.seed,
             inputs={"question": question.text, "passages": textes},
         )

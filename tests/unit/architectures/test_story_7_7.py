@@ -10,7 +10,7 @@ import pytest
 from wavelibrarian import registry
 from wavelibrarian.architectures import graphrag as _graphrag  # noqa: F401  (enregistre graphrag)
 from wavelibrarian.architectures._passages import lire_passages
-from wavelibrarian.architectures.lazy_graphrag import LazyGraphRag
+from wavelibrarian.architectures.lazy_graphrag import LazyGraphRag, _mots
 from wavelibrarian.core.types import ParsedCorpus, QuestionInput
 from wavelibrarian.llm.providers.fake import FakeProvider
 from wavelibrarian.ports.architecture import CorpusChange
@@ -46,6 +46,15 @@ def _spans(ctx: RunCtx, prefixe: str = "") -> list[dict[str, Any]]:
     lignes = chemin.read_text(encoding="utf-8").splitlines() if chemin.exists() else []
     spans = [s for s in map(json.loads, lignes) if s.get("wl.kind") == "llm"]
     return [s for s in spans if s["wl.step"].startswith(prefixe)]
+
+
+def _interdire_llm(ctx: RunCtx, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tout appel au provider lève : prouve l'absence d'appel sans dépendre de la Trace."""
+
+    def interdit(*_: Any, **__: Any) -> Any:
+        raise AssertionError("appel LLM interdit")
+
+    monkeypatch.setattr(ctx.provider, "complete", interdit)  # type: ignore[attr-defined]
 
 
 def _question() -> QuestionInput:
@@ -103,7 +112,12 @@ def test_relevance_budget_hors_de_l_index_key(ctx: RunCtx) -> None:
     assert _arch(ctx, min_community_size=2).index_key() != a.index_key()
 
 
-def test_indexation_sans_aucun_appel_llm(index: Path, ctx: RunCtx) -> None:
+def test_indexation_sans_aucun_appel_llm(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _interdire_llm(ctx, monkeypatch)
+    index = tmp_path / "i"
+    _indexer(ctx, minicorpus, index)
     assert _spans(ctx) == []
     g = _json(index, "graph/graph.json")
     assert g["nodes"] and g["edges"]
@@ -240,12 +254,13 @@ def test_fenetre_de_notation_reduit_le_lot(ctx: RunCtx, index: Path) -> None:
 
 
 def test_update_ajout_egale_l_index_complet_sans_appel(
-    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ajoute = minicorpus.documents[0]
     sans = minicorpus.model_copy(update={"documents": minicorpus.documents[1:]})
     _indexer(ctx, sans, tmp_path / "v1")
     _indexer(ctx, minicorpus, tmp_path / "complet")
+    _interdire_llm(ctx, monkeypatch)
     with ctx.scope(post="update"):
         _arch(ctx).update(
             CorpusChange(added=(ajoute,)), minicorpus, tmp_path / "v1", tmp_path / "v2"
@@ -289,4 +304,54 @@ def test_update_document_modifie_remplace_sans_dupliquer(
         assert (tmp_path / "v2" / nom).read_bytes() == (tmp_path / "complet" / nom).read_bytes()
     _citer_tout(ctx)
     rep = _repondre(ctx, tmp_path / "v2")
+    assert not rep.abstained and rep.citations
     assert {c.anchor_id for c in rep.citations} <= _existants(apres)
+
+
+# -- revue : Decider, seuil par défaut, mots outils ---------------------------------------------
+
+
+def test_notation_par_le_decider_avec_son_step(ctx: RunCtx, index: Path) -> None:
+    assert "decider" in LazyGraphRag.query_params
+    arch = _arch(ctx, decider={"name": "llm", "params": {"max_tokens": 64}})
+    assert arch.decider.max_tokens == 64 and arch._grade_max_tokens == 64
+    arch.load(index)
+    pris: list[str] = []
+    vrai = arch.decider.grade
+
+    def espion(question: Any, passages: Any, loop: int = 0, *, step: Any = None) -> Any:
+        pris.append(step)
+        return vrai(question, passages, loop, step=step)
+
+    arch.decider.grade = espion
+    _citer_tout(ctx)
+    with ctx.scope(post="query", question_id="q-001"):
+        arch.answer(_question())
+    assert pris and pris == [f"lazygraphrag.grade.{i}" for i in range(1, len(pris) + 1)]
+    assert [s["wl.step"] for s in _spans(ctx, "lazygraphrag.grade.")] == pris
+
+
+def test_seuil_par_defaut_ecarte_les_notes_quasi_nulles(ctx: RunCtx, index: Path) -> None:
+    assert _arch(ctx).p.relevance_threshold == 0.1
+
+    def faibles(req: Any) -> str:
+        return json.dumps({"scores": [0.05] * len(req.inputs["passages"])})
+
+    ctx.provider.script("grade_relevance", "lazygraphrag.grade.*", faibles)  # type: ignore[attr-defined]
+    rep = _repondre(ctx, index)
+    assert rep.abstained and not _spans(ctx, "generate")
+
+
+def test_mots_outils_ne_rattachent_rien() -> None:
+    assert _mots("que") == frozenset() and _mots("le") == frozenset()
+    assert _mots("pourquoi port ysel") == {"port", "ysel"}
+    assert _mots("port-ysel") == {"port", "ysel"}
+
+
+def test_le_provider_interdit_leve_bien_a_la_requete(
+    ctx: RunCtx, index: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Contrôle de la doublure : sans cela, les tests « sans appel » ne prouveraient rien."""
+    _interdire_llm(ctx, monkeypatch)
+    with pytest.raises(Exception, match="appel LLM interdit"):
+        _repondre(ctx, index)
