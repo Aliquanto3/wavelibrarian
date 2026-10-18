@@ -1,0 +1,58 @@
+# Expérience de bout en bout SM-3 (story 4.14) : profil `test` (Faux LLM, embedder factice,
+# aucun réseau), toutes les Architectures du registre, Conditions standard et contexte parfait,
+# Scénario de mise à jour du Mini-corpus. `tests/e2e/test_sm3.py` la lance par `wl run` et
+# vérifie qu'elle cite une Configuration par Architecture enregistrée : chaque nouvelle
+# Architecture y ajoute la sienne.
+experiment_id: mini-test
+seed: 42
+profile: test
+corpus: ../corpora/minicorpus/corpus.yaml
+questions: ../corpora/minicorpus/questions.yaml
+split: test
+scenario: ../corpora/minicorpus/scenario/scenario.yaml
+tier: 20  # Palier unique de 20 Documents (tout le Mini-corpus) : section « Paliers » du Rapport
+conditions: [standard, perfect_context]
+retries: {max_attempts: 1, backoff_s: 0.0, max_backoff_s: 0.0}
+configurations:
+  # Baselines (epic 4)
+  - {id: sans-contexte, architecture: no_context}
+  - {id: contexte-long, architecture: long_context}
+  - {id: bm25, architecture: bm25_only}
+  # Niveau 1 (epic 6)
+  - id: rag-naif
+    architecture: naive_rag
+    params: {embedder: {name: fake}}
+  - id: rag-hybride
+    architecture: hybrid_rag
+    params: {embedder: {name: fake}}
+  - id: rag-hybride-rerank
+    architecture: hybrid_rag
+    params: {embedder: {name: fake}, reranker: {name: fake}}
+  - id: hyde
+    architecture: hyde
+    params: {embedder: {name: fake}}
+  # Passages de 64 tokens : avec le faux embedder (sac de mots haché), des Passages de 300 tokens
+  # rendent la recherche dense quasi aléatoire, et le Decider (seuil 0,5) s'abstient toujours.
+  - id: rag-correctif
+    architecture: corrective_rag
+    params:
+      embedder: {name: fake}
+      chunker: {name: fixed_tokens, params: {size: 64, overlap: 16}}
+  - {id: cag, architecture: cag}
+  # Niveaux 2 et 3 (epic 7)
+  - id: raptor
+    architecture: raptor
+    params: {embedder: {name: fake}}
+  - {id: pageindex, architecture: pageindex}
+  - {id: wiki, architecture: llm_wiki}
+  - {id: agentique, architecture: agentic}
+  - id: graphrag-local
+    architecture: graphrag
+    params: {embedder: {name: fake}, search: local}
+  - id: graphrag-global
+    architecture: graphrag
+    params: {embedder: {name: fake}, search: global}
+  - {id: lazy-graphrag, architecture: lazy_graphrag}
+  - id: lightrag
+    architecture: lightrag
+    params: {embedder: {name: fake}}

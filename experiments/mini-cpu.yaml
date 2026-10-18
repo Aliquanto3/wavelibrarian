@@ -1,0 +1,37 @@
+# Expérience réelle locale (story 4.14) : profil `cpu` (Ollama sans couche GPU, embedder
+# multilingual-e5-small sur CPU), sans aucun appel d'API. Le profil `cpu` met
+# `claude-haiku-5-5` en tête de `generator_models` : chaque modèle est donc nommé ici.
+# Prérequis : `uv sync --extra local` et `wl installer --profil cpu`.
+experiment_id: mini-cpu
+seed: 42
+profile: cpu
+corpus: ../corpora/minicorpus/corpus.yaml
+questions: ../corpora/minicorpus/questions.yaml
+split: dev
+max_questions: 2
+conditions: [standard]
+judges:
+  pool: ["granite4.2:3b", "qwen3.5:4b"]  # Familles distinctes du Generator minicpm (AD-14)
+  panel_size: 2
+budget:
+  per_run: {anthropic: {amount: "0.00", currency: USD}}
+configurations:
+  - id: bm25
+    architecture: bm25_only
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: rag-naif
+    architecture: naive_rag
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: raptor
+    architecture: raptor
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: pageindex
+    architecture: pageindex
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      select_model: "minicpm5:1b-q4_k_m"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}

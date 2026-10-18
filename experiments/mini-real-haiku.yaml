@@ -1,0 +1,39 @@
+# Expérience réelle d'API (story 4.14, exécutée par SM-4 en story 4.15) : Generator
+# `claude-haiku-5-5`, 5 Questions, plafond de 5,00 USD. Aucun modèle local : Juges factices
+# `[fake-llm-b, fake-llm-c]`, embedder `fake`, pas de Filtre closed-book (`wl run` ne le lance
+# pas). Seule l'API Anthropic est sollicitée, ce qui laisse l'Ollama local à un autre banc.
+experiment_id: mini-real-haiku
+seed: 42
+profile: cpu
+corpus: ../corpora/minicorpus/corpus.yaml
+questions: ../corpora/minicorpus/questions.yaml
+split: dev
+max_questions: 5
+conditions: [standard]
+judges:
+  pool: [fake-llm-b, fake-llm-c]
+  panel_size: 2
+budget:
+  per_run: {anthropic: {amount: "5.00", currency: USD}}
+configurations:
+  - id: sans-contexte
+    architecture: no_context
+    params:
+      generator: {name: llm, params: {model: claude-haiku-5-5}}
+  - id: contexte-long
+    architecture: long_context
+    params:
+      generator: {name: llm, params: {model: claude-haiku-5-5}}
+  - id: bm25
+    architecture: bm25_only
+    params:
+      generator: {name: llm, params: {model: claude-haiku-5-5}}
+  - id: rag-naif
+    architecture: naive_rag
+    params:
+      embedder: {name: fake, params: {model: fake-embedder}}  # pas de multilingual-e5 du profil
+      generator: {name: llm, params: {model: claude-haiku-5-5}}
+  - id: cag
+    architecture: cag
+    params:
+      generator: {name: llm, params: {model: claude-haiku-5-5}}
