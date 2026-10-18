@@ -40,10 +40,7 @@ class NumpyExactStore:
         v = np.asarray(vecteurs, dtype=np.float32)
         if v.ndim != 2:
             raise WlError(f"vecteurs attendus en 2 dimensions, reçu {v.ndim}")
-        if self.dim == 0 and not self._ids:
-            self.dim = int(v.shape[1])
-            self._matrice = np.zeros((0, self.dim), dtype=np.float32)
-        if v.shape[1] != self.dim:
+        if self.dim and v.shape[1] != self.dim:
             raise WlError(f"dimension {v.shape[1]} différente de celle du store ({self.dim})")
         return v
 
@@ -53,6 +50,9 @@ class NumpyExactStore:
             raise WlError(f"{len(ids)} identifiants pour {v.shape[0]} vecteurs")
         if len(set(ids)) != len(ids):
             raise WlError("identifiants dupliqués dans `add`")
+        if self.dim == 0:  # dimension fixée par le premier ajout valide
+            self.dim = int(v.shape[1])
+            self._matrice = np.zeros((0, self.dim), dtype=np.float32)
         self.delete(ids)  # un id déjà présent est remplacé
         self._ids.extend(ids)
         self._matrice = np.vstack([self._matrice, v])
@@ -68,7 +68,7 @@ class NumpyExactStore:
     def search(self, query: NDArray[np.float32], k: int) -> list[tuple[str, float]]:
         """Au plus `k` couples (id, score), score décroissant, ex æquo départagés par id."""
         q = np.asarray(query, dtype=np.float32).reshape(-1)
-        if q.shape[0] != self.dim:
+        if self.dim and q.shape[0] != self.dim:
             raise WlError(f"dimension {q.shape[0]} différente de celle du store ({self.dim})")
         if k <= 0 or not self._ids:
             return []
@@ -87,12 +87,12 @@ class NumpyExactStore:
         try:
             meta = json.loads((directory / _IDS).read_text(encoding="utf-8"))
             matrice = np.load(directory / _VECTEURS, allow_pickle=False)
-        except (OSError, ValueError) as exc:
+            dim = int(meta["dim"])
+            ids = [str(i) for i in meta["ids"]]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             raise WlError(f"store vectoriel illisible : {directory}") from exc
-        dim = int(meta["dim"])
         if self.dim and dim != self.dim:
             raise WlError(f"dimension {dim} du store sauvegardé différente de {self.dim}")
-        ids = [str(i) for i in meta["ids"]]
         if matrice.ndim != 2 or matrice.shape != (len(ids), dim):
             raise WlError(f"store vectoriel incohérent : {directory}")
         self.dim = dim

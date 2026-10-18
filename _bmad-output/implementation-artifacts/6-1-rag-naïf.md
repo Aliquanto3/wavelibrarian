@@ -1,7 +1,7 @@
 ---
 story: "6.1"
 title: RAG naïf
-status: review
+status: done
 ---
 
 # Story 6.1 : RAG naïf
@@ -37,3 +37,14 @@ status: review
 - Statut : review. Vérifications finales dans le rapport de l'orchestrateur.
 - Reports : la Configuration `naive_rag` dans `experiments/mini-test.yaml`, la suite `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` n'existent pas encore dans ce dépôt (story 4.14 non livrée) : à ajouter à l'intégration. `update` n'est testé qu'en appel direct ; l'enchaînement par `IndexCache.build(post="update")` relève du Runner (4.7).
 - Un Document modifié garde ses `passage_id` d'ordinal égal (l'id ne dépend que du Document et de l'ordinal) : le vecteur est remplacé, pas dupliqué.
+
+## Revue
+
+- medium, second avis : test de mise à jour avec `doc_id` inchangé alors qu'un `modified` réel le change. Corrigé : `test_naive_rag_update_scenario_reel_depuis_le_cache` applique le vrai Scénario du Mini-corpus (`appliquer_fichier`) ; le code était déjà correct (sonde : 2 Passages sortants, 0 restant).
+- medium, second avis : enchaînement index servi par l'`IndexCache`, `update` sur instance neuve, `load` sur une autre, puis recherche jamais exécuté. Corrigé par le même test (aucun ancien Passage retrouvé, 5 Passages rendus). L'appel `update` par le Runner reste à la story 4.7.
+- low, second avis : score non cosinus si les vecteurs ne sont pas normés. Rejeté : le contrat impose des Embedders de norme L2 = 1 (faux et `sentence_transformers` normalisent) ; le store reste un produit scalaire exact, comme documenté.
+- low, second avis : un `add` refusé fixait la dimension du store vide. Corrigé : dimension fixée après validation complète (`test_numpy_exact_ajout_rate_ne_fixe_pas_la_dimension`).
+- low, second avis : `search` sur un store vide sans dimension levait une erreur. Corrigé : renvoie `[]`.
+- low, second avis : modèle par défaut de l'Embedder absent de `index_key` sans résolution des Params. Rejeté pour la story : comportement commun d'`ArchitectureBase.index_key()` (4.3), la Configuration résolue le fixe en production.
+- low, revue : `load` d'un `ids.json` sans `dim` ou `ids` levait `KeyError`. Corrigé : `WlError` « illisible ».
+- Reports (inchangés) : Configuration `naive_rag` dans `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` à passer quand 4.14 sera livrée ; embedder `sentence_transformers` réel à vérifier par `pytest -m real_local` après le go GPU.

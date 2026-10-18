@@ -279,3 +279,55 @@ def test_naive_rag_update_incremental(
     assert textes and any("Complément inédit" in x for x in textes)
     en_store = {i for i, _ in neuve._index.vectors.search(np.ones(64, np.float32), 100_000)}
     assert en_store == set(passages)
+
+
+def test_naive_rag_update_scenario_reel_depuis_le_cache(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    """Scénario réel (le `doc_id` d'un Document modifié change) : index servi par l'IndexCache,
+    `update` sur une instance neuve, puis `load` sur une autre et recherche."""
+    from wavelibrarian.corpus.scenario import appliquer_fichier
+
+    scenario = Path(__file__).resolve().parents[3] / "corpora/minicorpus/scenario/scenario.yaml"
+    change, apres = appliquer_fichier(minicorpus, scenario, parser="markdown")
+    assert change.added and change.removed and change.modified
+    assert all(ancien != doc.doc_id for ancien, doc in change.modified)
+    cache = IndexCache(tmp_path / "home")
+    v1: Any
+    v1, cle = cache.build(ctx, lambda: _arch(ctx), minicorpus)
+    sortants = set(change.removed) | {ancien for ancien, _ in change.modified}
+    anciens = {i for i, p in v1._index.passages.items() if p.doc_id in sortants}
+    assert anciens
+
+    maj = _arch(ctx)
+    appels = _compteur_embed(maj)
+    with ctx.scope(post="update"):
+        maj.update(change, apres, cache.path(cle), tmp_path / "v2")
+    entrants = [*change.added, *(doc for _, doc in change.modified)]
+    assert sum(appels) == sum(len(maj.chunker.chunk(d)) for d in entrants)
+
+    v2 = _arch(ctx)
+    v2.load(tmp_path / "v2")
+    passages = v2._index.passages
+    assert {p.doc_id for p in passages.values()} == {d.doc_id for d in apres.documents}
+    assert not anciens & set(passages)
+    en_store = {i for i, _ in v2._index.vectors.search(np.ones(64, np.float32), 100_000)}
+    assert en_store == set(passages)
+    rep = _repondre(v2, ctx)
+    assert len(rep.retrieved) == 5
+    assert not anciens & {s.passage.passage_id for s in rep.retrieved}
+
+
+def test_numpy_exact_ajout_rate_ne_fixe_pas_la_dimension(ctx: RunCtx, tmp_path: Path) -> None:
+    store = ctx.build("vector_store", ComponentSpec(name="numpy_exact"))
+    assert store.search(np.ones(3, np.float32), 2) == []  # vide, sans dimension
+    with pytest.raises(WlError):
+        store.add(["a"], np.zeros((2, 4), dtype=np.float32))  # 1 id pour 2 vecteurs
+    assert store.dim == 0
+    store.add(["a"], np.array([[1.0, 0.0]], dtype=np.float32))
+    assert store.dim == 2
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "ids.json").write_text("{}", encoding="utf-8")
+    np.save(tmp_path / "x" / "vectors.npy", np.zeros((0, 2), dtype=np.float32))
+    with pytest.raises(WlError, match="illisible"):
+        store.load(tmp_path / "x")
