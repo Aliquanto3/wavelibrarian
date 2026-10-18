@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-18-2026 10:30
+last_updated: 10-18-2026 16:52
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -121,8 +121,8 @@ development_status:
   8-5-alignements-de-spec-du-catalogue-et-du-registre-de-dépense: done
   8-6-énergie-cpu-mesurée-sous-windows: done
   8-7-modèle-cpu-de-sélection-pour-pageindex: done
-  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: in-progress
-  8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: in-progress  # code intégré (862a16e), paquet réel après 8.8
+  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: review  # runs faits, 7 Critères sans verdict et balayage non discriminant : à arbitrer par Anaël
+  8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: done
   8-10-calibration-réelle-des-juges-ollama: backlog
   epic-8-retrospective: optional
 action_items:

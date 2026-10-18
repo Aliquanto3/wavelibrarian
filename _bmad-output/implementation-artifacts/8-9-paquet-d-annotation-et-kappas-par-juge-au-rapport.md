@@ -1,7 +1,7 @@
 ---
 story: "8.9"
 title: "Paquet d'annotation et kappas par Juge au Rapport"
-status: review
+status: done
 ---
 
 # Story 8.9 : Paquet d'annotation et kappas par Juge au Rapport
