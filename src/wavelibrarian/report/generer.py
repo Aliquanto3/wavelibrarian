@@ -7,9 +7,11 @@
 """
 
 import csv
+import json
 import logging
 import os
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -215,6 +217,8 @@ def _juges(ex: Execution) -> list[str]:
     if chemin:
         try:
             exclus = sorted(excluded_judges(Path(chemin)))
+            if exclus:
+                note = f" (calibration du {_date_calibration(Path(chemin))})"
         except ConfigError as erreur:
             note = f" (calibration illisible : {erreur.message})"
     lignes = [
@@ -234,6 +238,17 @@ def _juges(ex: Execution) -> list[str]:
         + f"{note}.",
         "",
     ]
+
+
+def _date_calibration(chemin: Path) -> str:
+    """Date du fichier de calibration : `created_at` s'il existe, sinon date de modification."""
+    try:
+        cree = json.loads(chemin.read_text(encoding="utf-8")).get("created_at")
+    except (OSError, ValueError, AttributeError):
+        cree = None
+    if isinstance(cree, str) and len(cree) >= 10:
+        return cree[:10]
+    return datetime.fromtimestamp(chemin.stat().st_mtime, UTC).date().isoformat()
 
 
 def _inapplicables(ex: Execution) -> list[str]:

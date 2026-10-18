@@ -32,6 +32,7 @@ from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.report.export import exporter_front as exporter_front_vers
 from wavelibrarian.report.generer import generer_rapport
 from wavelibrarian.runner import installer as installation
+from wavelibrarian.runner.calibrer import calibrer as calibration
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.execute import load_questions, run_experiment, verifier_paliers
 from wavelibrarian.runner.resume import deja_terminee, verifier_reprise
@@ -217,6 +218,104 @@ def rapport(
     except (WlError, OSError, ValueError) as erreur:
         typer.echo(f"Rapport non généré : {erreur}", err=True)
         raise typer.Exit(1) from erreur
+
+
+@app.command("calibrer")
+def calibrer(
+    experience: Annotated[Path, typer.Argument(help="Fichier YAML de l'Expérience (Juges).")],
+    annotations: Annotated[
+        Path, typer.Option("--annotations", help="Dossier d'annotations (un YAML par annotateur).")
+    ],
+    run: Annotated[str, typer.Option("--run", help="Identifiant de l'Exécution annotée.")],
+    sortie: Annotated[
+        Path | None,
+        typer.Option(
+            "--sortie", help="Chemin de calibration.json (défaut : dossier de l'Exécution)."
+        ),
+    ] = None,
+) -> None:
+    """Calibre les Juges du réservoir sur des annotations humaines et écrit `calibration.json`.
+
+    Chaque Juge note chaque Réponse annotée `judges.calibration_passes` fois (Poste judging).
+    Un Juge dont le kappa est sous `judges.kappa_threshold` est exclu : renseigner
+    `judges.excluded_from` dans l'Expérience suivante. Codes de sortie : 0 succès, 1 erreur,
+    2 configuration invalide (Exécution inconnue, aucune annotation valide), 3 plafond atteint,
+    4 préflight échoué.
+    """
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    try:
+        resultat = validate_file(experience)
+    except ValidationFailed as echec:
+        typer.echo(f"Expérience invalide : {len(echec.errors)} erreur(s).", err=True)
+        for e in echec.errors:
+            typer.echo(f"  - {e.path} : {e.message}", err=True)
+        raise typer.Exit(2) from echec
+    exp = resultat.resolved
+    modeles = set(exp.judges.pool or ())
+    if exp.judges.calibration_judge is not None:
+        modeles.add(exp.judges.calibration_judge)
+    if not (wl_home / "runs" / run / "answers.jsonl").is_file():  # code 2 avant le préflight
+        typer.echo(f"Exécution {run} introuvable dans {wl_home / 'runs'}.", err=True)
+        raise typer.Exit(2)
+    verdict = preflight(modeles, resultat.catalog, exp.profile_settings)
+    if not verdict.ok:
+        typer.echo(
+            f"Préflight échoué : {len(verdict.errors)} dépendance(s) manquante(s).", err=True
+        )
+        for e in verdict.errors:
+            typer.echo(f"  - {e}", err=True)
+        raise typer.Exit(4)
+    try:
+        res, chemin = calibration(exp, annotations, run, wl_home=wl_home, sortie=sortie)
+    except BudgetExceeded as erreur:
+        typer.echo(f"Plafond atteint : {erreur} ; calibration non écrite.", err=True)
+        raise typer.Exit(3) from erreur
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except ProviderError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(4) from erreur
+    except WlError as erreur:
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    d = res.donnees
+    typer.echo(
+        f"Calibration de l'Exécution {run} : {len(d['judges'])} Juge(s), "
+        f"{res.n_appels} appel(s), {d['passes']} passe(s), "
+        f"seuil de kappa {_fr(d['kappa_threshold'])}."
+    )
+    for modele, fiche in d["judges"].items():
+        for critere, f in fiche["criteria"].items():
+            kappa = "indéfini" if f["kappa"] is None else _fr(f["kappa"])
+            instab = "indéfinie" if f["instability"] is None else _fr(f["instability"])
+            typer.echo(
+                f"  - {modele} / {critere} : kappa {kappa}, instabilité {instab}, "
+                f"{f['n_items']} item(s)"
+            )
+    for paire in d["inter_annotator"]:
+        for critere, f in paire["criteria"].items():
+            kappa = "indéfini" if f["kappa"] is None else _fr(f["kappa"])
+            typer.echo(
+                f"  - annotateurs {' et '.join(paire['annotators'])} / {critere} : "
+                f"kappa {kappa}, {f['n_items']} Réponse(s)"
+            )
+    if "calibration_judge" in d:
+        cj = d["calibration_judge"]
+        for critere, f in cj["criteria"].items():
+            kappa = "indéfini" if f["kappa"] is None else _fr(f["kappa"])
+            typer.echo(f"  - juge de calibration {cj['model']} / {critere} : kappa {kappa}")
+    for modele, raison in res.exclus.items():
+        typer.echo(f"Juge exclu : {modele} ({raison}).")
+    if not res.exclus:
+        typer.echo("Aucun Juge exclu.")
+    for a in res.avertissements:
+        typer.echo(f"Avertissement : {a}", err=True)
+    if res.ignorees:
+        typer.echo(f"Annotations ignorées (Réponse absente de l'Exécution) : {len(res.ignorees)}")
+    cout = ", ".join(f"{str(m.normalize()).replace('.', ',')} {dev}" for dev, m in res.cout.items())
+    typer.echo(f"Coût des Juges (Poste judging) : {cout or '0'}.")
+    typer.echo(f"Calibration écrite : {chemin}")
 
 
 @app.command("installer")

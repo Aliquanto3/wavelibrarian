@@ -1,7 +1,7 @@
 """Annotations humaines : chargement et rapprochement des Réponses (FR-38, contrats §4.6)."""
 
 import json
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.stats.kappa import cohen_kappa
 
 CRITERES = ("correctness", "completeness", "faithfulness")
 VERDICTS = {"yes": True, "no": False}
@@ -158,3 +159,112 @@ def rapprocher(annotations: Annotations, answer_ids: Iterable[str]) -> Rapproche
         elif cle[1] not in ignorees:
             ignorees.append(cle[1])
     return Rapprochement(Annotations(gardees), ignorees)
+
+
+# --- Calcul de la calibration d'un Juge (story 5.2) ----------------------------------------------
+
+Passe = tuple[str, str, int]  # (answer_id, criterion, pass_id)
+
+
+@dataclass(frozen=True)
+class FicheCritere:
+    """Un Juge sur un Critère : kappa juge-humain (passe 0), instabilité, nombre d'items."""
+
+    kappa: float | None
+    instability: float | None
+    n_items: int  # paires (annotateur, Réponse) comparées au verdict de la passe 0
+
+    def en_json(self) -> dict[str, Any]:
+        return {"kappa": self.kappa, "instability": self.instability, "n_items": self.n_items}
+
+
+def fiches_du_juge(
+    verdicts: Mapping[Passe, bool], annotations: Annotations, answer_ids: Collection[str]
+) -> dict[str, FicheCritere]:
+    """Fiches par Critère annoté d'un Juge, sur les Réponses `answer_ids` qu'il a pu noter.
+
+    `verdicts` : ses verdicts par (answer_id, criterion, pass_id). Kappa : verdict de la passe 0
+    contre chaque annotation (chaque annotateur compte séparément) ; une Réponse sans verdict de
+    passe 0 (appel en échec) n'entre pas. Instabilité : part des Réponses annotées, notées à
+    au moins deux passes, dont les verdicts diffèrent."""
+    admises = set(answer_ids)
+    fiches: dict[str, FicheCritere] = {}
+    for critere in CRITERES:
+        paires = [
+            (humain, verdicts[(aid, critere, 0)])
+            for (_, aid, c), humain in annotations.verdicts.items()
+            if c == critere and aid in admises and (aid, critere, 0) in verdicts
+        ]
+        annotees = {aid for (_, aid, c) in annotations.verdicts if c == critere} & admises
+        passes: dict[str, list[bool]] = {}
+        for (aid, c, _), v in verdicts.items():
+            if c == critere and aid in annotees:
+                passes.setdefault(aid, []).append(v)
+        notees = [vs for vs in passes.values() if len(vs) >= 2]
+        if not annotees:
+            continue
+        fiches[critere] = FicheCritere(
+            kappa=cohen_kappa([h for h, _ in paires], [j for _, j in paires]) if paires else None,
+            instability=(sum(1 for vs in notees if len(set(vs)) > 1) / len(notees))
+            if notees
+            else None,
+            n_items=len(paires),
+        )
+    return fiches
+
+
+def kappa_inter_annotateurs(
+    annotations: Annotations, answer_ids: Collection[str] | None = None
+) -> list[dict[str, Any]]:
+    """Kappa entre chaque couple d'annotateurs, par Critère, sur les Réponses annotées par les
+    deux. `answer_ids` : restreint aux Réponses données (sinon toutes)."""
+    noms = annotations.annotateurs
+    sortie: list[dict[str, Any]] = []
+    for i, a in enumerate(noms):
+        for b in noms[i + 1 :]:
+            criteres: dict[str, Any] = {}
+            for critere in CRITERES:
+                communs = sorted(
+                    {k[1] for k in annotations.verdicts if k[0] == a and k[2] == critere}
+                    & {k[1] for k in annotations.verdicts if k[0] == b and k[2] == critere}
+                )
+                if answer_ids is not None:
+                    communs = [x for x in communs if x in set(answer_ids)]
+                if not communs:
+                    continue
+                va = [annotations.verdicts[(a, x, critere)] for x in communs]
+                vb = [annotations.verdicts[(b, x, critere)] for x in communs]
+                criteres[critere] = {"kappa": cohen_kappa(va, vb), "n_items": len(communs)}
+            sortie.append({"annotators": [a, b], "criteria": criteres})
+    return sortie
+
+
+def doublement_annotees(annotations: Annotations) -> set[str]:
+    """Réponses annotées par au moins deux annotateurs (sur un même Critère)."""
+    par: dict[tuple[str, str], set[str]] = {}
+    for annotateur, aid, critere in annotations.verdicts:
+        par.setdefault((aid, critere), set()).add(annotateur)
+    return {aid for (aid, _), qui in par.items() if len(qui) >= 2}
+
+
+def decider_exclusion(
+    fiches: Mapping[str, FicheCritere], seuil: float
+) -> tuple[bool, str | None, list[str]]:
+    """Exclu si un kappa est sous le seuil ; un kappa indéfini n'exclut pas mais est signalé.
+
+    Rend (exclu, raison en français, signalements)."""
+
+    def fr(x: float) -> str:
+        return f"{x:.2f}".replace(".", ",")
+
+    raisons = [
+        f"kappa {fr(f.kappa)} sous le seuil {fr(seuil)} sur {c}"
+        for c, f in fiches.items()
+        if f.kappa is not None and f.kappa < seuil
+    ]
+    signales = [
+        f"kappa indéfini sur {c} (accord sur une seule classe ou aucun item), n'exclut pas le Juge"
+        for c, f in fiches.items()
+        if f.kappa is None
+    ]
+    return bool(raisons), ("; ".join(raisons) or None), signales
