@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 06:46 |
-| Story en cours | 4.13 (voie B) ; 7.8 en dev (voie A) |
-| Stories livrées | 51 / 56 |
+| Mis à jour | 2026-10-18 07:02 |
+| Story en cours | 5.2 (voie A) ; 4.13 en dev (voie B) |
+| Stories livrées | 52 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -241,3 +241,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 4.11 | 05:22 | 06:11 | f8153c84ac1ff85741fe11a4936c9698032e0fdc | 0 $ | Revue : empreinte du Corpus relu comparée au manifeste (recherche non mesurée et alerte si écart), lire_jsonl décode ligne par ligne (troncature multioctet ignorée), échec du Rapport sans perte du code 3, Ancrages non résolus comptés au Rapport. 1002 tests verts. |
 | 7.7 | 06:10 | 06:30 | 5f7a26824beb1ad7c4513fe352fb00938376ac9c | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : notation par le Decider (step paramétrable, défaut crag inchangé), relevance_threshold 0.1 strict, mots outils écartés des concepts, preuve sans appel LLM à l'indexation et à update par un provider qui lève. 1023 tests verts. |
 | 4.12 | 06:20 | 06:46 | 1662b20fca8c038e5b7dc45ee7edde1615783463 | 0 $ | Revue : cost_uncached des spans wl.resumed non recompté, valeurs de coût invalides signalées en Anomalie au Rapport (NaN compris), coût par requête = Poste query (échecs payés inclus) ÷ Réponses ok, documenté. 1040 tests verts. |
+| 7.8 | 06:32 | 07:02 | 929a9b1c38e8e3dbdcac48c2ce8790fe230c7247 | 0 $ | Livrée sous réserve de la conformité 4.14 (SM-3, 15 Architectures). Revue : toutes les descriptions distinctes d'une paire et d'une entité encodées (lues dans extractions.json), cache d'extraction factorisé (components/graph/cache.py) et dédoublonné dans un lot, tests niveau haut et réembarquement exacts. 1058 tests verts. |
