@@ -1,5 +1,6 @@
 """Architecture `hyde` : recherche dense avec le vecteur d'une réponse hypothétique (FR-20)."""
 
+import logging
 from typing import Annotated, Any, ClassVar
 
 import numpy as np
@@ -11,6 +12,8 @@ from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.core.types import ArchAnswer, ModelRefMeta, QuestionInput
 from wavelibrarian.ports.gateway import LLMRequest, Message
 from wavelibrarian.registry import register
+
+_log = logging.getLogger(__name__)
 
 _SYSTEM = (
     "Écris un court passage de documentation qui répondrait à la question, dans la langue de la "
@@ -42,9 +45,13 @@ class Hyde(NaiveRag):
         hyde_max_tokens: int = Field(default=256, gt=0)
 
     def __init__(self, params: Any, ctx: Any) -> None:
-        if params.retriever.name == "lexical":
+        if params.retriever.name != "dense":
+            # `lexical` ignorerait le vecteur ; `hybrid` exige un index lexical que l'index
+            # dense de `naive_rag` ne construit pas (échec à chaque Question, après l'appel hyde).
             raise ConfigError(
-                "retriever", "`hyde` cherche par vecteur : le retriever `lexical` l'ignorerait"
+                "retriever",
+                f"`hyde` cherche dans l'index dense de `naive_rag` : retriever `dense` seul, "
+                f"pas `{params.retriever.name}`",
             )
         super().__init__(params, ctx)
         self._hyde_model: str = params.hyde_model or ctx.profile.defaults.generator_models[0]
@@ -67,6 +74,10 @@ class Hyde(NaiveRag):
         celui de la Question. Une réponse vide se rabat sur la Question."""
         texte = hypothese.strip()
         if not texte:
+            _log.warning(
+                "hyde : réponse hypothétique vide pour %s, recherche par la Question",
+                question.question_id,
+            )
             return self.embedder.embed_queries([question.text])[0]
         if not self.params.mix_question:  # type: ignore[attr-defined]
             return self.embedder.embed_queries([texte])[0]

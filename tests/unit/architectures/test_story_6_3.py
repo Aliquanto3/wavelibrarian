@@ -186,3 +186,58 @@ def test_reponse_hypothetique_vide_se_rabat_sur_la_question(
 def test_retriever_lexical_refuse(ctx: RunCtx) -> None:
     with pytest.raises(ConfigError):
         _arch(ctx, retriever={"name": "lexical"})
+
+
+@pytest.mark.parametrize("nom", ["hybrid"])
+def test_retriever_autre_que_dense_refuse(ctx: RunCtx, nom: str) -> None:
+    # l'index de `naive_rag` n'a pas d'index lexical : `hybrid` échouerait à chaque Question
+    with pytest.raises(ConfigError, match="dense"):
+        _arch(ctx, retriever={"name": nom})
+
+
+def test_la_requete_passe_par_embed_queries_et_non_embed_passages(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    ctx.provider.script("hyde", "hyde", f"{MARQUEUR} tresor cache")  # type: ignore[attr-defined]
+    arch = _construire(ctx, minicorpus, tmp_path)
+    appels: list[tuple[str, list[str]]] = []
+    for methode in ("embed_queries", "embed_passages"):
+        origine = getattr(arch.embedder, methode)
+
+        def espion(textes: Any, _m: str = methode, _o: Any = origine) -> Any:
+            appels.append((_m, list(textes)))
+            return _o(textes)
+
+        setattr(arch.embedder, methode, espion)
+    _repondre(arch, ctx)
+    assert appels == [("embed_queries", [f"{MARQUEUR} tresor cache"])]
+
+
+def test_hyde_model_et_hyde_max_tokens(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    vues: list[LLMRequest] = []
+
+    def sortie(req: LLMRequest) -> str:
+        vues.append(req)
+        return f"{MARQUEUR} tresor cache"
+
+    ctx.provider.script("hyde", "hyde", sortie)  # type: ignore[attr-defined]
+    arch = _construire(ctx, minicorpus, tmp_path, hyde_model="fake-llm-b", hyde_max_tokens=77)
+    _repondre(arch, ctx)
+    assert len(vues) == 1
+    assert vues[0].model_id == "fake-llm-b" and vues[0].max_tokens == 77
+    assert vues[0].role == "hyde" and vues[0].step == "hyde"
+    # ni le modèle ni le budget de la réponse hypothétique n'entrent dans la clé d'index
+    assert arch.index_key() == _arch(ctx).index_key()
+    assert _arch(ctx)._hyde_model == ctx.profile.defaults.generator_models[0]
+
+
+def test_repli_sur_la_question_est_journalise(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ctx.provider.script("hyde", "hyde", "")  # type: ignore[attr-defined]
+    arch = _construire(ctx, minicorpus, tmp_path)
+    with caplog.at_level("WARNING", logger="wavelibrarian.architectures.hyde"):
+        _repondre(arch, ctx)
+    assert any("q-001" in r.getMessage() for r in caplog.records)

@@ -1,7 +1,7 @@
 ---
 story: "6.3"
 title: HyDE
-status: review
+status: done
 ---
 
 # Story 6.3 : HyDE
@@ -18,7 +18,7 @@ status: review
 - `answer` : un appel `complete` au rôle `hyde` (step `hyde`, entrée `text` = Question) puis `embed_queries` de la réponse hypothétique, vecteur passé au Retriever (`query_vector`). Le poste (`query`) vient du `scope` du Runner ; la passerelle trace le span `hyde`, distinct de `generate`. L'Architecture ne trace rien.
 - `mix_question: true` : `embed_queries([hypothèse, question])`, moyenne puis renormalisation ; somme nulle : vecteur de l'hypothèse seul.
 - Le texte hypothétique ne sort pas de `answer` : ni Contexte, ni prompt `generate`, ni Citation.
-- Choix hors AC : une réponse hypothétique vide se rabat sur le vecteur de la Question ; le retriever `lexical` est refusé (`ConfigError`) car il ignorerait le vecteur. `dense` (défaut) et `hybrid` sont acceptés.
+- Choix hors AC : une réponse hypothétique vide se rabat sur le vecteur de la Question ; tout retriever autre que `dense` est refusé (`ConfigError`) : `lexical` ignorerait le vecteur, `hybrid` exige un index lexical que l'index de `naive_rag` ne construit pas. Le repli est journalisé (`WARNING`), l'Architecture ne trace pas de span.
 
 ## Tâches et critères
 
@@ -31,6 +31,14 @@ status: review
 
 ## Auto Run Result
 
-- Statut : review. Vérifications finales dans le rapport de l'orchestrateur.
+- Statut : done (sous réserve du report 4.14 ci-dessous). Vérifications finales dans le rapport de l'orchestrateur.
 - Reports : Configuration `hyde` dans `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` absents du dépôt (story 4.14 non livrée) ; à vérifier quand ils existent, sans réseau.
 - Le Cache de réponses sert un second appel `hyde` identique (même Question) sans nouvel appel : comportement voulu de la passerelle, non modifiée.
+
+## Revue
+
+- medium, revue : `hybrid` annoncé accepté mais `WlError` à chaque Question (pas d'index lexical dans l'index de `naive_rag`), après l'appel `hyde` payé. Corrigé : `dense` seul accepté, test `test_retriever_autre_que_dense_refuse`.
+- medium, second avis 1-2 : `FakeEmbedder` identique pour `embed_queries` et `embed_passages`, une régression passait. Corrigé : espion sur les deux méthodes, `test_la_requete_passe_par_embed_queries_et_non_embed_passages`.
+- medium, second avis 3 : Configuration `mini-test.yaml`, conformité et `test_sm3.py` absents. Reporté vers 4.14 (décision de l'orchestrateur) : ajouter `hyde` et faire passer les deux suites sans réseau.
+- low, second avis 4 : `hyde_model` et `hyde_max_tokens` non testés. Corrigé : `test_hyde_model_et_hyde_max_tokens` (requête et `index_key`).
+- low, second avis 5 : repli silencieux sur la Question. Corrigé : `WARNING` journalisé avec l'id de Question ; pas d'attribut de span, une Architecture ne trace pas (epic 6).
