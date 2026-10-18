@@ -1,7 +1,7 @@
 ---
 story: "8.3"
 title: "Statut completed_with_errors de wl run"
-status: review
+status: done
 ---
 
 # Story 8.3 : Statut `completed_with_errors` de `wl run`

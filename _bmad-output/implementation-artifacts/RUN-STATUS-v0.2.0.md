@@ -14,13 +14,13 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 12:20 |
-| Story en cours | voie A : 8.3 (Opus) ; voie B : 8.7 (revue, run réel) |
-| Stories livrées | 4 / 9 (8.10 hors run) |
+| Mis à jour | 2026-10-18 12:41 |
+| Story en cours | voie B : 8.7 (application de l'option c) ; voie A : 8.6 à lancer |
+| Stories livrées | 5 / 9 (8.10 hors run) |
 | Dépense Anthropic | ~0,0103 $ (SM-4 de 8.2) / plafond 5 $ |
 | Ollama | **disponible** (feu vert d'Anaël, 2026-10-18) ; profil `cpu`, `num_gpu: 0`, `CUDA_VISIBLE_DEVICES=-1` ; un seul serveur |
 | Attentes envers Anaël | aucune |
-| À arbitrer par Anaël | **8.2 (non bloquant)** : en profil `test`, la part matérielle de la possession locale (secondes CPU réelles des spans `local` : index, BM25) est classée fictive avec l'énergie factice, pour que `cost_eur_real` = 0 exactement (AC 2 littéral) ; une énergie `measured` reste réelle. Alternative : garder la part matérielle dans le réel et relire l'AC 2 comme « 0 hors possession ». Choix du run : le premier (spec 8-2, section « Revue »). |
+| À arbitrer par Anaël | **8.2 (non bloquant)** : en profil `test`, la part matérielle de la possession locale (secondes CPU réelles des spans `local` : index, BM25) est classée fictive avec l'énergie factice, pour que `cost_eur_real` = 0 exactement (AC 2 littéral) ; une énergie `measured` reste réelle. Alternative : garder la part matérielle dans le réel et relire l'AC 2 comme « 0 hors possession ». Choix du run : le premier (spec 8-2, section « Revue »). **8.7 (bloque le lancement de 8.8)** : `repeat_penalty: 1.15` global au profil `cpu` remplit l'AC (8/8 ok, 0 sortie tronquée, 56 verdicts, Juges intacts) mais fait passer la qualité de PageIndex de 1,00 à 0,00 sur q-002 (n = 1 ; contre-essai sans pénalité : même nœud, Réponse « 1297 » au lieu de « More than 2000 », le Generator est dégradé). Choix : (b) garder la pénalité globale ; (c) `select_model: granite4.2:3b` sans pénalité (sélection 18-20 s, 5,1 Go) ; (d) étendre le schéma pour réserver `repeat_penalty` au rôle `select_nodes` ou à un modèle. Spec 8-7, section « Revue ». **8.3 (non bloquant)** : voir spec 8-3, section « À arbitrer par Anaël » (`all_failed` et `--tolerer-erreurs`, Configuration seulement `inapplicable`, reprise d'une Exécution d'avant 8.3). |
 
 ## Stories livrées
 
@@ -30,6 +30,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | 8.4 | — | 11:27 | aef57dd | 0 $ | `think: bool \| None = False` au Catalogue, posé par la passerelle, clé de cache Ollama. Réel : real_local 2/2 ; mini-cpu 7 ok / 1 error, 49 verdicts, 9 min 11 (= référence). Revue : contracts.md aligné, test direct de cache_key. Une reprise d'un run d'avant v0.2.0 est refusée (catalog_fingerprint change) : relancer de zéro. 1177 tests verts. |
 | 8.2 | — | 11:39 | e43fdbd | ~0,0103 $ | cost_eur_real sans les spans fake, colonne cost_eur_fake ; SM-4 réel vert (cost_eur_real = Registre converti). Revue : possession des spans local à énergie factice classée fictive (cost_eur_real = 0 exactement en Faux LLM), Faux LLM pur détecté par l'absence de span réel, coût par requête et point mort sur le fictif, mention du fictif exclu en run mixte. 1181 tests verts. Arbitrage non bloquant soumis. |
 | 8.5 | — | 12:20 | 6a8f65c | 0 $ | Tests 1.8 (0,90 + 0,90 sous 2,00, soldes vérifiés, mois suivant par horloge injectée ; ancien test à 3,00 supprimé) et 1.4 (3,00 et 0,03 sur le Catalogue livré) ; relevé de prix recopié, aucun écart, Catalogue inchangé. 1181 tests verts. |
+| 8.3 | — | 12:41 | 36efec0 | 0 $ | completed_with_errors (aucune ok, Critère sans verdict, taux d'error > max_error_rate 0,2), causes au manifeste avec taux réel, code 1 ou 0 avec --tolerer-erreurs (all_failed compris, AC 2), budget_exceeded/3 prime, bandeau du Rapport, reprise des error et Critères sans verdict. 1195 tests verts. Points non bloquants soumis (spec 8-3). |
 
 ## Reports entre stories
 

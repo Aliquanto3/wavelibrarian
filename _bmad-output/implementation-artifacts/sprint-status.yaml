@@ -116,7 +116,7 @@ development_status:
   epic-8: in-progress
   8-1-licences-spdx-par-liste-blanche-exacte: done
   8-2-coûts-factices-hors-du-coût-réel: done
-  8-3-statut-completed-with-errors-de-wl-run: in-progress
+  8-3-statut-completed-with-errors-de-wl-run: done
   8-4-think-par-modèle-au-catalogue: done
   8-5-alignements-de-spec-du-catalogue-et-du-registre-de-dépense: done
   8-6-énergie-cpu-mesurée-sous-windows: backlog
