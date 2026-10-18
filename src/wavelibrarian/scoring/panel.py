@@ -208,6 +208,13 @@ def ecrire_panel(
     return manquants
 
 
-def construire_juges(ctx: Any, modeles: Iterable[str]) -> dict[str, Judge]:
-    """Un Juge `llm` par modèle du Panel, construit par le contexte (AD-2)."""
-    return {m: ctx.build("judge", ComponentSpec(name="llm", params={"model": m})) for m in modeles}
+def construire_juges(
+    ctx: Any, modeles: Iterable[str], *, cache_later_passes: bool = True
+) -> dict[str, Judge]:
+    """Un Juge `llm` par modèle du Panel, construit par le contexte (AD-2) ;
+    `cache_later_passes=False` (calibration) : passes >= 1 hors Cache de réponses."""
+    params: dict[str, Any] = {} if cache_later_passes else {"cache_later_passes": False}
+    return {
+        m: ctx.build("judge", ComponentSpec(name="llm", params={"model": m, **params}))
+        for m in modeles
+    }

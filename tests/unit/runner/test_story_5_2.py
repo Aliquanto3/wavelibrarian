@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 from wavelibrarian.cli import app
 from wavelibrarian.components.judges.llm import LLMJudge
 from wavelibrarian.config.panel import excluded_judges
+from wavelibrarian.core.errors import NonConformantOutput, ProviderError
 from wavelibrarian.core.types import Criterion
 from wavelibrarian.evalset import io
 from wavelibrarian.evalset.freeze import select_questions
@@ -317,3 +318,98 @@ def test_code_2_run_inconnu_dossier_vide_et_annotations_hors_execution(
     res = _calibrer(exp, tmp_path / "autre", dossier.name, code=2)
     assert "aucune annotation ne porte sur une Réponse" in res.output
     assert not (dossier / "calibration.json").exists()
+
+
+# --- Revue : Cache, échecs de fournisseur, bornes ----------------------------------------------
+
+
+def _spans_judging(dossier_hors_execution: Path) -> list[dict[str, Any]]:
+    lignes = (dossier_hors_execution / "traces.jsonl").read_text(encoding="utf-8").splitlines()
+    return [s for s in map(json.loads, lignes) if s["wl.post"] == "judging"]
+
+
+def test_seconde_calibration_rappelle_les_passes_1_a_4_hors_cache(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path
+) -> None:
+    """La seconde calibration trouve tout au Cache ; seule la passe 0 peut y être servie."""
+    exp, dossier = execution
+    _annoter(dossier, tmp_path / "ann")
+    _calibrer(exp, tmp_path / "ann", dossier.name)
+    (premiere,) = list((wl_home / "hors-execution").iterdir())
+    _calibrer(exp, tmp_path / "ann", dossier.name)
+    (seconde,) = [d for d in (wl_home / "hors-execution").iterdir() if d != premiere]
+    spans = _spans_judging(seconde)
+    assert spans and len(spans) % 5 == 0
+    reels = [s for s in spans if not s["wl.llm_cache_hit"]]
+    assert len(reels) == 4 * len(spans) // 5  # passe 0 au Cache, passes 1 à 4 rappelées
+    assert len(_spans_judging(premiere)) == len(spans)
+
+
+def test_le_panel_de_wl_run_garde_le_cache_des_passes_suivantes() -> None:
+    """Hors calibration, `pass_id` >= 1 lit toujours le Cache (comportement du Panel inchangé)."""
+    vus: list[bool] = []
+
+    class _Passerelle:
+        def complete_structured(self, requete: Any, schema: Any, *, use_cache: bool = True) -> Any:
+            vus.append(use_cache)
+            raise RuntimeError("arrêt")
+
+    class _Ctx:
+        seed = 1
+        gateway = _Passerelle()
+
+    item = JudgeInput(
+        question="q", reference_answer="r", reference_texts=(), answer_text="a", context_texts=()
+    )
+    for drapeau in (True, False):
+        juge = LLMJudge(LLMJudge.Params(model="fake-llm-b", cache_later_passes=drapeau), _Ctx())
+        for passe in (0, 1):
+            with pytest.raises(RuntimeError):
+                juge.judge(item, ["correctness"], passe)
+    assert vus == [True, True, True, False]
+
+
+def test_fournisseur_injoignable_sort_en_code_4_sans_ecrire(
+    execution: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exp, dossier = execution
+    _annoter(dossier, tmp_path / "ann")
+
+    def panne(juge: str, passe: int, critere: str, humain: bool) -> bool:
+        if juge == "fake-llm-b":
+            raise ProviderError("connexion refusée")
+        return humain
+
+    _espion(monkeypatch, panne)
+    res = _calibrer(exp, tmp_path / "ann", dossier.name, code=4)
+    assert "connexion refusée" in res.output
+    assert not (dossier / "calibration.json").exists()
+
+
+def test_juge_sans_aucun_verdict_conforme_fait_echouer_la_calibration(
+    execution: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exp, dossier = execution
+    _annoter(dossier, tmp_path / "ann")
+
+    def muet(juge: str, passe: int, critere: str, humain: bool) -> bool:
+        if juge == "fake-llm-c":
+            raise NonConformantOutput("sortie non conforme")
+        return humain
+
+    _espion(monkeypatch, muet)
+    res = _calibrer(exp, tmp_path / "ann", dossier.name, code=1)
+    assert "aucun verdict conforme pour le(s) Juge(s) fake-llm-c" in res.output
+    assert not (dossier / "calibration.json").exists()
+
+
+def test_run_hors_nom_simple_et_passes_insuffisantes_refuses(
+    execution: tuple[Path, Path], tmp_path: Path
+) -> None:
+    exp, dossier = execution
+    _annoter(dossier, tmp_path / "ann")
+    res = _calibrer(exp, tmp_path / "ann", f"../runs/{dossier.name}", code=2)
+    assert "introuvable" in res.output
+    une = _experience(tmp_path, "exp-1.yaml", judges={"calibration_passes": 1})
+    res = _calibrer(une, tmp_path / "ann", dossier.name, code=2)
+    assert "calibration_passes" in res.output

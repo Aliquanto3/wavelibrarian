@@ -56,9 +56,11 @@ class _PasserelleSousPoste:
         self._verifier()
         return self._interne.complete(request, use_cache=use_cache)
 
-    def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]:
+    def complete_structured(
+        self, request: LLMRequest, schema: type[T], *, use_cache: bool = True
+    ) -> tuple[T, LLMResult]:
         self._verifier()
-        return self._interne.complete_structured(request, schema)
+        return self._interne.complete_structured(request, schema, use_cache=use_cache)
 
 
 class Context:

@@ -96,10 +96,13 @@ class MeteredGateway:
         fournisseur) ; la réponse remplace l'entrée. Sert au préchargement CAG (story 6.5)."""
         return self._run(request, None, use_cache=use_cache)[1]
 
-    def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]:
-        """Un nouvel essai (sans lecture du cache) si la sortie ne valide pas `schema`."""
+    def complete_structured(
+        self, request: LLMRequest, schema: type[T], *, use_cache: bool = True
+    ) -> tuple[T, LLMResult]:
+        """Un nouvel essai (sans lecture du cache) si la sortie ne valide pas `schema`.
+        `use_cache=False` : ne lit pas le Cache (passes de calibration, story 5.2)."""
         try:
-            valeur, resultat = self._run(request, schema, use_cache=True)
+            valeur, resultat = self._run(request, schema, use_cache=use_cache)
         except NonConformantOutput as fautive:
             valeur, resultat = self._run(request, schema, use_cache=False)
             resultat = resultat.model_copy(update={"retry_cost_uncached": fautive.cost_uncached})

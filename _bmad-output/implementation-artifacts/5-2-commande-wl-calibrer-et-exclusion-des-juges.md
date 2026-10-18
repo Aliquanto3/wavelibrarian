@@ -41,3 +41,15 @@ status: review
 - Reports vers 4.14 (conformité, vérifications réelles) : exécuter `wl calibrer` sur Ollama local avec de vrais Juges (cache de passes, instabilité réelle d'un modèle 4B, durée et mémoire GPU) ; vérifier la notation par lots et le seuil de 0,6 sur de vraies annotations.
 - Reports vers 4.15 : affichage au Rapport des kappas et instabilités par Juge (ici seule l'exclusion et la date sont citées) ; choisir si la calibration d'un Palier ou d'une phase `after_update` doit avoir son propre Corpus de référence.
 - Hors périmètre, consigné : une Expérience qui change de `judges.pool` après la calibration garde un `calibration.json` pour d'autres Juges (ignorés) ; un Juge absent du fichier n'est pas exclu.
+
+## Revue
+
+- high, second avis 1, corrigé : `complete_structured` lisait toujours le Cache, donc une seconde calibration servait les passes 1 à 4 depuis le Cache (instabilité nulle par construction). Ajout de `use_cache` à `complete_structured` (port, passerelle, contexte) et du Param `cache_later_passes` du Juge `llm` ; `wl calibrer` construit ses Juges avec `cache_later_passes=False`. Le Panel de `wl run` garde le Cache. Tests `test_seconde_calibration_rappelle_les_passes_1_a_4_hors_cache`, `test_le_panel_de_wl_run_garde_le_cache_des_passes_suivantes`.
+- medium, second avis 2, corrigé : le test « hors cache » d'origine ne le prouvait pas (une seule calibration) ; remplacé en pratique par le test des deux calibrations successives, qui échoue sans le correctif.
+- medium, second avis 3, corrigé : `except Exception` avalait `ProviderError` (fournisseur en panne, `calibration.json` écrit, code 0). Seul `NonConformantOutput` est consigné ; `ProviderError` sort en code 4 sans rien écrire (`test_fournisseur_injoignable_sort_en_code_4_sans_ecrire`).
+- medium, second avis 4, corrigé : `calibration_passes` borné à ≥ 2 (l'AC fixe 5 dans son scénario, pas un minimum de 5 ; l'instabilité exige deux passes) ; `kappa_threshold` borné à [-1, 1].
+- medium, revue, corrigé : le préflight de la CLI ne vérifiait pas le réservoir du profil quand `judges.pool` est absent, alors que la calibration l'utilise ; il le vérifie désormais.
+- low, second avis 5, corrigé : le Jeu est lu avant tout appel payé.
+- low, second avis 11, corrigé : un Juge appelé sans aucun verdict conforme fait échouer la commande (code 1, rien n'est écrit) au lieu d'un kappa indéfini qui ne l'excluait pas (`test_juge_sans_aucun_verdict_conforme_fait_echouer_la_calibration`).
+- low, second avis 12, corrigé : `--run` doit être un simple nom d'Exécution (`RUN_ID`), sinon code 2.
+- Reporté vers 4.14 : vérifier sur Ollama que les passes 1 à 4 d'une seconde calibration partent bien au fournisseur (spans `wl.llm_cache_hit=false`) et mesurer l'instabilité réelle.

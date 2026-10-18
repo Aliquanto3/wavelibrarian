@@ -37,10 +37,13 @@ class LLMJudge:
         model_config = ConfigDict(extra="forbid", frozen=True)
 
         model: Annotated[str | None, ModelRefMeta("judge_pool[0]")] = None
+        # False : les passes `pass_id` >= 1 ne lisent pas le Cache (calibration, story 5.2).
+        cache_later_passes: bool = True
 
     def __init__(self, params: "LLMJudge.Params", ctx: Any) -> None:
         self._ctx = ctx
         self.model_id: str = params.model or ctx.profile.defaults.judge_pool[0]
+        self._cache_later_passes = params.cache_later_passes
 
     def judge(
         self, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int
@@ -69,7 +72,9 @@ class LLMJudge:
             pass_id=pass_id,
             inputs=inputs,
         )
-        sortie, _ = self._ctx.gateway.complete_structured(requete, _schema(criteres))
+        sortie, _ = self._ctx.gateway.complete_structured(
+            requete, _schema(criteres), use_cache=pass_id == 0 or self._cache_later_passes
+        )
         verdicts: Any = getattr(sortie, "verdicts")  # noqa: B009
         resultat: dict[Criterion, tuple[bool, str]] = {}
         for c in criteres:

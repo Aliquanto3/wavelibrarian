@@ -19,7 +19,7 @@ from typing import Any
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.experiment import ResolvedConfiguration, ResolvedExperiment
 from wavelibrarian.config.panel import closed_book_judge
-from wavelibrarian.core.errors import BudgetExceeded, ConfigError
+from wavelibrarian.core.errors import ConfigError, NonConformantOutput, WlError
 from wavelibrarian.core.types import Answer, Criterion, ParsedCorpus, Question
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest
@@ -81,6 +81,7 @@ def calibrer(
             f"aucune annotation ne porte sur une Réponse de l'Exécution {run_id}",
         )
     questions = {q.id: q for q in load_questions(experience).questions}
+    jeu = io.load(Path(experience.questions))  # avant tout appel payé
     configs = {c.id: c for c in experience.configurations}
     avertissements: list[str] = []
     cibles: dict[str, tuple[Answer, Question, ResolvedConfiguration]] = {}
@@ -111,11 +112,12 @@ def calibrer(
     verdicts_de: dict[str, dict[cal.Passe, bool]] = {m: {} for m in modeles}
     admises: dict[str, set[str]] = {m: set() for m in modeles}
     lignes: list[dict[str, Any]] = []
+    tentes: set[str] = set()  # Juges appelés au moins une fois
     appels = 0
     with Context.from_experiment(
         experience, wl_home=wl_home, run_id=id_cal, providers=providers, execution=False
     ) as ctx:
-        juges = construire_juges(ctx, modeles)
+        juges = construire_juges(ctx, modeles, cache_later_passes=False)
         try:
             for aid, (a, q, conf) in cibles.items():
                 familles = {catalogue.get(m).family for m in conf.answer_producers}
@@ -155,6 +157,7 @@ def calibrer(
                     est_cal = modele == juge_cal and aid in doubles
                     if not (est_pool or est_cal):
                         continue
+                    tentes.add(modele)
                     if est_pool:
                         admises[modele].add(aid)
                     for passe in range(passes):
@@ -162,9 +165,9 @@ def calibrer(
                             with ctx.scope(post="judging", question_id=q.id):
                                 notes = juges[modele].judge(item, criteres, passe)
                             appels += 1
-                        except BudgetExceeded:
-                            raise
-                        except Exception as erreur:  # un Juge en échec n'arrête pas la calibration
+                        except NonConformantOutput as erreur:
+                            # Sortie non conforme après un nouvel essai : consignée, la calibration
+                            # continue. Plafond, fournisseur injoignable (code 4) et bogues sortent.
                             avertissements.append(
                                 f"Juge {modele} en échec sur {aid} (passe {passe}) : {erreur}"
                             )
@@ -184,6 +187,12 @@ def calibrer(
         finally:
             ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
         trace = ctx.run_dir / "traces.jsonl"
+    sans_verdict = sorted(m for m in tentes if not verdicts_de[m])
+    if sans_verdict:  # toutes ses passes ont échoué : rien n'est écrit
+        raise WlError(
+            f"aucun verdict conforme pour le(s) Juge(s) {', '.join(sans_verdict)} : "
+            "calibration non écrite"
+        )
     donnees = _assembler(
         experience,
         run_id,
@@ -198,7 +207,6 @@ def calibrer(
     )
     cout = _cout_judging(trace)
     resultat = Calibration(donnees, rapprochement.ignorees, avertissements, cout, appels)
-    jeu = io.load(Path(experience.questions))
     avertissements.extend(
         avertissements_closed_book(experience, resultat.exclus, jeu.questions, catalogue)
     )

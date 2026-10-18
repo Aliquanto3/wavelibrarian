@@ -251,10 +251,11 @@ def calibrer(
             typer.echo(f"  - {e.path} : {e.message}", err=True)
         raise typer.Exit(2) from echec
     exp = resultat.resolved
-    modeles = set(exp.judges.pool or ())
+    modeles = set(exp.judges.pool or exp.profile_settings.defaults.judge_pool)
     if exp.judges.calibration_judge is not None:
         modeles.add(exp.judges.calibration_judge)
-    if not (wl_home / "runs" / run / "answers.jsonl").is_file():  # code 2 avant le préflight
+    if not RUN_ID.fullmatch(run) or not (wl_home / "runs" / run / "answers.jsonl").is_file():
+        # code 2 avant le préflight ; un `--run` qui n'est pas un simple nom est refusé
         typer.echo(f"Exécution {run} introuvable dans {wl_home / 'runs'}.", err=True)
         raise typer.Exit(2)
     verdict = preflight(modeles, resultat.catalog, exp.profile_settings)

@@ -31,8 +31,8 @@ class JudgesSettings(_Schema):
     )  # None : `profil.defaults.judge_pool`
     panel_size: int | None = Field(default=None, ge=1)  # None : `profil.defaults.panel_size`
     passes: int = 1
-    calibration_passes: int = 5
-    kappa_threshold: float = 0.6
+    calibration_passes: int = Field(default=5, ge=2)  # instabilité : au moins deux passes
+    kappa_threshold: float = Field(default=0.6, ge=-1.0, le=1.0)
     calibration_judge: str | None = None
     excluded_from: str | None = None  # chemin d'un calibration.json
 
