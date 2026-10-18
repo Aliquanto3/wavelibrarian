@@ -113,8 +113,8 @@ development_status:
   epic-7-retrospective: done
 
   # Lot v0.2.0 (rétro epics 1-7, items F, B, A, G, H, E, D, run du split dev, C) : ordre imposé
-  epic-8: backlog
-  8-1-licences-spdx-par-liste-blanche-exacte: backlog
+  epic-8: in-progress
+  8-1-licences-spdx-par-liste-blanche-exacte: in-progress
   8-2-coûts-factices-hors-du-coût-réel: backlog
   8-3-statut-completed-with-errors-de-wl-run: backlog
   8-4-think-par-modèle-au-catalogue: backlog
