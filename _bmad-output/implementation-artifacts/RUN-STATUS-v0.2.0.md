@@ -15,10 +15,10 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | Champ | Valeur |
 | --- | --- |
 | Mis à jour | 2026-10-18 |
-| Story en cours | 8.1 |
+| Story en cours | voie A : 8.1 ; voie B : 8.4 |
 | Stories livrées | 0 / 9 (8.10 hors run) |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
-| Ollama | **non disponible** (attendre « Ollama disponible » d'Anaël) |
+| Ollama | **disponible** (feu vert d'Anaël, 2026-10-18) ; profil `cpu`, `num_gpu: 0`, `CUDA_VISIBLE_DEVICES=-1` ; un seul serveur |
 | Attentes envers Anaël | aucune |
 | À arbitrer par Anaël | aucun |
 
@@ -31,6 +31,11 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 
 À transmettre au dev-story de la story cible.
 
+- **8.5 (relevé de prix, orchestrateur, 2026-10-18)** : https://platform.claude.com/docs/en/about-claude/pricing (sections « Model pricing », « Batch processing », « Long context pricing »). Haiku 5.5 jusqu'à 100 000 tokens de prompt : entrée 0,10, écriture cache 5 min 0,125, 1 h 0,20, lecture 0,01, sortie 0,50 $/Mtok ; au-delà (« over 100,000 tokens ») : 0,50 / 0,625 / 1 / 0,05 / 2,50, soit ×5 sur tous les postes ; batch 0,05/0,25 → 0,25/1,25 (×5). « A request's prompt length counts all of its input tokens, including cache reads and cache writes. Each request is priced on its own. » → concorde avec `defaults/models.yaml` (`above_prompt_tokens: 100000`, `multiplier: "5"`). Seuil strict (« over ») : `config/catalog.py:52` applique bien `>`. Aucun écart : rien à soumettre à Anaël.
+
 ## Journal
 
 - 2026-10-18 : artefacts de planification commités (`ab2181f`) ; `epic-8-context.md` compilé ; démarrage du run.
+- 2026-10-18 : relevé de prix de 8.5 fait (voir Reports), concordant.
+- 2026-10-18 : Anaël : « Ollama est maintenant disponible pour toi ». `/api/version` 0.40.5 ; `/api/tags` : minicpm5:1b-q4_k_m, granite4.2:3b, qwen3.5:4b, nomic-embed-text présents ; `/api/ps` vide. Plus d'attente Ollama : 8.4 (vérif. réelle), 8.7 et 8.8 s'enchaînent dans l'ordre.
+- 2026-10-18 : Anaël autorise la parallélisation si elle est sans risque. Deux voies : A (sans réseau) 8.1 → 8.2 → 8.3 → 8.5 → 8.6 → code 8.9 ; B (Ollama) 8.4 → 8.7. 8.8 attend 8.1 à 8.7 intégrées. Intégration séquentielle sur `main` (rebase, suite complète, contrôle rapide). Pas de mesure de charge 8.6 pendant un run Ollama ; latences de la voie B indicatives si la voie A teste en même temps. Référence de 8.4 : 3e série du 2026-10-18, mini-cpu 7 ok / 1 error, 49 lignes de verdicts, ~9 min 30.
