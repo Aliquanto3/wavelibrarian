@@ -1,8 +1,8 @@
 """Cache de réponses LLM `llm_cache.sqlite` (FR-34) : pas de paiement en double."""
 
 import hashlib
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
