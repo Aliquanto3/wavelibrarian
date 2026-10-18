@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 02:45 |
-| Story en cours | 6.3 (voie A) ; 4.6 (voie B) |
-| Stories livrées | 34 / 56 |
+| Mis à jour | 2026-10-18 02:54 |
+| Story en cours | 4.6 (voie B) ; 6.4 (voie A) |
+| Stories livrées | 35 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -153,6 +153,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 02:38 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 3 tronq., 53 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on reasoning/bbeh-mini 1 tronq., 74 s/tronq. (pas de réf.) ; pire -14 % | 17 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | -14 % sur 2 réponses seulement (rag/oneruler-fr-cwe), juste sous le seuil de 15 % : vigilance, mesure suivante surveillée ; on continue (6.3) |
 | 02:45 | 6 tronq. (qwen3.5:4b) : think_on rag/oneruler-fr-niah 3 tronq., 51 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on abstention/oneruler-fr-none 1 tronq., 51 s/tronq. (pas de réf.) ; pire -14 % | 19 % | 19.3 Go | 1 s, 86 Mo, 105 thr (21 proc) | Sous les seuils : on continue (4.6) |
 | 02:51 | Génération du banc terminée à 02:42 (« génération complète », 3 376 lignes, 0 ERROR) ; plus de réponses à mesurer. `generation.lock` encore présent, un `llama-server` (pid 11716) occupe toujours le GPU, sans `pilot-report.md` | 33 % | 18,0 Go | 10 s, 154 Mo, 136 thr | Contraintes Ollama/GPU maintenues jusqu'au contrôle de 5 h (consigne d'Anaël) ; on continue sur deux voies |
+| 02:54 | 16 tronq. (lfm2.5:8b-a1b-q4_K_M) : think_off reasoning/bbeh-mini 6 tronq., 14 s/tronq. (pas de réf.) ; think_off instructions/ifbench 4 tronq., 14 s/tronq. (pas de réf.) ; think_off extraction/jsonschemabench 3 tronq., 14 s/tronq. (pas de réf.) ; pire -1 % | 17 % | 19.1 Go | 11 s, 182 Mo, 106 thr (20 proc) | Sous les seuils ; seconde campagne du banc (replay) démarrée à 02:42, mesure et contrôle de fin adaptés ; on continue (6.4) |
 
 ## Journal des stories
 
@@ -192,3 +193,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 6.1 | 02:07 | 02:21 | 093fbf0833057bc5ce0a7010f2df01ea981a639f | 0 $ | Store numpy exact, retriever dense, naive_rag. Revue : test de mise à jour sur le vrai Scénario via IndexCache et rechargement, dimension fixée après ajout valide, search vide → [], ids.json illisible → WlError. 697 tests verts. |
 | 6.2 | 02:23 | 02:38 | 768c8501a1903f783372738b12dc545b065a8fdb | 0 $ | Retriever hybride (RRF et pondéré), reranker fake, hybrid_rag. Revue : scores non reclassés plafonnés (ordre décroissant), paramètres de fusion contradictoires refusés, test BM25 après update renforcé. 716 tests verts. |
 | 4.5 | 02:20 | 02:45 | 4d60217d0e9e588edea5b8bfc8e586a0f4f0ced5 | 0 $ | Revue : phase refermée si le mesureur échoue, Réponses écrites après les spans de leur phase, latence d'origine des hits conservée en cache et retracée (rejeu à l'identique), exceptions en vol préservées, kWh réparti sur phase sans durée. 7 corrigés. |
+| 6.3 | 02:39 | 02:54 | 71e8d7bbc1da6d11b83271ea1a0973110316034a | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : retriever hybrid refusé (il échouait après l'appel hyde payé), espion embed_queries vs embed_passages, test hyde_model / hyde_max_tokens, repli journalisé. 747 tests verts. |
