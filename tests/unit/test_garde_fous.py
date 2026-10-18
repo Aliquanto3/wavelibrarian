@@ -82,3 +82,22 @@ def test_lint_imports_detecte_une_rupture(tmp_path: Path) -> None:
     resultat = _lint_imports(tmp_path)
     assert resultat.returncode != 0
     assert "BROKEN" in resultat.stdout
+
+
+def test_real_local_et_real_api_autorisent_les_sockets(request: pytest.FixtureRequest) -> None:
+    """Le hook de `conftest.py` pose `enable_socket` sur les tests réels, pas sur les autres."""
+    from conftest import pytest_collection_modifyitems
+
+    class Item:
+        def __init__(self, marque: str | None) -> None:
+            self.marque, self.ajoutes = marque, []
+
+        def get_closest_marker(self, nom: str) -> object | None:
+            return object() if nom == self.marque else None
+
+        def add_marker(self, marque: object) -> None:
+            self.ajoutes.append(marque)
+
+    items = [Item("real_local"), Item("real_api"), Item(None)]
+    pytest_collection_modifyitems(items)  # type: ignore[arg-type]
+    assert [len(i.ajoutes) for i in items] == [1, 1, 0]

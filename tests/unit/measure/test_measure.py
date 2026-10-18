@@ -327,6 +327,15 @@ def test_mesure_materielle_seulement_avec_compteur() -> None:
     assert not is_hardware_counter(SimpleNamespace())
 
 
+def test_gpu_vide_n_est_pas_un_compteur() -> None:
+    class GPU:
+        def __init__(self, gpu_ids: list[int]) -> None:
+            self.gpu_ids = gpu_ids
+
+    assert not is_hardware_counter(SimpleNamespace(_hardware=[GPU([])]))
+    assert is_hardware_counter(SimpleNamespace(_hardware=[GPU([0])]))
+
+
 def test_ecologits_double(monkeypatch: pytest.MonkeyPatch) -> None:
     def impacts(**kw: Any) -> Any:
         return SimpleNamespace(energy=SimpleNamespace(value=SimpleNamespace(min=1.0, max=3.0)))

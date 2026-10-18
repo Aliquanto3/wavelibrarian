@@ -33,3 +33,11 @@ def minicorpus(tmp_path_factory: pytest.TempPathFactory) -> ParsedCorpus:
     profil `test`) et un cache de parsing temporaire ; une seule ingestion pour la session."""
     wl_home = tmp_path_factory.mktemp("wl_home_minicorpus")
     return ingest(declare(CORPUS_MINICORPUS), wl_home=wl_home)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Les tests `real_local` et `real_api` appellent un service réel : le blocage des sockets
+    (`--disable-socket`, actif par défaut) ne doit pas les empêcher de joindre Ollama ou l'API."""
+    for item in items:
+        if item.get_closest_marker("real_local") or item.get_closest_marker("real_api"):
+            item.add_marker(pytest.mark.enable_socket)

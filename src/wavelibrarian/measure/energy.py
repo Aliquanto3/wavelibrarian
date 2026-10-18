@@ -74,7 +74,11 @@ def is_hardware_counter(tracker: Any) -> bool:
     """Vrai si l'un des matériels suivis par codecarbon a été lu sur un compteur matériel."""
     for hw in getattr(tracker, "_hardware", None) or []:
         mode = str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
-        if mode in _MODES_MATERIELS or type(hw).__name__ == "GPU":
+        # codecarbon 3.3.x instancie un `GPU` même avec `gpu_ids=[]` : il ne compte que s'il suit
+        # au moins un GPU.
+        if mode in _MODES_MATERIELS or (
+            type(hw).__name__ == "GPU" and getattr(hw, "gpu_ids", None)
+        ):
             return True
     return False
 
