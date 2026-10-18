@@ -27,7 +27,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | Story | Début | Fin | Commit d'intégration | Dépense | Notes |
 | --- | --- | --- | --- | --- | --- |
 | 8.1 | — | 10:45 | d9d285c | 0 $ | Liste blanche SPDX exacte, message nommant la licence ; Mini-corpus CC-BY-4.0 inchangé. Revue : AC 2 couvert (licence restrictive hors dépôt ou ignorée : declare puis ingest), refus d'une licence ignorée mais suivie. 1172 tests verts. |
-| 8.4 | — | 11:27 | aef57dd | 0 $ | think: bool | None = False au Catalogue, posé par la passerelle, clé de cache Ollama. Réel : real_local 2/2 ; mini-cpu 7 ok / 1 error, 49 verdicts, 9 min 11 (= référence). Revue : contracts.md aligné, test direct de cache_key. Une reprise d'un run d'avant v0.2.0 est refusée (catalog_fingerprint change) : relancer de zéro. 1177 tests verts. |
+| 8.4 | — | 11:27 | aef57dd | 0 $ | `think: bool \| None = False` au Catalogue, posé par la passerelle, clé de cache Ollama. Réel : real_local 2/2 ; mini-cpu 7 ok / 1 error, 49 verdicts, 9 min 11 (= référence). Revue : contracts.md aligné, test direct de cache_key. Une reprise d'un run d'avant v0.2.0 est refusée (catalog_fingerprint change) : relancer de zéro. 1177 tests verts. |
 
 ## Reports entre stories
 
