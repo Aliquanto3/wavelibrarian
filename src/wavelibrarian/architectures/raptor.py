@@ -13,11 +13,19 @@ départage par id, départ au plus petit id), puis coupés en `ceil(n / group_ma
 consécutifs de tailles égales à un près. Chaque groupe compte donc entre `group_min` et
 `group_max` nœuds ; seul un niveau de moins de `group_min` nœuds forme un unique groupe plus
 petit (dernier groupe toléré). Simplification documentée : ce n'est pas un GMM/UMAP.
+`group_max` >= 2 garantit que chaque niveau compte moins de nœuds que le précédent ; la
+construction s'arrête dès qu'il reste un seul nœud (pas de résumé d'un nœud unique).
+
+Fenêtre du modèle de résumé : avec le chunker `fixed_tokens`, la construction refuse une
+configuration dont un groupe plein (`group_max` enfants de `max(size, summary_max_tokens)`
+tokens) dépasserait la fenêtre du Catalogue ; chaque appel est de plus vérifié avant l'envoi,
+pour qu'aucun prompt ne soit tronqué en silence (Ollama `num_ctx`).
 
 Pas de mise à jour incrémentale : `update` reconstruit l'arbre sur `corpus_after`.
 """
 
 import math
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -54,7 +62,7 @@ class Raptor(NaiveRag):
 
     class Params(NaiveRag.Params):
         group_min: int = Field(default=5, ge=1)
-        group_max: int = Field(default=10, ge=1)
+        group_max: int = Field(default=10, ge=2)  # >= 2 : chaque niveau réduit
         max_depth: int = Field(default=3, ge=1)
         summary_model: Annotated[str | None, ModelRefMeta("generator_models[0]")] = None
         summary_max_tokens: int = Field(default=256, gt=0)
@@ -75,21 +83,68 @@ class Raptor(NaiveRag):
             )
         super().__init__(params, ctx)
         self._summary_model: str = params.summary_model or ctx.profile.defaults.generator_models[0]
+        self._verifier_fenetre_configuree()
+
+    # -- fenêtre du modèle de résumé ------------------------------------------------------------
+
+    def _fenetre(self) -> int | None:
+        return self.ctx.catalog.get(self._summary_model).context_window  # type: ignore[attr-defined]
+
+    def _tokens_modele(self, n_reference: int) -> int:
+        """Tokens de référence ramenés au modèle de résumé, comme l'estimation de la passerelle."""
+        entree = self.ctx.catalog.get(self._summary_model)  # type: ignore[attr-defined]
+        if entree.tokenizer == "reference":
+            return math.ceil(Decimal(n_reference) * entree.token_factor)
+        return n_reference
+
+    def _verifier_fenetre_configuree(self) -> None:
+        """Refus avant tout appel si un groupe plein dépasse la fenêtre (chunker `fixed_tokens`)."""
+        fenetre = self._fenetre()
+        spec = self.params.chunker  # type: ignore[attr-defined]
+        if fenetre is None or spec.name != "fixed_tokens":
+            return
+        p: Any = self.params
+        taille = int(spec.params.get("size", 300))
+        par_enfant = max(self._tokens_modele(taille), p.summary_max_tokens)
+        systeme = self._tokens_modele(self.ctx.tokenizer.count(_SYSTEM))  # type: ignore[attr-defined]
+        besoin = p.group_max * par_enfant + systeme + p.summary_max_tokens
+        if besoin > fenetre:
+            raise ConfigError(
+                "group_max",
+                f"`raptor` : un groupe de {p.group_max} enfants (environ {besoin} tokens avec la "
+                f"sortie) dépasse la fenêtre de {fenetre} tokens de `{self._summary_model}`",
+            )
+
+    def _verifier_fenetre(self, texte: str) -> None:
+        """Contrôle avant chaque appel : entrée estimée + sortie réservée dans la fenêtre."""
+        fenetre = self._fenetre()
+        if fenetre is None:
+            return
+        tokenizer = self.ctx.tokenizer_for(self._summary_model)  # type: ignore[attr-defined]
+        n = self._tokens_modele(tokenizer.count(_SYSTEM + "\n" + texte))
+        n += self.params.summary_max_tokens  # type: ignore[attr-defined]
+        if n > fenetre:
+            raise ConfigError(
+                "group_max",
+                f"`raptor` : le texte à résumer (environ {n} tokens avec la sortie) dépasse la "
+                f"fenêtre de {fenetre} tokens de `{self._summary_model}` ; baisser `group_max`",
+            )
 
     # -- regroupement ---------------------------------------------------------------------------
 
     @staticmethod
     def _ordre_voisins(ids: list[str], vecteurs: Any) -> list[str]:
         """Chaîne de plus proches voisins ; départ au plus petit id, égalités par id."""
-        pos = {i: n for n, i in enumerate(ids)}
-        reste = sorted(ids)
-        courant = reste.pop(0)
-        ordre = [courant]
-        while reste:
-            v = vecteurs[pos[courant]]
-            _, courant = min((-float(vecteurs[pos[i]] @ v), i) for i in reste)
-            reste.remove(courant)
-            ordre.append(courant)
+        rangs = sorted(range(len(ids)), key=lambda n: ids[n])
+        m = vecteurs[rangs]  # lignes par id croissant : argmax rend le plus petit id ex æquo
+        libres = np.ones(len(rangs), dtype=bool)
+        courant = 0
+        libres[0] = False
+        ordre = [ids[rangs[0]]]
+        for _ in range(len(rangs) - 1):
+            courant = int(np.argmax(np.where(libres, m @ m[courant], -np.inf)))
+            libres[courant] = False
+            ordre.append(ids[rangs[courant]])
         return ordre
 
     def _grouper(self, ids: list[str], vecteurs: Any) -> list[list[str]]:
@@ -109,6 +164,7 @@ class Raptor(NaiveRag):
 
     def _resumer(self, niveau: int, enfants: list[Passage]) -> str:
         texte = "\n\n".join(p.text for p in enfants)
+        self._verifier_fenetre(texte)
         requete = LLMRequest(
             model_id=self._summary_model,
             role="summarize",
@@ -161,7 +217,7 @@ class Raptor(NaiveRag):
         courant = feuilles
         max_depth: int = self.params.max_depth  # type: ignore[attr-defined]
         for niveau in range(1, max_depth + 1):
-            if not courant or (niveau > 1 and len(courant) <= 1):
+            if len(courant) <= 1:  # rien à regrouper : pas de résumé d'un nœud unique
                 break
             par_id = {p.passage_id: p for p in courant}
             groupes = self._grouper([p.passage_id for p in courant], vecteurs)

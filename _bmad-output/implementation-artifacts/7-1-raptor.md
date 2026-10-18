@@ -1,7 +1,7 @@
 ---
 story: "7.1"
 title: RAPTOR
-status: review
+status: done
 ---
 
 # Story 7.1 : RAPTOR
@@ -18,7 +18,7 @@ status: review
 - Règle du dernier groupe : tous les groupes comptent entre `group_min` et `group_max`, sauf un niveau de moins de `group_min` nœuds, qui forme un unique groupe plus petit. `Params` refuse `group_max < 2 * group_min - 1` (garantit la borne basse).
 - Niveaux construits tant que `niveau <= max_depth` et qu'il reste plus d'un nœud (à partir du niveau 2).
 - Nœud : `passage_id = sha16("node","raptor",level,*sorted(child_ids))`, `anchor_ids` = union triée des Ancrages des enfants (donc des feuilles), `doc_id` nul si plusieurs Documents.
-- Résumés : rôle `summarize`, step `raptor.summarize.level<n>`, Poste courant (`indexing` sous le runner). Le Faux LLM renvoie le texte reçu.
+- Résumés : rôle `summarize`, step `raptor.summarize.level<n>`, Poste courant (`indexing` sous le runner). Le Faux LLM renvoie les 30 premiers mots du texte reçu.
 - Citation d'un nœud : le `labels` du `labeled` porte déjà ses `anchor_ids` ; `LLMGenerator` les convertit, rien de propre à RAPTOR.
 - `update` : reconstruction complète sur `corpus_after` (Poste `update` fixé par le runner).
 - Retriever autre que `dense` refusé à la construction (leçon epic 6).
@@ -38,3 +38,18 @@ status: review
 ## Auto Run Result
 
 Voir le rapport de l'agent : tests ciblés, suite complète, pyright et contrôle rapide verts.
+
+## Revue
+
+Revue Opus en une passe, après rebase sur `main` (4.7). Livrée sous réserve de la conformité 4.14.
+
+- medium, second avis 1 : corrigé. Aucune borne sur le texte envoyé au résumé. Avec `fixed_tokens`, la construction refuse un groupe plein (`group_max × max(size, summary_max_tokens)` + system + sortie) qui dépasse la fenêtre du Catalogue, avant tout appel ; chaque appel `summarize` est aussi vérifié avant l'envoi (`ConfigError`, rien de tronqué en silence). Test `test_fenetre_du_modele_de_resume`.
+- medium, second avis 2 : corrigé. `group_max = 1` passait la validation ; désormais `group_max >= 2`, donc chaque niveau réduit, et la boucle s'arrête dès qu'il reste un seul nœud. Test `test_group_max_un_refuse_et_chaque_niveau_reduit`.
+- low, second avis 3 : corrigé. Une feuille unique ne donne plus de résumé à un enfant. Test `test_feuille_unique_sans_resume`.
+- low, second avis 4 : corrigé. Les Design Notes disent maintenant que le Faux LLM renvoie les 30 premiers mots.
+- low, second avis 5 : rejeté. `resoudre_params` remplit `summary_model` avec le défaut du profil dans l'Expérience résolue, avant la construction : la clé d'index porte le modèle résolu, comme `hyde_model` (6.3). La valeur `None` n'apparaît qu'en construction directe dans les tests.
+- low, second avis 6 : corrigé. Le test de borne basse vérifie tous les niveaux, le niveau 1 compris.
+- low, second avis 7 : corrigé. Les Ancrages de chaque nœud, quel que soit son niveau, sont comparés à l'union récursive de ceux de ses feuilles, et appartiennent au Corpus.
+- low, second avis 8 et 9 : consigné. La reconstruction complète à l'`update` est conforme à l'AC (`incremental_update: false`). Reporté à 4.14 : Configuration `raptor` dans `experiments/mini-test.yaml`, passage de `tests/conformance/test_architectures.py` et de `tests/e2e/test_sm3.py`.
+- low, revue : corrigé. La chaîne de plus proches voisins faisait O(n²) appels Python scalaires ; elle est vectorisée (un produit matriciel par pas), avec le même départage par id (argmax sur les lignes triées par id).
+- Report, service réel : vérifier sur Ollama (`minicpm5`, fenêtre 32 768) qu'une indexation par défaut ne journalise aucune fenêtre pleine (`prompt_eval_count + eval_count >= num_ctx`).

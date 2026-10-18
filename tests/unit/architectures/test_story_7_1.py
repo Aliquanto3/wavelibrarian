@@ -94,8 +94,16 @@ def test_groupes_toleres_sous_group_min_et_profondeur_bornee(
     _indexer(ctx, minicorpus, tmp_path / "a", max_depth=1)
     assert max(p.level for p in lire_passages(tmp_path / "a")) == 1
     _indexer(ctx, minicorpus, tmp_path / "b", group_min=40, group_max=79, max_depth=2)
-    noeuds = [p for p in lire_passages(tmp_path / "b") if p.level >= 1]
-    assert noeuds and all(len(n.child_ids) < 40 or n.level == 1 for n in noeuds)
+    passages_b = lire_passages(tmp_path / "b")
+    noeuds = [p for p in passages_b if p.level >= 1]
+    assert noeuds and max(n.level for n in noeuds) <= 2
+    for niveau in {n.level for n in noeuds}:
+        du_niveau = [n for n in noeuds if n.level == niveau]
+        total = sum(len(n.child_ids) for n in du_niveau)
+        assert total == sum(1 for p in passages_b if p.level == niveau - 1)
+        for n in du_niveau:  # aucun niveau exempté, le niveau 1 compris
+            assert len(n.child_ids) <= 79
+            assert len(n.child_ids) >= 40 or (len(du_niveau) == 1 and total < 40)
     with pytest.raises(Exception, match="group_max"):
         _arch(ctx, group_min=5, group_max=8)
 
@@ -143,10 +151,17 @@ def test_recherche_a_plat_niveaux_et_citation_vers_les_feuilles(
     assert {c.anchor_id for c in rep.citations} == attendues
     # pertinence par recouvrement d'Ancrages : un nœud couvre les Ancrages de ses feuilles
     par_id = arch._index.passages
-    for s in rep.retrieved:
-        p: Passage = s.passage
-        if p.level == 1:
-            assert set(p.anchor_ids) == {a for c in p.child_ids for a in par_id[c].anchor_ids}
+
+    def ancrages_des_feuilles(p: Passage) -> set[str]:
+        if p.level == 0:
+            return set(p.anchor_ids)
+        return {a for c in p.child_ids for a in ancrages_des_feuilles(par_id[c])}
+
+    assert max(p.level for p in par_id.values()) >= 2
+    for p in par_id.values():  # tous les niveaux, pas seulement le niveau 1
+        if p.level >= 1:
+            assert set(p.anchor_ids) == ancrages_des_feuilles(p)
+            assert set(p.anchor_ids) <= existants
 
 
 def test_update_reconstruit_et_retire_le_document_supprime(
@@ -177,3 +192,47 @@ def test_retriever_non_dense_refuse_avant_tout_appel(ctx: RunCtx) -> None:
     with pytest.raises(ConfigError, match="dense"):
         _arch(ctx, retriever={"name": "lexical"})
     assert _spans_llm(ctx) == []
+
+
+def test_group_max_un_refuse_et_chaque_niveau_reduit(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    with pytest.raises(Exception, match="group_max"):
+        _arch(ctx, group_min=1, group_max=1)
+    _indexer(ctx, minicorpus, tmp_path / "i", group_min=1, group_max=2, max_depth=10)
+    passages = lire_passages(tmp_path / "i")
+    comptes = [
+        sum(1 for p in passages if p.level == n) for n in range(max(p.level for p in passages) + 1)
+    ]
+    assert all(b < a for a, b in zip(comptes, comptes[1:], strict=False))
+    assert comptes[-1] == 1  # arrêt dès qu'il reste un seul nœud, avant max_depth
+
+
+def test_feuille_unique_sans_resume(ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path) -> None:
+    doc = minicorpus.documents[0]
+    un = minicorpus.model_copy(update={"documents": (doc,)})
+    _indexer(
+        ctx,
+        un,
+        tmp_path / "i",
+        chunker={"name": "fixed_tokens", "params": {"size": 40000, "overlap": 5}},
+        group_max=2,
+        group_min=1,
+    )
+    passages = lire_passages(tmp_path / "i")
+    assert len(passages) == 1 and passages[0].level == 0
+    assert [s for s in _spans_llm(ctx) if s["wl.step"].startswith("raptor.")] == []
+
+
+def test_fenetre_du_modele_de_resume(ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path) -> None:
+    # fake-llm-a : fenêtre de 100 000 tokens ; 400 enfants de 300 tokens n'y tiennent pas
+    grand = {"name": "fixed_tokens", "params": {"size": 300, "overlap": 5}}
+    with pytest.raises(ConfigError, match="fenêtre"):
+        _arch(ctx, chunker=grand, group_max=400)
+    assert _spans_llm(ctx) == []
+    # contrôle avant chaque appel : aucun prompt tronqué en silence
+    arch = _arch(ctx)
+    arch._fenetre = lambda: 300
+    with ctx.scope(post="indexing"), pytest.raises(ConfigError, match="fenêtre"):
+        arch.index(minicorpus, tmp_path / "i")
+    assert [s for s in _spans_llm(ctx) if s["wl.step"].startswith("raptor.")] == []
