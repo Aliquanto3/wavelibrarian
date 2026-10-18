@@ -25,7 +25,7 @@ from wavelibrarian.llm.gateway import limiter_journaux
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.scoring.panel import CleVerdict, PanelVerdict, cle
 
-Status = Literal["running", "completed", "budget_exceeded", "failed"]
+Status = Literal["running", "completed", "completed_with_errors", "budget_exceeded", "failed"]
 JsonlName = Literal["answers.jsonl", "verdicts.jsonl", "panel.jsonl"]
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 RUN_ID = _RUN_ID  # forme d'un run_id, aussi contrôlée par `--reprendre`
@@ -113,10 +113,13 @@ def set_status(
     *,
     answers: dict[str, int] | None = None,
     unjudged: int | None = None,
+    causes: list[dict[str, Any]] | None = None,
 ) -> None:
     """Met à jour `status` du manifeste (fin d'Exécution) ; `answers` : décompte des Réponses
     par statut (`ok`, `error`, `inapplicable`), pour que les erreurs se voient au manifeste ;
-    `unjudged` : Critères jugés restés sans verdict de panel (Juge en échec), à reprendre."""
+    `unjudged` : Critères jugés restés sans verdict de panel (Juge en échec), à reprendre ;
+    `causes` : celles d'un statut `completed_with_errors`, `{config_id, cause, count}` par
+    Configuration (`core/bilan.py`, story 8.3)."""
     chemin = dossier / "manifest.json"
     donnees = json.loads(chemin.read_text(encoding="utf-8"))
     donnees["status"] = status
@@ -124,6 +127,8 @@ def set_status(
         donnees["answers"] = answers
     if unjudged is not None:
         donnees["unjudged"] = unjudged
+    if causes is not None:
+        donnees["causes"] = causes
     if status != "running":
         donnees["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _ecrire_manifest(dossier, donnees)
@@ -139,6 +144,7 @@ def reopen_run_dir(dossier: Path, budget: Budget) -> None:
     donnees.pop("finished_at", None)
     donnees.pop("answers", None)
     donnees.pop("unjudged", None)
+    donnees.pop("causes", None)
     reprises = donnees.setdefault("resumptions", [])
     reprises.append(
         {

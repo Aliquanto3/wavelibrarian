@@ -314,6 +314,7 @@ def resolve_experiment(
         costs=couts,
         models_frozen_at=experience.models_frozen_at or catalogue.catalog_date,
         max_questions=experience.max_questions,
+        max_error_rate=experience.max_error_rate,
         budget=experience.budget,
         judges=juges,
         stats=experience.stats,

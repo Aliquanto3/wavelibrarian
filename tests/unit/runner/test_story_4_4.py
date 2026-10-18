@@ -222,7 +222,9 @@ def test_sortie_non_conforme_status_error_et_l_execution_continue(wl_home: Path)
     faux = FakeProvider()
     faux.script("generate", "*", sortie)
     issue = run_experiment(resolue_exp, questions, wl_home=wl_home, providers={"fake": faux})
-    assert issue.status == "completed"
+    # 1 `error` sur 3 : taux 1/3 > `max_error_rate` 0,2 (story 8.3)
+    assert issue.status == "completed_with_errors"
+    assert issue.causes == ({"config_id": "bm25", "cause": "error_rate", "count": 1},)
     reponses = _answers(issue.run_dir)
     assert [a.question_id for a in reponses] == [q.id for q in questions.questions]
     assert reponses[0].status == "error"
@@ -349,7 +351,7 @@ def test_toutes_les_reponses_en_erreur_code_1_et_decompte_au_manifeste(
     assert "Aucune Réponse valide" in res.output
     dossier = _un_run(wl_home)
     manifest = _manifest(dossier)
-    assert manifest["status"] == "completed"
+    assert manifest["status"] == "completed_with_errors"  # story 8.3
     assert manifest["answers"] == {"ok": 0, "error": 2, "inapplicable": 0}
 
 
@@ -364,7 +366,7 @@ def test_configuration_en_echec_ses_questions_en_erreur_les_autres_s_executent(
     monkeypatch.setattr(Bm25Only, "check", check_en_panne)
     confs = [BASELINES[0], BASELINES[2]]
     res = _wl_run(_experience(tmp_path, configurations=confs, max_questions=2))
-    assert res.exit_code == 0, res.output
+    assert res.exit_code == 1, res.output  # story 8.3 : `bm25` sans Réponse `ok`
     dossier = _un_run(wl_home)
     reponses = _answers(dossier)
     bm25 = [a for a in reponses if a.config_id == "bm25"]
@@ -374,6 +376,11 @@ def test_configuration_en_echec_ses_questions_en_erreur_les_autres_s_executent(
     )
     assert [a.status for a in reponses if a.config_id == "sans-contexte"] == ["ok", "ok"]
     assert _manifest(dossier)["answers"] == {"ok": 2, "error": 2, "inapplicable": 0}
+    assert _manifest(dossier)["status"] == "completed_with_errors"
+    assert {(c["config_id"], c["cause"]) for c in _manifest(dossier)["causes"]} == {
+        ("bm25", "no_ok_answer"),
+        ("bm25", "error_rate"),
+    }
 
 
 def test_exception_non_rattrapee_manifeste_failed(

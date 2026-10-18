@@ -22,6 +22,7 @@ from wavelibrarian.config.defaults import charger_yaml
 from wavelibrarian.config.experiment import ResolvedConfiguration, ResolvedExperiment
 from wavelibrarian.config.panel import excluded_judges, form_panel
 from wavelibrarian.config.schemas import valider
+from wavelibrarian.core.bilan import causes_execution
 from wavelibrarian.core.errors import BudgetExceeded, ConfigError
 from wavelibrarian.core.ids import answer_id, canonical_json, new_run_id, sha16
 from wavelibrarian.core.types import (
@@ -72,7 +73,7 @@ from wavelibrarian.scoring.panel import construire_juges, criteres_juges, juger_
 
 log = logging.getLogger(__name__)
 
-RunStatus = Literal["completed", "budget_exceeded"]
+RunStatus = Literal["completed", "completed_with_errors", "budget_exceeded"]
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,8 @@ class RunOutcome:
     n_answers: int
     counts: dict[str, int]
     unjudged: int = 0  # Critères jugés sans verdict de panel (appel d'un Juge en échec)
+    # `completed_with_errors` : `{config_id, cause, count}` par Configuration (`core/bilan.py`)
+    causes: tuple[dict[str, Any], ...] = ()
 
     @property
     def all_failed(self) -> bool:
@@ -248,30 +251,44 @@ class _Runner:
         self.requis = tuple(sorted(requis))
         self.inapplicables: dict[str, dict[str, Any]] = {}
         self.counts: dict[str, int] = {"ok": 0, "error": 0, "inapplicable": 0}
+        self.par_config: dict[str, dict[str, int]] = {}
         # Reprise : `faits` = answer_id déjà traités (jamais refaits), `en_attente` = answer_id dont
-        # la dernière ligne est `budget_exceeded` (reposés ; non réécrits si le plafond rebloque).
+        # la dernière ligne est `budget_exceeded` ou `error` (reposés, story 8.3 ; une clé
+        # `budget_exceeded` n'est pas réécrite si le plafond rebloque).
         self.faits: set[str] = set()
         self.en_attente: set[str] = set()
-        self.non_jugees = 0
+        self.non_jugees_par: dict[
+            str, int
+        ] = {}  # Critères sans verdict de panel, par Configuration
 
     @property
     def n_answers(self) -> int:
         return sum(self.counts.values())
 
+    @property
+    def non_jugees(self) -> int:
+        return sum(self.non_jugees_par.values())
+
     def compter(self) -> None:
         """Décompte des Réponses effectives (dernière ligne par clé) de `answers.jsonl`, pour le
         manifeste ; `budget_exceeded` n'y figure que s'il en reste."""
         self.counts = {"ok": 0, "error": 0, "inapplicable": 0}
+        self.par_config = {}
         for a in read_answers(self.dossier).values():
             self.counts[a.status] = self.counts.get(a.status, 0) + 1
+            compte = self.par_config.setdefault(a.config_id, {})
+            compte[a.status] = compte.get(a.status, 0) + 1
 
     def reprendre(self) -> None:
-        """Reprise (AD-11) : relit `answers.jsonl` (clés présentes sautées, sauf `budget_exceeded`),
+        """Reprise (AD-11) : relit `answers.jsonl` (clés présentes sautées, sauf `budget_exceeded`
+        et `error`, reposées : story 8.3),
         `applicability.json`, et repère les Questions interrompues, c'est-à-dire déjà tracées au
         Poste `query` sans Réponse : leurs appels refaits sortent du cache et sont marqués
         `wl.resumed` (ni appel ni latence en double dans le Rapport)."""
         existantes = read_answers(self.dossier)
-        self.faits = {i for i, a in existantes.items() if a.status != "budget_exceeded"}
+        self.faits = {
+            i for i, a in existantes.items() if a.status not in ("budget_exceeded", "error")
+        }
         self.en_attente = set(existantes) - self.faits
         faites = {
             (a.config_id, a.condition, a.tier, a.phase, a.question_id)
@@ -349,7 +366,7 @@ class _Runner:
         deja_panel = set(read_panel(self.dossier))
         juges: dict[tuple[str, ...], Any] = {}
         corpus_de: dict[tuple[str, str], tuple[ParsedCorpus, set[str]] | None] = {}
-        self.non_jugees = 0
+        self.non_jugees_par = {}
         reponses = read_answers(self.dossier)
         log.info("étape jugement : %d Réponses", len(reponses))
         try:
@@ -370,7 +387,7 @@ class _Runner:
                         )
                     corpus_phase = corpus_de[(conf.id, a.phase)]
                     if corpus_phase is None:
-                        self.non_jugees += len(criteres_juges(q))
+                        self._non_juges(conf.id, len(criteres_juges(q)))
                         continue
                     parse, tout = corpus_phase
                     ancres = [
@@ -388,7 +405,7 @@ class _Runner:
                         a.phase,
                     )
                     with ctx.scope(post="judging", question_id=q.id):
-                        self.non_jugees += juger_reponse(
+                        n = juger_reponse(
                             a,
                             q,
                             reference_texts=[parse.anchor_text(i) for i in ancres],
@@ -401,8 +418,13 @@ class _Runner:
                             verdicts=verdicts,
                             panel=panel,
                         )
+                        self._non_juges(conf.id, n)
         finally:
             ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
+
+    def _non_juges(self, config_id: str, n: int) -> None:
+        if n:
+            self.non_jugees_par[config_id] = self.non_jugees_par.get(config_id, 0) + n
 
     # --- ingestion et profilage ------------------------------------------------------------
 
@@ -709,7 +731,7 @@ class _Runner:
         index."""
         ctx = self.ctx
         questions = self.questions if questions is None else questions
-        if self.faits:  # reprise : seules les clés absentes (ou `budget_exceeded`) sont refaites
+        if self.faits:  # reprise : seules les clés absentes (`budget_exceeded`, `error`) refaites
             questions = [
                 q
                 for q in questions
@@ -926,7 +948,23 @@ def run_experiment(
                     log.warning("Plafond atteint pendant le jugement : %s", erreur)
                     statut = "budget_exceeded"
             runner.compter()
-            set_status(dossier, statut, answers=dict(runner.counts), unjudged=runner.non_jugees)
+            causes: list[dict[str, Any]] = []
+            if statut == "completed":  # le plafond prime (code 3) ; sinon P9, story 8.3
+                causes = causes_execution(
+                    runner.par_config,
+                    runner.non_jugees_par,
+                    experience.max_error_rate,
+                    [c.id for c in experience.configurations],
+                )
+                if causes:
+                    statut = "completed_with_errors"
+            set_status(
+                dossier,
+                statut,
+                answers=dict(runner.counts),
+                unjudged=runner.non_jugees,
+                causes=causes,
+            )
             log.info("Exécution %s : %s, Réponses %s", run_id, statut, runner.counts)
             if runner.non_jugees:
                 log.warning(
@@ -948,4 +986,5 @@ def run_experiment(
         n_answers=runner.n_answers,
         counts=dict(runner.counts),
         unjudged=runner.non_jugees,
+        causes=tuple(causes),
     )

@@ -46,7 +46,8 @@ def _experience(tmp_path: Path, **champs: Any) -> Path:
 
 
 def _wl(*args: str, code: int = 0) -> Any:
-    res = CliRunner().invoke(app, ["run", *args])
+    # `--tolerer-erreurs` : Questions et Juges en échec scénarisés -> `completed_with_errors` (8.3)
+    res = CliRunner().invoke(app, ["run", *args, "--tolerer-erreurs"])
     assert res.exit_code == code, res.output
     return res
 
@@ -320,7 +321,7 @@ def test_juge_en_echec_compte_au_manifeste_puis_repris(
         len(JUGES) - (questions[a.question_id].answer_form == "short")
         for a in read_answers(dossier).values()
     )
-    assert manifeste["status"] == "completed" and manifeste["unjudged"] == attendu
+    assert manifeste["status"] == "completed_with_errors" and manifeste["unjudged"] == attendu
     assert "sans verdict de panel" in res.output
     assert not [p for p in read_panel(dossier).values() if p.judges]
 

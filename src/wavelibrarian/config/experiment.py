@@ -73,6 +73,8 @@ class Experiment(_Schema):
     costs: str | None = None
     models_frozen_at: Date | None = None  # None : date du Catalogue
     max_questions: int | None = Field(default=None, ge=1, strict=True)
+    # Au-delà (strictement), par Configuration : statut `completed_with_errors` (P9, story 8.3).
+    max_error_rate: float = Field(default=0.2, ge=0.0, le=1.0, strict=True)
     budget: Budget = Budget()
     judges: JudgesSettings = JudgesSettings()
     stats: StatsSettings = StatsSettings()
@@ -108,6 +110,7 @@ class ResolvedExperiment(_Schema):
     costs: CostSettings
     models_frozen_at: Date
     max_questions: int | None
+    max_error_rate: float = 0.2  # défaut : relire une Exécution antérieure à la story 8.3
     budget: Budget
     judges: JudgesSettings
     stats: StatsSettings

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from wavelibrarian.config.panel import excluded_judges
+from wavelibrarian.core.bilan import decrire_cause
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.report.ancrages import Resolveur, ResolveurCorpus, resolveur_de
 from wavelibrarian.report.couts import ENTETE_COUTS, Couts, calculer_couts, ligne_csv
@@ -147,6 +148,17 @@ def _bandeau(ex: Execution) -> list[str]:
         return [
             "> **Exécution arrêtée au plafond de dépense : résultats partiels.** Les Questions "
             "restantes sont en `budget_exceeded` ; `wl run --reprendre` les pose.",
+            "",
+        ]
+    if statut == "completed_with_errors":  # story 8.3 : Configurations et causes nommées
+        seuil = ex.experience.max_error_rate
+        causes = ex.manifeste.get("causes") or []
+        return [
+            "> **Exécution terminée avec erreurs (`completed_with_errors`) : résultats à ne pas "
+            "prendre pour un résultat complet.** `wl run --reprendre` repose les Questions en "
+            "`error` et rejuge les Critères sans verdict.",
+            ">",
+            *(f"> - {decrire_cause(c, seuil)}" for c in causes),
             "",
         ]
     return [f"> **Exécution non terminée (statut `{statut}`) : résultats partiels.**", ""]

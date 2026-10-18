@@ -13,6 +13,7 @@ from wavelibrarian import registry
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import load_profile
 from wavelibrarian.config.validate import validate_file
+from wavelibrarian.core.bilan import decrire_cause
 from wavelibrarian.core.errors import (
     BudgetExceeded,
     ConfigError,
@@ -92,10 +93,19 @@ def run(
             "refaites (plafonds relevables ; toute autre différence d'Expérience est refusée).",
         ),
     ] = None,
+    tolerer_erreurs: Annotated[
+        bool,
+        typer.Option(
+            "--tolerer-erreurs",
+            help="Sort en code 0 pour une Exécution `completed_with_errors` (résumé des causes "
+            "affiché quand même).",
+        ),
+    ] = False,
 ) -> None:
     """Valide une Expérience, vérifie ses dépendances (préflight), puis l'exécute.
 
-    Codes de sortie : 0 succès, 1 erreur (dont une autre Exécution en cours), 2 configuration
+    Codes de sortie : 0 succès, 1 erreur (dont une autre Exécution en cours, et une Exécution
+    `completed_with_errors` sauf `--tolerer-erreurs`), 2 configuration
     invalide (Jeu non Gelé ou modifié compris, reprise d'une Expérience différente), 3 plafond
     atteint, 4 préflight échoué.
     """
@@ -152,16 +162,20 @@ def run(
     if issue.status == "budget_exceeded":
         typer.echo("Plafond de dépense atteint : Exécution arrêtée.", err=True)
         raise typer.Exit(3)
-    if issue.unjudged:
-        typer.echo(
-            f"{issue.unjudged} Critère(s) sans verdict de panel (Juge en échec) : "
-            "relancer avec --reprendre.",
-            err=True,
-        )
+    if issue.status == "completed_with_errors":
+        typer.echo("Exécution terminée avec erreurs (completed_with_errors) :", err=True)
+        for cause in issue.causes:
+            typer.echo(
+                f"  - {decrire_cause(cause, resultat.resolved.max_error_rate).replace('`', '')}",
+                err=True,
+            )
+        typer.echo(f"Reprise : wl run {experience} --reprendre {issue.run_id}", err=True)
     if issue.all_failed:
         typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
         raise typer.Exit(1)
     if not rapport_ok:
+        raise typer.Exit(1)
+    if issue.status == "completed_with_errors" and not tolerer_erreurs:
         raise typer.Exit(1)
 
 

@@ -60,7 +60,8 @@ def _experience(tmp_path: Path) -> Path:
 
 def _wl_run(chemin: Path, wl_home: Path) -> Path:
     avant = set((wl_home / "runs").glob("*")) if (wl_home / "runs").exists() else set()
-    res = CliRunner().invoke(app, ["run", str(chemin)])
+    # `--tolerer-erreurs` : les Questions en erreur scénarisées ici rendent `completed_with_errors`
+    res = CliRunner().invoke(app, ["run", str(chemin), "--tolerer-erreurs"])
     assert res.exit_code == 0, res.output
     (nouveau,) = set((wl_home / "runs").glob("*")) - avant
     return nouveau

@@ -120,7 +120,9 @@ def verifier_reprise(
 
 def deja_terminee(wl_home: Path, run_id: str) -> bool:
     """Exécution `completed` sans Critère resté non jugé (`unjudged`, story 4.9) : une reprise
-    n'a rien à refaire (code 0 dans la CLI). Avec des Critères non jugés, la reprise rejuge."""
+    n'a rien à refaire (code 0 dans la CLI). Avec des Critères non jugés, la reprise rejuge.
+    `completed_with_errors` (story 8.3) n'est jamais terminée : la reprise repose les Questions
+    en `error` et rejuge les Critères sans verdict."""
     manifeste = lire_manifeste(wl_home, run_id)
     return manifeste.get("status") == "completed" and not manifeste.get("unjudged")
 
