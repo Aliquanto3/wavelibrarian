@@ -126,6 +126,7 @@ def _jeu_gele(monkeypatch: pytest.MonkeyPatch) -> None:
     """Les Expériences factices de ces tests n'ont pas de Jeu : le contrôle du Gel, fait avant
     le préflight, est neutralisé (testé dans `test_story_4_4.py`)."""
     monkeypatch.setattr(cli, "load_questions", lambda _r: None)
+    monkeypatch.setattr(cli, "verifier_paliers", lambda *_a: None)
 
 
 def _sans_execution(monkeypatch: pytest.MonkeyPatch) -> None:

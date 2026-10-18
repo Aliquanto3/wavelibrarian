@@ -412,6 +412,7 @@ def test_cli_experience_valide(
         run_id="r", status="completed", n_answers=0, run_dir=wl_home, all_failed=False
     )
     monkeypatch.setattr(cli, "load_questions", lambda _r: None)
+    monkeypatch.setattr(cli, "verifier_paliers", lambda *_a: None)
     monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
     res = CliRunner().invoke(app, ["run", str(ecrire(BASE))])
     assert res.exit_code == 0

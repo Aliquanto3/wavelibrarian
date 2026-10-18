@@ -1,6 +1,7 @@
 """Architecture `long_context` : tout le Corpus dans le prompt, system en cache (FR-16)."""
 
 import math
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -72,10 +73,12 @@ class LongContext(ArchitectureBase):
 
     def __init__(self, params: Any, ctx: Any) -> None:
         super().__init__(params, ctx)
+        self._spec_generateur: ComponentSpec = params.generator
         self.generator = ctx.build("generator", params.generator)
         self.context_builder = ctx.build("context_builder", params.context_builder)
         self._contexte: Context | None = None
         self._par_ancrage: dict[str, Passage] = {}
+        self._generateur_parfait: Any = None
 
     def check(self, profile: CorpusProfile) -> Applicability:
         """Inapplicable si le Corpus dépasse la fenêtre du modèle ou un palier tarifaire."""
@@ -139,3 +142,31 @@ class LongContext(ArchitectureBase):
             "cited",
             tokenizer=self.ctx.tokenizer_for(self.generator.model_id),
         )
+
+    def answer_with_context(
+        self, question: QuestionInput, passages: Sequence[Passage]
+    ) -> ArchAnswer:
+        """Contexte parfait : quelques Passages propres à la Question, jamais le Corpus. Le
+        Generator `llm` passe donc sans `cache_system` (écrire un cache à chaque Question coûte
+        plus qu'il ne rapporte) ; un autre Generator est gardé tel quel."""
+        generateur = self._generateur_sans_cache()
+        contexte = self.context_builder.build(passages)
+        resultat = generateur.generate(question, contexte)
+        return build_arch_answer(
+            contexte,
+            resultat,
+            [],
+            "provided",
+            tokenizer=self.ctx.tokenizer_for(generateur.model_id),
+        )
+
+    def _generateur_sans_cache(self) -> Any:
+        spec = self._spec_generateur
+        if spec.name != "llm":
+            return self.generator
+        if self._generateur_parfait is None:
+            params = {**spec.params, "cache_system": False}
+            self._generateur_parfait = self.ctx.build(
+                "generator", ComponentSpec(name="llm", params=params)
+            )
+        return self._generateur_parfait

@@ -10,7 +10,7 @@ l'Exécution continue ; `BudgetExceeded` l'arrête avec le manifeste `budget_exc
 import json
 import logging
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
@@ -25,6 +25,7 @@ from wavelibrarian.core.types import (
     ArchAnswer,
     CorpusProfile,
     ParsedCorpus,
+    Passage,
     Question,
     QuestionInput,
     Usage,
@@ -32,13 +33,14 @@ from wavelibrarian.core.types import (
 from wavelibrarian.corpus.declare import DeclaredCorpus, declare
 from wavelibrarian.corpus.ingest import ingest
 from wavelibrarian.corpus.profile import profile as profil_corpus
+from wavelibrarian.corpus.tiers import tirer, tirer_chemins
 from wavelibrarian.evalset import io
 from wavelibrarian.evalset.freeze import select_questions, verify_frozen
 from wavelibrarian.evalset.io import QuestionsFile
 from wavelibrarian.llm.gateway import Providers
 from wavelibrarian.measure.energy import make_meter
 from wavelibrarian.measure.tracing import temps_propre
-from wavelibrarian.ports.architecture import ArchitectureBase
+from wavelibrarian.ports.architecture import Applicability, ArchitectureBase
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.index_cache import IndexCache
@@ -92,14 +94,69 @@ def load_questions(experience: ResolvedExperiment) -> FrozenQuestions:
 
 
 def _hors_perimetre(experience: ResolvedExperiment) -> None:
-    """Refus explicite de ce que le runner ne sait pas encore exécuter, plutôt qu'un résultat
-    faux (contexte parfait et Paliers : story 4.6 ; Scénario : story 4.7)."""
-    if experience.conditions != ("standard",):
-        raise ConfigError("conditions", "seule la Condition `standard` est exécutée (story 4.6)")
-    if experience.tier is not None:
-        raise ConfigError("tier", "les Paliers de volume ne sont pas encore exécutés (story 4.6)")
+    """Refus explicite de ce que le runner ne sait pas encore exécuter (Scénario : story 4.7)."""
     if experience.scenario is not None:
         raise ConfigError("scenario", "la phase après mise à jour n'est pas exécutée (story 4.7)")
+
+
+def verifier_paliers(
+    experience: ResolvedExperiment, questions: FrozenQuestions | None = None
+) -> None:
+    """`ConfigError` (code 2) si `tier` demande des Paliers que le Corpus ne déclare pas, une
+    taille absente de `tiers.sizes`, ou (avec `questions`) des Documents requis que le plus petit
+    Palier ne peut pas contenir. Sans réseau ni verrou : appelé avant le préflight."""
+    if experience.tier is None:
+        return
+    corpus = declare(Path(experience.corpus))
+    tiers = corpus.spec.tiers
+    if tiers is None:
+        raise ConfigError("tier", "le Corpus ne déclare pas de clé `tiers` dans corpus.yaml")
+    if experience.tier != "all" and experience.tier not in tiers.sizes:
+        tailles = ", ".join(str(t) for t in tiers.sizes)
+        raise ConfigError(
+            "tier", f"la taille {experience.tier} n'est pas déclarée dans tiers.sizes ({tailles})"
+        )
+    if questions is not None:  # tirage à blanc : requis hors Corpus ou plus nombreux que le Palier
+        presents = [d.source_path for d in corpus.documents]
+        tirer_chemins(presents, tiers, chemins_requis(questions.questions, presents))
+
+
+def chemins_requis(
+    questions: Sequence[Question], presents: Iterable[str] | None = None
+) -> tuple[str, ...]:
+    """`required_paths` des Paliers : Documents des Ancrages de référence des Questions posées.
+
+    `presents` : Documents du Corpus. Un Ancrage vers un Document absent (créé par le Scénario,
+    story 4.7) n'est pas requis : le Palier ne peut pas le contenir."""
+    docs = {a.doc for q in questions for a in q.reference_anchors}
+    if presents is not None:
+        docs &= set(presents)
+    return tuple(sorted(docs))
+
+
+def passages_de_reference(parse: ParsedCorpus, q: Question) -> list[Passage]:
+    """Contexte parfait (AD-6) : un Passage `level 0` par Ancrage de référence, dans l'ordre des
+    `reference_anchors` (sans doublon), texte de `ParsedCorpus.anchor_text`. Vide pour une
+    Question `unanswerable`."""
+    if q.type == "unanswerable":
+        return []
+    passages: dict[str, Passage] = {}
+    for ref in q.reference_anchors:
+        anchor_id = parse.resolve(ref.doc, ref.page, ref.headings)
+        if anchor_id is None:
+            raise ConfigError(
+                "reference_anchors", f"Ancrage introuvable pour {q.id} : {ref.doc} p.{ref.page}"
+            )
+        if anchor_id in passages:
+            continue
+        doc_id = anchor_id.split("#", 1)[0]
+        passages[anchor_id] = Passage(
+            passage_id=sha16(doc_id, "perfect_context", anchor_id),
+            doc_id=doc_id,
+            text=parse.anchor_text(anchor_id),
+            anchor_ids=(anchor_id,),
+        )
+    return list(passages.values())
 
 
 def _question_input(q: Question) -> QuestionInput:
@@ -131,6 +188,9 @@ class _Runner:
         self.meter = make_meter(ctx.profile.energy)
         self._parses: dict[str, ParsedCorpus] = {}
         self._profils: dict[str, CorpusProfile] = {}
+        self._paliers: dict[str, dict[int, ParsedCorpus]] = {}
+        self._profils_paliers: dict[tuple[str, int], CorpusProfile] = {}
+        self.requis = chemins_requis(questions, (d.source_path for d in corpus.documents))
         self.inapplicables: dict[str, dict[str, Any]] = {}
         self.counts: dict[str, int] = {"ok": 0, "error": 0, "inapplicable": 0}
 
@@ -158,6 +218,26 @@ class _Runner:
                 volatility=self.corpus.spec.volatility,
             )
         return self._parses[parser], self._profils[parser]
+
+    def palier(self, parser: str, taille: int) -> tuple[ParsedCorpus, CorpusProfile]:
+        """Sous-corpus du Palier `taille` et son Profil. Tirage de `corpus/tiers.py` avec les
+        Documents des Ancrages de référence comme `required_paths` (AD-22) ; le Profil est celui
+        du sous-corpus, donc `check()` juge le Palier et non le Corpus entier."""
+        parse, _ = self.preparer(parser)
+        if parser not in self._paliers:
+            tiers = self.corpus.spec.tiers
+            if tiers is None:  # déjà refusé par verifier_paliers
+                raise ConfigError("tier", "le Corpus ne déclare pas de clé `tiers`")
+            self._paliers[parser] = tirer(parse, tiers, self.requis)
+        sous = self._paliers[parser][taille]
+        if (parser, taille) not in self._profils_paliers:
+            self._profils_paliers[(parser, taille)] = profil_corpus(
+                sous,
+                parser=parser,
+                tokenizer=self.ctx.tokenizer,
+                volatility=self.corpus.spec.volatility,
+            )
+        return sous, self._profils_paliers[(parser, taille)]
 
     def ecrire_profil(self, profil: CorpusProfile) -> None:
         _ecrire_json(self.dossier / "corpus_profile.json", profil.model_dump(mode="json"))
@@ -215,11 +295,17 @@ class _Runner:
                 log.error("fin de phase %s:%s en échec : %s", conf.id, phase, exc)
 
     def poser(
-        self, conf: ResolvedConfiguration, q: Question, arch: ArchitectureBase, methode: Any
+        self,
+        conf: ResolvedConfiguration,
+        q: Question,
+        arch: ArchitectureBase,
+        methode: Any,
+        passages: Callable[[Question], Sequence[Passage]] | None = None,
     ) -> Answer:
         """Pose une Question dans le Poste `query`. Le span `answer` est émis ici, jamais par
         l'Architecture ; sa latence est le temps propre de `answer`, hors spans déjà tracés
-        (appels, embeddings). `Answer.latency_s` = somme des spans `query` de la Question."""
+        (appels, embeddings). `Answer.latency_s` = somme des spans `query` de la Question.
+        `passages` : Condition contexte parfait, `answer_with_context` au lieu de `answer`."""
         tracer = self.ctx.traceur
         reponse: ArchAnswer | None = None
         erreur: Exception | None = None
@@ -227,7 +313,10 @@ class _Runner:
             debut = time.perf_counter()
             externe, ecoule = tracer.latency_total, tracer.elapsed_total
             try:
-                reponse = arch.answer(_question_input(q))
+                if passages is None:
+                    reponse = arch.answer(_question_input(q))
+                else:
+                    reponse = arch.answer_with_context(_question_input(q), passages(q))
             except BudgetExceeded:
                 raise
             except Exception as exc:  # AD-11 : la Question suivante est posée
@@ -298,48 +387,98 @@ class _Runner:
         for q in self.questions:
             self._ecrire(writer, self._answer(conf, q, vide, status, message))
 
-    def configuration(self, writer: JsonlWriter, conf: ResolvedConfiguration) -> None:
+    def configuration(
+        self, writer: JsonlWriter, conf: ResolvedConfiguration, experience: ResolvedExperiment
+    ) -> None:
+        """Une Configuration : chaque Condition, puis chaque Palier (`tier: all`) ou le Palier
+        demandé, avec sa propre ligne d'`answers.jsonl` et son propre index."""
         ctx = self.ctx
         ctx.config_id = conf.id
         ctx.parser = conf.parser.name
         parse, profil = self.preparer(conf.parser.name)
+        if experience.tier is None:
+            tailles: list[int | None] = [None]
+        elif experience.tier == "all":
+            tiers = self.corpus.spec.tiers
+            tailles = list(tiers.sizes) if tiers is not None else []
+        else:
+            tailles = [experience.tier]
+        try:
+            for condition in experience.conditions:
+                for taille in tailles:
+                    ctx.condition, ctx.tier = condition, taille
+                    sous, profil_t = (
+                        (parse, profil) if taille is None else self.palier(conf.parser.name, taille)
+                    )
+                    self._cellule(writer, conf, condition, taille, parse, sous, profil_t)
+        finally:
+            ctx.condition, ctx.tier = "standard", None
+
+    def _cellule(
+        self,
+        writer: JsonlWriter,
+        conf: ResolvedConfiguration,
+        condition: str,
+        taille: int | None,
+        parse: ParsedCorpus,
+        sous: ParsedCorpus,
+        profil: CorpusProfile,
+    ) -> None:
+        """Une (Configuration, Condition, Palier). En contexte parfait, l'Architecture ne reçoit
+        que les Passages de référence : ni `check()` (le Corpus n'entre pas dans le prompt), ni
+        index."""
+        ctx = self.ctx
+        parfait = condition == "perfect_context"
         spec = ComponentSpec(name=conf.architecture, params=conf.params)
 
         def fabrique() -> ArchitectureBase:
             return ctx.build("architecture", spec)
 
+        cle_applicabilite = conf.id if taille is None else f"{conf.id}@{taille}"
         try:
             arch = fabrique()
-            log.info("étape check : %s", conf.id)
-            verdict = arch.check(profil)
+            verdict = Applicability(applicable=True)
+            if not parfait:
+                log.info("étape check : %s", cle_applicabilite)
+                verdict = arch.check(profil)
         except BudgetExceeded:
             raise
         except Exception as erreur:  # Configuration en échec : ses Questions en `error`
             log.exception("Configuration %s : construction ou check en échec", conf.id)
             self._vides(writer, conf, "none", "error", f"{type(erreur).__name__} : {erreur}")
             return
-        methode = arch.capabilities.retrieval_method
+        methode = "provided" if parfait else arch.capabilities.retrieval_method
         if not verdict.applicable:
             raison = verdict.reason or "inapplicable"
-            log.info("Configuration %s inapplicable : %s", conf.id, raison)
-            self.inapplicables[conf.id] = {
+            log.info("Configuration %s inapplicable : %s", cle_applicabilite, raison)
+            self.inapplicables[cle_applicabilite] = {
                 "architecture": conf.architecture,
                 "applicable": False,
                 "reason": raison,
+                **({} if taille is None else {"tier": taille}),
             }
             self._vides(writer, conf, methode, "inapplicable", raison)
             return
-        try:
-            log.info("étape index : %s", conf.id)
-            with self.energie_de_phase(conf, "index"):
-                arch, cle = self.index_cache.build(ctx, fabrique, parse)
-        except BudgetExceeded:
-            raise
-        except Exception as erreur:
-            log.exception("Configuration %s : index en échec", conf.id)
-            self._vides(writer, conf, methode, "error", f"{type(erreur).__name__} : {erreur}")
-            return
-        log.info("étape answer : %s (index %s, %d Questions)", conf.id, cle, len(self.questions))
+        cle = "-"
+        if not parfait:
+            try:
+                log.info("étape index : %s", cle_applicabilite)
+                with self.energie_de_phase(conf, "index"):
+                    arch, cle = self.index_cache.build(ctx, fabrique, sous)
+            except BudgetExceeded:
+                raise
+            except Exception as erreur:
+                log.exception("Configuration %s : index en échec", conf.id)
+                self._vides(writer, conf, methode, "error", f"{type(erreur).__name__} : {erreur}")
+                return
+        log.info(
+            "étape answer : %s (%s, palier %s, index %s, %d Questions)",
+            conf.id,
+            condition,
+            "all" if taille is None else taille,
+            cle,
+            len(self.questions),
+        )
         # Réponses écrites après leurs spans retenus : un arrêt dur pendant la phase perd les
         # deux à la fois, et la reprise (AD-11) repose ces Questions depuis les caches.
         reponses: list[Answer] = []
@@ -348,9 +487,12 @@ class _Runner:
             for answer in reponses:
                 self._ecrire(writer, answer)
 
+        def passages(q: Question) -> Sequence[Passage]:
+            return passages_de_reference(parse, q)
+
         with self.energie_de_phase(conf, "query", apres=ecrire_reponses):
             for q in self.questions:
-                reponses.append(self.poser(conf, q, arch, methode))
+                reponses.append(self.poser(conf, q, arch, methode, passages if parfait else None))
 
 
 def run_experiment(
@@ -368,6 +510,7 @@ def run_experiment(
     scénarisé des tests ; sinon les adaptateurs du Catalogue (`build_providers`, `fake` compris).
     """
     _hors_perimetre(experience)
+    verifier_paliers(experience, questions)
     corpus = declare(Path(experience.corpus))
     experience = resolve_parsers(experience, corpus)
     if run_id is None:
@@ -391,7 +534,7 @@ def run_experiment(
             try:
                 with JsonlWriter(dossier, "answers.jsonl") as writer:
                     for conf in experience.configurations:
-                        runner.configuration(writer, conf)
+                        runner.configuration(writer, conf, experience)
             except BudgetExceeded as erreur:  # arrêt propre ; reprise : story 4.8
                 log.warning("Plafond atteint : %s", erreur)
                 statut = "budget_exceeded"

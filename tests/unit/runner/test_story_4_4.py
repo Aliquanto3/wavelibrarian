@@ -275,19 +275,6 @@ def test_sortie_scenarisee_ne_persiste_pas_dans_le_cache_de_wl_home(wl_home: Pat
     assert reponses and all(a.text != "SORTIE SCENARISEE" for a in reponses)
 
 
-@pytest.mark.parametrize(
-    ("champ", "valeur"),
-    [("conditions", ["standard", "perfect_context"]), ("tier", "all")],
-)
-def test_conditions_et_paliers_refuses_explicitement(
-    tmp_path: Path, wl_home: Path, champ: str, valeur: Any
-) -> None:
-    res = _wl_run(_experience(tmp_path, **{champ: valeur}))
-    assert res.exit_code == 2, res.output
-    assert "story 4.6" in res.output
-    assert not (wl_home / "runs").exists()
-
-
 # --- Revue : Gel avant préflight, plafond, échecs de Configuration et d'Exécution ---------------
 
 

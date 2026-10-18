@@ -31,7 +31,7 @@ from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.context import Context
-from wavelibrarian.runner.execute import load_questions, run_experiment
+from wavelibrarian.runner.execute import load_questions, run_experiment, verifier_paliers
 
 app = typer.Typer(
     name="wl",
@@ -95,6 +95,7 @@ def run(
     typer.echo("Validation réussie.")
     try:  # Gel vérifié à la validation, avant le préflight et tout appel (AD-11, AD-15)
         questions = load_questions(resultat.resolved)
+        verifier_paliers(resultat.resolved, questions)  # Palier non déclaré : code 2
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
