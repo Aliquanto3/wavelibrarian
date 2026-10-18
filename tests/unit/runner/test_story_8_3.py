@@ -105,14 +105,17 @@ def test_taux_d_erreur_strictement_au_dessus_du_seuil() -> None:
     }
     assert causes_execution(reponses, {"a": 3}, 0.2, confs) == [
         {"config_id": "a", "cause": "unjudged", "count": 3},
-        {"config_id": "b", "cause": "error_rate", "count": 2},
+        {"config_id": "b", "cause": "error_rate", "count": 2, "rate": 0.4},
         {"config_id": "d", "cause": "no_ok_answer", "count": 2},
-        {"config_id": "d", "cause": "error_rate", "count": 2},
+        {"config_id": "d", "cause": "error_rate", "count": 2, "rate": 1.0},
     ]
     assert causes_execution(reponses, {}, 1.0, ["b"]) == []  # 0,4 n'est pas au-dessus de 1
     assert causes_execution({"b": {"ok": 1, "error": 1}}, {}, 0.0, ["b"]) == [
-        {"config_id": "b", "cause": "error_rate", "count": 1}
+        {"config_id": "b", "cause": "error_rate", "count": 1, "rate": 0.5}
     ]
+    texte = decrire_cause({"config_id": "b", "cause": "error_rate", "count": 2, "rate": 0.4}, 0.2)
+    assert texte == "`b` : 2 Réponse(s) en `error`, taux 40 % au-dessus de `max_error_rate` (20 %)"
+    # Manifeste antérieur sans `rate` : description sans le taux réel.
     texte = decrire_cause({"config_id": "b", "cause": "error_rate", "count": 2}, 0.2)
     assert texte == "`b` : 2 Réponse(s) en `error`, taux au-dessus de `max_error_rate` (20 %)"
 
@@ -120,7 +123,7 @@ def test_taux_d_erreur_strictement_au_dessus_du_seuil() -> None:
 # --- validation de max_error_rate ----------
 
 
-@pytest.mark.parametrize("valeur", [1.5, -0.1, "0.2", True])
+@pytest.mark.parametrize("valeur", [1.5, -0.1, "0.2", True, float("nan"), float("inf")])
 def test_max_error_rate_hors_bornes_refuse_code_2(
     tmp_path: Path, wl_home: Path, valeur: Any
 ) -> None:
@@ -281,3 +284,23 @@ def test_reprise_repose_les_erreurs_et_rejuge(
     assert {a.status for a in read_answers(dossier).values()} == {"ok"}
     assert deja_terminee(wl_home, dossier.name)
     assert "rien à reprendre" in _wl(str(chemin), "--reprendre", dossier.name).output
+
+
+def test_toutes_en_erreur_tolerer_erreurs_code_0(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`all_failed` (aucune `ok`) est un `completed_with_errors` : `--tolerer-erreurs` donne le
+    code 0 (AC 2, décision de revue), avec le même résumé."""
+    faux = FakeProvider()
+    faux.script("generate", "generate", "pas du JSON")
+    _avec_faux(monkeypatch, faux)
+    chemin = _experience(tmp_path)
+    sans = _wl(str(chemin))
+    assert sans.exit_code == 1, sans.output
+    res = _wl(str(chemin), "--tolerer-erreurs")
+    assert res.exit_code == 0, res.output
+    assert "Aucune Réponse valide" in res.output
+    assert "bm25 : aucune Réponse ok (2 en error)" in res.output
+    for dossier in (wl_home / "runs").iterdir():
+        if dossier.is_dir():
+            assert _manifeste(dossier)["status"] == "completed_with_errors"

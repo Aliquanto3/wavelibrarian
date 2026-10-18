@@ -49,10 +49,25 @@ Exigences : FR-1, FR-40 ; AD-11 ; `contracts.md` §5 (`manifest.json`, `max_erro
 
 ## Reports et points à arbitrer
 
-- `all_failed` (aucune `ok` sur toute l'Exécution, story 4.4) garde le code 1 même avec `--tolerer-erreurs` : l'AC 2 dit « code 0 avec `--tolerer-erreurs` » sans traiter ce cas. Comportement antérieur conservé, à trancher par Anaël.
 - Le bandeau est placé sous le titre `# Rapport`, comme celui de `budget_exceeded` ; « commence par » lu comme « avant toute section ».
 - Une Expérience résolue gagne `max_error_rate` : l'empreinte des Exécutions antérieures à 8.3 change, leur `--reprendre` est refusé (code 2).
 - Reprise : une Question en `error` est reposée à chaque reprise, y compris après `budget_exceeded` ; une erreur déterministe (sortie non conforme) se reproduit (seuls les succès vont au Cache de réponses).
+
+## À arbitrer par Anaël
+
+- `all_failed` (aucune `ok` sur toute l'Exécution) suit désormais l'AC 2 à la lettre : code 0 avec `--tolerer-erreurs` (message « Aucune Réponse valide » et résumé affichés), code 1 sans. Faut-il que `all_failed` sorte en 1 même avec `--tolerer-erreurs` ? `contracts.md` §8 n'en dit rien (aucune contradiction).
+- Configuration entièrement `inapplicable` (ni `ok` ni `error`) : non comptée comme cause. La lecture littérale de l'AC 1 (« aucune Réponse `ok` ») ferait sortir en `completed_with_errors` toute Expérience où une Architecture est inapplicable au Corpus (refus motivé, FR), alors que c'est un résultat attendu. Aucune Expérience livrée n'est touchée aujourd'hui (SM-3 : chaque Configuration a 111 `ok` et 1 `inapplicable`). Règle du dev gardée.
+- `max_error_rate` entre dans l'empreinte de l'Expérience : le relever à la reprise est refusé (code 2), comme toute différence hors plafonds. Faut-il le rendre relevable comme les plafonds ?
+
+## Revue
+
+- medium, second avis 1 : `all_failed` sortait en 1 avant la règle `--tolerer-erreurs`, contre l'AC 2. Corrigé (`cli.py`), test `test_toutes_en_erreur_tolerer_erreurs_code_0` ; point à arbitrer ci-dessus.
+- low, second avis 2 : Configuration seulement `inapplicable` non comptée. Rejeté (règle gardée, motif ci-dessus), à arbitrer.
+- low, second avis 3 : `max_error_rate` dans l'empreinte. Consigné, non changé (à arbitrer).
+- low, second avis 4 : lignes `answers.jsonl` en double pour les Questions rejouées. Rejeté : journal en ajout seul (AD-11), tous les lecteurs (`rundir.read_answers`, `report/lecture.lire_reponses`) gardent la dernière ligne ; même mécanisme que `budget_exceeded` (4.8).
+- low, second avis 5 : taux réel absent. Corrigé : `rate` ajouté aux causes `error_rate` du manifeste (`contracts.md` §5 aligné), affiché par la CLI et le bandeau (« taux 50 % au-dessus de `max_error_rate` (20 %) ») ; un manifeste sans `rate` reste décrit sans le taux.
+- low, second avis 6 : `wl.resumed` sur les hits de cache des Questions `error` rejouées. Rejeté : l'appel d'origine reste tracé dans `traces.jsonl` avec son coût et son `wl.cost_uncached` ; le hit rejoué n'apporte qu'un coût réel nul et n'est pas recompté (`report/couts.py`). Un appel refait hors cache n'est pas marqué et compte, à juste titre (dépense nouvelle). Aucun coût ne sort du Rapport.
+- low, revue : NaN et infini pour `max_error_rate`. Ajoutés au test de refus (code 2) ; pydantic les refuse déjà (bornes [0, 1]).
 
 ## Commande de vérification
 

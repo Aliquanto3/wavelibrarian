@@ -170,9 +170,8 @@ def run(
                 err=True,
             )
         typer.echo(f"Reprise : wl run {experience} --reprendre {issue.run_id}", err=True)
-    if issue.all_failed:
+    if issue.all_failed:  # toujours `completed_with_errors` : même règle de code (AC 2, 8.3)
         typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
-        raise typer.Exit(1)
     if not rapport_ok:
         raise typer.Exit(1)
     if issue.status == "completed_with_errors" and not tolerer_erreurs:

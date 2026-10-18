@@ -224,7 +224,9 @@ def test_sortie_non_conforme_status_error_et_l_execution_continue(wl_home: Path)
     issue = run_experiment(resolue_exp, questions, wl_home=wl_home, providers={"fake": faux})
     # 1 `error` sur 3 : taux 1/3 > `max_error_rate` 0,2 (story 8.3)
     assert issue.status == "completed_with_errors"
-    assert issue.causes == ({"config_id": "bm25", "cause": "error_rate", "count": 1},)
+    assert issue.causes == (
+        {"config_id": "bm25", "cause": "error_rate", "count": 1, "rate": 1 / 3},
+    )
     reponses = _answers(issue.run_dir)
     assert [a.question_id for a in reponses] == [q.id for q in questions.questions]
     assert reponses[0].status == "error"

@@ -22,7 +22,8 @@ def causes_execution(
     - `no_ok_answer` : aucune Réponse `ok` et au moins une en `error` (`count` : Réponses en
       `error`) ; une Configuration seulement `inapplicable` n'est pas en erreur.
     - `error_rate` : `error / (ok + error)` strictement au-dessus de `max_error_rate`
-      (`count` : Réponses en `error`) ; les `inapplicable` n'entrent pas dans le taux.
+      (`count` : Réponses en `error`, `rate` : taux réel) ; les `inapplicable` n'entrent pas
+      dans le taux.
     - `unjudged` : Critères jugés restés sans verdict de panel (`count` : Critères).
     """
     causes: list[dict[str, Any]] = []
@@ -31,8 +32,10 @@ def causes_execution(
         ok, erreurs = compte.get("ok", 0), compte.get("error", 0)
         if ok == 0 and erreurs > 0:
             causes.append({"config_id": config_id, "cause": "no_ok_answer", "count": erreurs})
-        if erreurs and erreurs / (ok + erreurs) > max_error_rate:
-            causes.append({"config_id": config_id, "cause": "error_rate", "count": erreurs})
+        if erreurs and (taux := erreurs / (ok + erreurs)) > max_error_rate:
+            causes.append(
+                {"config_id": config_id, "cause": "error_rate", "count": erreurs, "rate": taux}
+            )
         if n := non_jugees.get(config_id, 0):
             causes.append({"config_id": config_id, "cause": "unjudged", "count": n})
     return causes
@@ -44,8 +47,10 @@ def decrire_cause(cause: Mapping[str, Any], max_error_rate: float | None = None)
     if quoi == "no_ok_answer":
         texte = f"aucune Réponse `ok` ({n} en `error`)"
     elif quoi == "error_rate":
+        taux = cause.get("rate")
+        reel = f" {taux * 100:.0f} %" if isinstance(taux, int | float) else ""
         seuil = "" if max_error_rate is None else f" ({max_error_rate * 100:g} %)"
-        texte = f"{n} Réponse(s) en `error`, taux au-dessus de `max_error_rate`{seuil}"
+        texte = f"{n} Réponse(s) en `error`, taux{reel} au-dessus de `max_error_rate`{seuil}"
     elif quoi == "unjudged":
         texte = f"{n} Critère(s) sans verdict de panel"
     else:
