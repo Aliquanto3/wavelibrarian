@@ -181,6 +181,8 @@ class MeteredGateway:
         extra: dict[str, str | int | float | bool] = {}
         if request.temperature is None:
             extra["wl.temperature_omitted"] = True
+        if provider == "ollama" and request.think is None:
+            extra["wl.think_omitted"] = True
         if raw_output is not None:  # sortie non conforme : son début, pour le diagnostic
             extra["wl.raw_output"] = raw_output[: NonConformantOutput.RAW_OUTPUT_MAX]
         if energie:
@@ -223,6 +225,9 @@ class MeteredGateway:
             # AD-20 : `temperature` ne part que si le modèle l'accepte ; la clé de cache reflète
             # la requête effective, et le span porte `wl.temperature_omitted`.
             marquee = marquee.model_copy(update={"temperature": None})
+        if nom == "ollama" and marquee.think != entry.think:
+            # Story 8.4 : `think` effectif du Catalogue, repris dans la clé de cache.
+            marquee = marquee.model_copy(update={"think": entry.think})
         schema_json = schema.model_json_schema() if schema is not None else None
         # Après le marquage : le rôle entre dans la clé ; le schéma aussi (il change la requête).
         cle = cache_key(marquee, nom, schema_json)

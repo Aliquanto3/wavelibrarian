@@ -52,6 +52,8 @@ def cache_key(
         "messages": [{"role": m.role, "content": m.content} for m in request.messages],
         "pass_id": request.pass_id,
     }
+    if provider == "ollama":
+        contenu["params"]["think"] = request.think  # None (omis) distinct de False
     if provider == "fake":
         contenu["inputs"] = request.inputs
         contenu["step"] = request.step  # `script(role, step_glob, …)` : sortie selon l'étape

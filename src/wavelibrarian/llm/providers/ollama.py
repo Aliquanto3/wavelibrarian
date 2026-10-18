@@ -147,12 +147,13 @@ class OllamaProvider:
             "stream": False,
             "keep_alive": self._settings.keep_alive,
             "options": options,
-            # Un modèle à raisonnement (qwen3.5) dépenserait `num_predict` en réflexion, hors de
-            # `message.content` : la sortie structurée arriverait vide ou tronquée. Envoyé à tous
-            # les modèles : validé en réel sur granite4.2 et minicpm (3e série du 2026-10-18), qui
-            # l'ignorent ou l'acceptent ; un modèle qui le refuserait répondrait HTTP 400.
-            "think": False,
         }
+        # `think` (Catalogue, story 8.4) : `false` par défaut, car un modèle à raisonnement
+        # (qwen3.5) dépenserait `num_predict` en réflexion, hors de `message.content` ; validé en
+        # réel sur granite4.2 et minicpm (3e série du 2026-10-18). `None` : champ omis, pour un
+        # modèle qui le refuserait (HTTP 400).
+        if request.think is not None:
+            corps["think"] = request.think
         if output_schema is not None:
             corps["format"] = inline_refs(output_schema)
         return corps

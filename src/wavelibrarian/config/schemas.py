@@ -48,6 +48,9 @@ class ModelEntry(_Schema):
     # passerelle la retire de la requête et de la clé de cache, et le span le signale.
     accepts_temperature: bool = True
     min_cacheable_tokens: int | None = None
+    # Ollama : valeur du champ `think` envoyé ; `None` = champ non envoyé (modèle qui l'ignore
+    # mal). Entre dans la clé du Cache de réponses via la requête effective (v0.2.0, P7).
+    think: bool | None = False
     # `validate_default` : l'absence de `pricing` d'un modèle d'API est signalée à `...pricing`.
     pricing: Pricing | None = Field(default=None, validate_default=True)
     dim: int | None = None

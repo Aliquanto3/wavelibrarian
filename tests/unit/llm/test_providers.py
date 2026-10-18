@@ -704,3 +704,15 @@ def test_real_api_anthropic_haiku() -> None:  # pragma: no cover
         _req(max_tokens=16, messages=(Message(role="user", content="Dis oui."),)), timeout_s=30
     )
     assert rep.text and rep.usage.output_tokens > 0
+
+
+@pytest.mark.parametrize(("think", "attendu"), [(False, False), (True, True), (None, "absent")])
+def test_ollama_think_selon_la_requete(think: bool | None, attendu: bool | str) -> None:
+    """Story 8.4 : `think` part tel quel (false/true) ; `None` : le champ n'est pas envoyé."""
+    t = Transport(Resp(200, json=REPONSE_OLLAMA))
+    _ollama(t).complete(_req(MINICPM, think=think), timeout_s=5)
+    corps = t.body()
+    if attendu == "absent":
+        assert "think" not in corps
+    else:
+        assert corps["think"] is attendu

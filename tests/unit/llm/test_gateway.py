@@ -554,3 +554,37 @@ def test_reglement_interrompu_ne_cache_que_les_succes_de_schema(
         with pytest.raises(NonConformantOutput):
             env.gw.complete_structured(_req(), Schema)
         assert len(env.provider.requests) > 1
+
+
+def test_think_du_catalogue_dans_la_requete_la_cle_et_le_span(
+    make_env: Callable[..., Env],
+) -> None:
+    """Story 8.4 : la passerelle pose le `think` du Catalogue sur la requête Ollama ; il entre
+    dans la clé de cache (changer `think` ne sert pas une réponse mise en cache sous l'autre)."""
+    env = make_env("ok")
+    mini = "minicpm5:1b-q4_k_m"
+    assert env.catalog.get(mini).think is False  # défaut du Catalogue
+    env.gw.complete(_req(mini))
+    env.gw.complete(_req(mini))  # même valeur effective : hit
+    for valeur in (True, None):
+        entree = env.catalog.get(mini).model_copy(update={"think": valeur})
+        env.gw._catalog = _CatalogueSurcharge(env.catalog, entree)  # type: ignore[attr-defined]
+        env.gw.complete(_req(mini))  # clé différente : appel réel
+    assert [r.think for r in env.provider.requests] == [False, True, None]
+    faux, hit, vrai, omis = env.spans()
+    assert hit["wl.llm_cache_hit"] is True
+    assert "wl.think_omitted" not in faux and "wl.think_omitted" not in vrai
+    assert omis["wl.think_omitted"] is True
+
+
+class _CatalogueSurcharge:
+    """Catalogue dont une entrée est remplacée (ModelCatalog est figé)."""
+
+    def __init__(self, base: ModelCatalog, entree: Any) -> None:
+        self._base, self._entree = base, entree
+
+    def get(self, model_id: str) -> Any:
+        return self._entree if model_id == self._entree.id else self._base.get(model_id)
+
+    def cost(self, model_id: str, usage: Any) -> Any:
+        return self._base.cost(model_id, usage)
