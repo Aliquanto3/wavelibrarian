@@ -85,6 +85,10 @@ class JsonlSpanExporter(SpanExporter):
                 f.write("\n".join(lignes) + "\n")
         except OSError as exc:
             self.erreur = exc
+            try:  # écriture partielle : le prochain span ne doit pas s'y coller
+                terminer_ligne(self.path)
+            except OSError:
+                pass
             return SpanExportResult.FAILURE
         self.ecrits += len(lignes)
         return SpanExportResult.SUCCESS

@@ -101,6 +101,7 @@ class Resultats:
     contaminees: list[LigneScore] = field(default_factory=list)  # Qualité à part (FR-12)
     recherche: list[LigneRecherche] = field(default_factory=list)
     paires: list[LignePaire] = field(default_factory=list)
+    alertes_recherche: list[str] = field(default_factory=list)  # Ancrages, Corpus modifié
 
 
 def qualite(q: Question, verdicts: dict[str, bool]) -> bool | None:

@@ -51,3 +51,14 @@ status: review
 - Reports traités : lecteurs tolérants et `\n` avant ajout (4.8) ; `read_answers`/dernière ligne et `budget_exceeded` jamais noté (4.8) ; `retrieval.csv` (4.9) ; `unjudged` affiché (4.9) ; `pairs.csv`, `graine_derivee`, `None` de `compare`, multiplicité (4.10) ; contaminées (FR-12) ; `section_fidelite` (7.3).
 - Reports non traités : Citation « hors du Corpus » jugée sur le sous-corpus du Palier (4.9) : renvoyé à 4.13, qui tire les Paliers ; `citation_correctness` est écrite par le runner sur le Corpus entier et n'entre pas dans la Qualité. Spans `wl.resumed` ignorés pour les appels et la latence (4.8) : 4.12 (aucun span n'est lu ici). Fraîcheur et exclusion des `inapplicable` du dénominateur : 4.13. Fidélité du wiki : la section existe, le juge par défaut suit `profil.judge_pool` (7.3), rien à ajouter ici.
 - Risque : `generer_rapport` ré-ingère le Corpus (cache de parsing) pour résoudre les Ancrages de référence ; un Corpus modifié depuis l'Exécution donnerait d'autres `anchor_id` (l'Exécution reprise le refuse, pas `wl rapport`).
+
+## Revue
+- high, second avis 1 : corrigé. Le Corpus relu (et le Corpus après Scénario) est comparé à `inputs.corpus_fingerprint` / `scenario_fingerprint` du manifeste, avec le parser de la première Configuration comme le runner ; écart : recherche non mesurée pour la phase et alerte dans la section Recherche ; `inputs` absent : alerte « non comparé ». Second volet rejeté : `doc_id` est `sha256(octets)[:16]`, l'empreinte couvre donc le contenu. `test_corpus_modifie_depuis_l_execution_recherche_non_mesuree_et_signalee`.
+- high, second avis 2 : corrigé. `lire_jsonl` décode ligne par ligne ; une troncature dans un caractère multioctet n'invalide que sa ligne. `test_lire_jsonl_tolere_une_troncature_au_milieu_d_un_caractere_multioctet`.
+- medium, second avis 3 : corrigé. `_ecrire_rapport` attrape toute exception : le code 3 du plafond est conservé. `test_echec_du_rapport_ne_masque_pas_le_code_de_l_execution`.
+- medium, second avis 4 : corrigé. `ResolveurCorpus` compte les Questions aux Ancrages non résolus (par parser et phase) et le Rapport l'affiche, ainsi qu'un Corpus indisponible. `test_ancrage_non_resolu_compte_et_signale`.
+- low, second avis 5 : tranché, gardé. Run `completed` dont le Rapport échoue : code 1 (le Rapport fait partie de `wl run`) ; couvert par le test du point 3.
+- low, second avis 6 : corrigé. L'assertion vérifie une valeur `non jugées` > 0 dans la table.
+- low, second avis 7 : corrigé. `test_paire_continue_avec_questions_communes` : bootstrap apparié avec `n_common` > 0, `diff` comparé à la moyenne des écarts par Question.
+- low, second avis 8 : corrigé. `JsonlSpanExporter.export` termine la ligne après une écriture ratée. `test_exporteur_de_traces_termine_la_ligne_apres_une_ecriture_partielle`.
+- low, second avis 9 : rejeté. En contexte parfait, les Ancrages de référence sont fournis (`provided`) : rappel 1 par construction, rien à mesurer.

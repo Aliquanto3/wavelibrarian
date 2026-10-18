@@ -438,7 +438,12 @@ def test_critere_sans_verdict_est_affiche_non_juge(run_complet: Path) -> None:
     generer_rapport(run_complet)
     md = (run_complet / "report" / "report.md").read_text(encoding="utf-8")
     comptes = md.split("## Réponses non notées")[1]
-    assert "| non jugées |" in comptes.replace("**", "") or "non jugées" in comptes
+    derniers = [
+        ligne.rstrip(" |").rsplit("|", 1)[-1].strip()
+        for ligne in comptes.split("\n## ")[0].splitlines()
+        if ligne.startswith("|") and "---" not in ligne
+    ]
+    assert derniers[0] == "non jugées" and any(x.isdigit() and int(x) > 0 for x in derniers[1:])
     ex = charger(run_complet)
     res = evaluer(ex, resolveur_de(ex.experience, run_complet.parent.parent))
     assert sum(c.non_jugees for c in res.comptes.values()) >= 1
@@ -467,3 +472,145 @@ def test_exporteur_de_traces_termine_la_ligne_tronquee_a_la_reprise(tmp_path: Pa
     JsonlSpanExporter(chemin)
     assert chemin.read_bytes() == b'{"name": "a"}\n{"name": "tr\n'
     assert lire_jsonl(chemin) == [{"name": "a"}]
+
+
+# --- Revue : empreinte du Corpus, Ancrages non résolus, UTF-8 tronqué, échec du Rapport ---------
+
+
+def test_corpus_modifie_depuis_l_execution_recherche_non_mesuree_et_signalee(
+    run_complet: Path,
+) -> None:
+    md = (run_complet / "report" / "report.md").read_text(encoding="utf-8")
+    assert "**Attention**" not in md  # Corpus inchangé : aucune alerte
+    assert _csv(run_complet / "report" / "retrieval.csv")
+    chemin = run_complet / "manifest.json"
+    manifeste = json.loads(chemin.read_text(encoding="utf-8"))
+    assert manifeste["inputs"]["corpus_fingerprint"]
+    manifeste["inputs"]["corpus_fingerprint"] = "0" * 16
+    chemin.write_text(json.dumps(manifeste), encoding="utf-8")
+    generer_rapport(run_complet)
+    md = (run_complet / "report" / "report.md").read_text(encoding="utf-8")
+    recherche = md.split("## Recherche")[1]
+    assert "Corpus modifié depuis l'Exécution (base)" in recherche
+    assert "0000000000000000" in recherche
+    assert _csv(run_complet / "report" / "retrieval.csv") == []
+
+
+def test_ancrage_non_resolu_compte_et_signale(run_complet: Path) -> None:
+    from wavelibrarian.core.types import AnchorRef
+
+    ex = charger(run_complet)
+    resoudre = resolveur_de(ex.experience, run_complet.parent.parent)
+    q = next(q for q in ex.jeu.values() if q.reference_anchors)
+    bonne = resoudre("bm25", "base", q)
+    assert bonne and resoudre.alertes() == []
+    fausse = q.model_copy(
+        update={"reference_anchors": (*q.reference_anchors, AnchorRef(doc="absent.md"))}
+    )
+    assert resoudre("bm25", "base", fausse) == bonne
+    resoudre("bm25", "base", fausse)  # comptée une fois par Question
+    (alerte,) = resoudre.alertes()
+    assert alerte.startswith("1 Question(s) avec au moins un Ancrage de référence non résolu")
+    assert q.id in alerte
+
+
+def test_lire_jsonl_tolere_une_troncature_au_milieu_d_un_caractere_multioctet(
+    tmp_path: Path,
+) -> None:
+    chemin = tmp_path / "f.jsonl"
+    chemin.write_bytes('{"a": "é"}\n'.encode() + '{"b": "é'.encode()[:-1])
+    assert lire_jsonl(chemin) == [{"a": "é"}]
+    chemin.write_bytes(b'{"a": 1}\n{"b": "\xff"}\n{"c": 2}\n')
+    assert lire_jsonl(chemin) == [{"a": 1}, {"c": 2}]
+
+
+def test_echec_du_rapport_ne_masque_pas_le_code_de_l_execution(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def casse(*_: Any, **__: Any) -> Path:
+        raise RuntimeError("panne inattendue")
+
+    monkeypatch.setattr("wavelibrarian.cli.generer_rapport", casse)
+    plafond = _plafond_pour(tmp_path, 5)
+    chemin = _experience(
+        tmp_path,
+        "plafonne",
+        budget={"per_run": {"fake": {"amount": str(plafond), "currency": "USD"}}},
+    )
+    res = _wl("run", str(chemin), code=3)  # le code du plafond, pas celui du Rapport
+    assert "Rapport non généré : RuntimeError: panne inattendue" in res.output
+    res = _wl("run", str(_experience(tmp_path, "complet")), code=1)  # completed, Rapport en échec
+    assert "Rapport non généré" in res.output
+
+
+def test_paire_continue_avec_questions_communes(run_complet: Path) -> None:
+    """Bootstrap apparié avec `n_common` > 0 : deux Configurations de recherche dont l'une ne
+    retrouve qu'une partie des Ancrages (résolveur injecté)."""
+    ex = charger(run_complet)
+    vrai = resolveur_de(ex.experience, run_complet.parent.parent)
+    bm25 = [a for a in ex.reponses.values() if a.config_id == "bm25"]
+    # Copie des Réponses bm25 sous un second config_id, même recherche.
+    copies = {
+        f"{a.answer_id}#b": a.model_copy(update={"answer_id": f"{a.answer_id}#b", "config_id": "b"})
+        for a in bm25
+    }
+    ex.reponses.update(copies)
+    for aid, critere_verdict in list(ex.verdicts_par_reponse.items()):
+        if f"{aid}#b" in copies:
+            ex.verdicts_par_reponse[f"{aid}#b"] = critere_verdict
+
+    def resoudre(config_id: str, phase: Any, q: Any) -> list[str]:
+        ids = vrai("bm25", phase, q)
+        return ids if config_id == "bm25" else ids[:1] + ["inconnu"]
+
+    res = evaluer(ex, resoudre)
+    lignes = {
+        p.metric: p
+        for p in res.paires
+        if {p.config_a, p.config_b} == {"b", "bm25"} and p.condition == "standard"
+    }
+    rappel = lignes["recall"]
+    assert rappel.test == "bootstrap_apparie" and rappel.n_common > 0
+    # Oracle : moyenne des écarts par Question, recalculée depuis les Réponses.
+    ecarts = []
+    for a in bm25:
+        if a.condition != "standard":
+            continue
+        q = ex.jeu[a.question_id]
+        sa = retrieval_metrics(
+            a.retrieved, resoudre(rappel.config_a, a.phase, q), a.retrieval_method, 5
+        )
+        sb = retrieval_metrics(
+            a.retrieved, resoudre(rappel.config_b, a.phase, q), a.retrieval_method, 5
+        )
+        if sa.recall is not None and sb.recall is not None:
+            ecarts.append(sa.recall - sb.recall)
+    assert rappel.n_common == len(ecarts)
+    assert rappel.diff == pytest.approx(sum(ecarts) / len(ecarts))
+    assert rappel.p_value is not None and 0.0 <= rappel.p_value <= 1.0
+
+
+def test_exporteur_de_traces_termine_la_ligne_apres_une_ecriture_partielle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wavelibrarian.measure import tracing
+
+    chemin = tmp_path / "traces.jsonl"
+    exporteur = tracing.JsonlSpanExporter(chemin)
+    ouvrir = Path.open
+
+    def partiel(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if mode == "a":
+            with ouvrir(self, "ab") as f:
+                f.write(b'{"name": "par')
+            raise OSError("disque plein")
+        return ouvrir(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", partiel)
+    attributs = {"name": "x", "start_time": 0, "end_time": 1, "attributes": {}}
+    span: Any = type("S", (), {"get_span_context": lambda _: None, **attributs})()
+    assert exporteur.export([span]) == tracing.SpanExportResult.FAILURE
+    monkeypatch.setattr(Path, "open", ouvrir)
+    assert chemin.read_bytes() == b'{"name": "par\n'
+    assert exporteur.export([span]) == tracing.SpanExportResult.SUCCESS
+    assert [s["name"] for s in lire_jsonl(chemin)] == ["x"]

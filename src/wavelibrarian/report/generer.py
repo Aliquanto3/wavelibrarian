@@ -14,7 +14,7 @@ from typing import Any
 
 from wavelibrarian.config.panel import excluded_judges
 from wavelibrarian.core.errors import ConfigError
-from wavelibrarian.report.ancrages import Resolveur, resolveur_de
+from wavelibrarian.report.ancrages import Resolveur, ResolveurCorpus, resolveur_de
 from wavelibrarian.report.lecture import CleGroupe, Execution, charger
 from wavelibrarian.report.scores import (
     CRITERES,
@@ -354,6 +354,8 @@ def _recherche(res: Resultats) -> list[str]:
         "reprend `retrieval_method`. La Baseline `no_context` n'a pas de recherche. Détail par "
         "Type : `retrieval.csv`.",
         "",
+        *(f"- **Attention** : {m}" for m in res.alertes_recherche),
+        *([""] if res.alertes_recherche else []),
         *corps,
     ]
 
@@ -486,8 +488,11 @@ def generer_rapport(
     ex = charger(run_dir)
     if resoudre is None:
         home = wl_home or Path(os.environ.get("WL_HOME") or ".wl")
-        resoudre = resolveur_de(ex.experience, home)
+        entrees = ex.manifeste.get("inputs")
+        resoudre = resolveur_de(ex.experience, home, entrees if isinstance(entrees, dict) else {})
     res = evaluer(ex, resoudre)
+    if isinstance(resoudre, ResolveurCorpus):
+        res.alertes_recherche = resoudre.alertes()
     sortie = run_dir / "report"
     sortie.mkdir(exist_ok=True)
     ecrire_csv(sortie, res)

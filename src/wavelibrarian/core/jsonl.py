@@ -36,11 +36,13 @@ def lire_jsonl(chemin: Path) -> list[dict[str, Any]]:
     if not chemin.is_file():
         return []
     objets: list[dict[str, Any]] = []
-    for i, ligne in enumerate(chemin.read_text(encoding="utf-8").split("\n"), start=1):
-        if not ligne.strip():
+    # Décodage ligne par ligne : une troncature au milieu d'un caractère multioctet n'invalide
+    # que sa propre ligne (UnicodeDecodeError est une ValueError).
+    for i, brute in enumerate(chemin.read_bytes().split(b"\n"), start=1):
+        if not brute.strip():
             continue
         try:
-            objet = json.loads(ligne)
+            objet = json.loads(brute.decode("utf-8"))
         except ValueError:
             objet = None
         if not isinstance(objet, dict):

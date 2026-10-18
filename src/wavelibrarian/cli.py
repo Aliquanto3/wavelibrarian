@@ -167,8 +167,8 @@ def _ecrire_rapport(run_dir: Path, wl_home: Path) -> bool:
     """Génère `report/` ; un échec du Rapport est annoncé sans masquer l'issue de l'Exécution."""
     try:
         sortie = generer_rapport(run_dir, wl_home=wl_home)
-    except (WlError, OSError, ValueError) as erreur:
-        typer.echo(f"Rapport non généré : {erreur}", err=True)
+    except Exception as erreur:  # jamais masquer le code de sortie de l'Exécution (3 au plafond)
+        typer.echo(f"Rapport non généré : {type(erreur).__name__}: {erreur}", err=True)
         return False
     typer.echo(f"Rapport écrit dans {sortie}")
     return True
