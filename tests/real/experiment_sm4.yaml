@@ -1,0 +1,24 @@
+# Expérience minimale du test réel SM-4 (story 4.15), propre à ce test : ne dépend pas de
+# `experiments/mini-real-haiku.yaml` (story 4.14). Seule l'API Anthropic est sollicitée :
+# Generator Haiku 5.5, Juges et embedder factices, aucun modèle local.
+experiment_id: sm4-real-haiku
+seed: 42
+profile: test            # tokenizer approx, énergie factice : aucun téléchargement
+corpus: ../../corpora/minicorpus/corpus.yaml
+questions: ../../corpora/minicorpus/questions.yaml
+split: dev
+max_questions: 5
+conditions: [standard]
+retries: {max_attempts: 2, backoff_s: 1.0, max_backoff_s: 10.0}
+budget:
+  per_run: {anthropic: {amount: "5.00", currency: USD}}   # plafond dur du test (AD-9)
+  period: {anthropic: {amount: "50.00", currency: USD}}
+judges:
+  pool: [fake-llm-b, fake-llm-c]
+  panel_size: 2
+configurations:
+  - id: naive-haiku
+    architecture: naive_rag
+    params:
+      embedder: {name: fake}
+      generator: {name: llm, params: {model: claude-haiku-5-5, max_tokens: 512}}
