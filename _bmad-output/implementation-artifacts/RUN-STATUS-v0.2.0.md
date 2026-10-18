@@ -52,3 +52,4 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 - 2026-10-18 13:18 : code de 8.9 approuvé (34d03df, wl annotations exporter avec --ecraser, contexte des Juges dans le paquet, section Calibration des Juges) ; intégration différée après la mesure de 8.6 (pas de suite complète pendant la mesure). Report : longueur du paquet (~8 000 tokens par Réponse) et tirage non stratifié, à voir avec Anaël sur le paquet réel.
 - 2026-10-18 13:22 : à la demande d'Anaël, topic GitHub repassé de status-test à status-dev pendant le lot v0.2.0 ; à remettre à status-test avec la release v0.2.0.
 - 2026-10-18 13:24 : « Ollama de nouveau disponible ». 8.8 démarre après la mesure de 8.6 et l'intégration de 8.6 et 8.9.
+- 2026-10-18 13:44 : code de 8.9 intégré (862a16e, 1216 tests verts) ; reste le paquet réel depuis le run_id de 8.8.
