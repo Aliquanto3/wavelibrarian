@@ -94,7 +94,8 @@ class _P(BaseModel):
 
 
 def _arch(parser: str = "markdown=markdown,pdf=pdf_text") -> _Arch:
-    ctx = SimpleNamespace(tokenizer=SimpleNamespace(name="approx"), parser=parser)
+    jetons = SimpleNamespace(name="approx", count=lambda texte: len(texte.split()))
+    ctx = SimpleNamespace(tokenizer=jetons, tokenizer_for=lambda _m: jetons, parser=parser)
     return _Arch(_P(), ctx)
 
 
@@ -112,6 +113,8 @@ def test_answer_with_context_par_defaut() -> None:
     assert rep.context_anchor_ids == ("d#p1",)
     assert rep.context_texts == ("[S1] t",)
     assert rep.invalid_citations == 1
+    assert rep.context_truncated is False
+    assert [(r.rank, r.passage) for r in rep.retrieved] == [(1, p)]
 
 
 def test_update_reindexe_dans_new_directory(tmp_path: Path) -> None:

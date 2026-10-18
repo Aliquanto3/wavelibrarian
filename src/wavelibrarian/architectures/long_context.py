@@ -19,6 +19,7 @@ from wavelibrarian.core.types import (
     QuestionInput,
     ScoredPassage,
 )
+from wavelibrarian.ports.arch_answer import passages_fournis
 from wavelibrarian.ports.architecture import Applicability, ArchCapabilities, ArchitectureBase
 from wavelibrarian.ports.components import ComponentSpec, Context
 from wavelibrarian.registry import register
@@ -155,7 +156,7 @@ class LongContext(ArchitectureBase):
         return build_arch_answer(
             contexte,
             resultat,
-            [],
+            passages_fournis(passages),
             "provided",
             tokenizer=self.ctx.tokenizer_for(generateur.model_id),
         )

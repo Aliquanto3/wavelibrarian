@@ -15,6 +15,7 @@ from wavelibrarian.core.types import (
     Passage,
     QuestionInput,
 )
+from wavelibrarian.ports.arch_answer import build_arch_answer, passages_fournis
 from wavelibrarian.ports.components import ContextBuilder, Generator
 from wavelibrarian.ports.context import RunContext
 
@@ -96,15 +97,14 @@ class ArchitectureBase(ABC):
     def answer_with_context(
         self, question: QuestionInput, passages: Sequence[Passage]
     ) -> ArchAnswer:
-        """Défaut : `context_builder.build` puis `generator.generate` (contexte parfait)."""
+        """Défaut : `context_builder.build` puis `generator.generate` (contexte parfait), avec la
+        même assemblée que `answer` (`build_arch_answer` : troncature au-delà de 8 000 tokens)."""
         context = self.context_builder.build(passages)
         result = self.generator.generate(question, context)
-        return ArchAnswer(
-            text=result.text,
-            abstained=result.abstained,
-            citations=result.citations,
-            retrieval_method="provided",
-            context_anchor_ids=tuple(a for ids in context.labels.values() for a in ids),
-            context_texts=context.blocks,
-            invalid_citations=result.invalid_citations,
+        return build_arch_answer(
+            context,
+            result,
+            passages_fournis(passages),
+            "provided",
+            tokenizer=self.ctx.tokenizer_for(self.generator.model_id),
         )

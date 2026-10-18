@@ -1,7 +1,7 @@
 ---
 story: "4.6"
 title: Condition contexte parfait et Paliers de volume
-status: review
+status: done
 ---
 
 # Story 4.6 : Condition contexte parfait et Paliers de volume
@@ -16,12 +16,15 @@ status: review
 ## Design Notes
 
 - Contexte parfait : l'Architecture reçoit `QuestionInput` et les Passages, rien d'autre. Pas de `check()` ni d'index (le Corpus n'entre pas dans le prompt, et un index d'Architecture à embeddings coûterait pour rien) ; une seule phase d'énergie `query`. Les Réponses portent `retrieval_method: provided`, y compris en `error`. Les Ancrages en doublon sont dédoublonnés. `unanswerable` : Contexte vide.
-- Ancrage vers un Document créé par le Scénario (par exemple `chronique-1415.md`, Question `q-044`) : introuvable dans le Corpus de base, donc la Réponse en contexte parfait est `status: error` (« Ancrage introuvable »). Ces Questions relèvent de la phase après mise à jour (story 4.7).
+- Ancrage vers un Document créé par le Scénario (par exemple `chronique-1415.md`, Question `q-044`, `scenario_target.state: after`) : absent du Corpus de base, donc la Réponse en contexte parfait de la phase `base` est `status: inapplicable` (non-applicabilité structurelle, pas une panne). Ces Questions relèvent de la phase après mise à jour (story 4.7). Un autre Ancrage introuvable reste en `error`.
 - `required_paths` : Documents des Ancrages de référence des Questions posées, limités aux Documents présents au Corpus. Le tirage est le même pour tous les Palier (`tirer` emboîte) et fait par parser résolu.
 - Paliers : chaque Palier est indexé sur son sous-corpus avec sa propre `index_key` (la `fingerprint` du sous-corpus change). `check()` juge le Profil du Palier, non du Corpus entier : `long_context` peut être inapplicable à un Palier et applicable à un autre. `applicability.json` garde la clé `config_id` sans Palier et prend `<config_id>@<taille>` (avec `tier`) sinon.
 - Le contexte parfait s'exécute aussi par Palier quand `tier` est posé (une ligne par config, Condition, Palier), pour que les lignes d'`answers.jsonl` et le Rapport aient la même grille.
 - Refus avant tout appel (code 2) : Corpus sans clé `tiers`, taille absente de `tiers.sizes`, et tirage à blanc impossible (Documents requis plus nombreux que le plus petit Palier). `verifier_paliers` est appelé par `cli.py` et à l'entrée de `run_experiment`.
-- Mini-corpus : le split `dev` entier a 12 Documents requis, plus que le Palier de 5. `tier: all` sur le split complet est donc refusé (code 2) ; les tests limitent par `max_questions`.
+- Un Palier ne dépend pas des autres tailles (préfixe d'un même mélange) : `tier: <taille>` seul ne tire que ce Palier, et les Documents requis doivent tenir dans celui-ci, non dans le plus petit déclaré (`tirer_chemins(..., tailles)`). L'emboîtement est inchangé.
+- Mini-corpus : le split `dev` entier a 12 Documents requis, plus que le Palier de 5. `tier: all` sur le split complet est donc refusé (code 2), avec un message qui nomme le Palier (`tiers.sizes[0]`) et le remède (`max_questions` ou un Palier plus grand) ; `tier: 20` passe. Les tests de `tier: all` limitent par `max_questions`.
+- Les prompts du contexte parfait sont identiques d'un Palier à l'autre : à partir du deuxième Palier, le cache LLM sert les Réponses (coût nul hors premier Palier).
+- `ArchitectureBase.answer_with_context` par défaut passe par `build_arch_answer` (déplacé dans `ports/arch_answer.py`, réexporté par `components.context`) : troncature à 8 000 tokens et `context_truncated` comme `answer`. `retrieved` reprend les Passages fournis, dans l'ordre (méthode `provided`, contracts.md §1).
 
 ## Tâches et critères
 
@@ -42,3 +45,18 @@ status: review
 - Reports traités : `required_paths` des Paliers ; contexte parfait de `long_context` sans cache du system.
 - Reports laissés : Scénario (story 4.7) ; reprise et Questions restantes `budget_exceeded` (story 4.8) ; Panel (story 4.9).
 - Risques : le contexte parfait est rejoué à chaque Palier (même résultat, coût multiplié par le nombre de Paliers hors cache) ; à revoir si le Rapport de la 4.13 préfère une seule ligne. Les Questions de Scénario sont en `error` en contexte parfait tant que la 4.7 n'existe pas.
+
+## Revue
+
+Revue Opus du 2026-10-18 (rebasée sur `main` 89b3758), constats du second avis (Haiku) repris un par un.
+
+- medium, second avis 1 : `q-044` en `error` en contexte parfait de la phase `base`. Corrigé : `inapplicable` si `scenario_target.state: after` et Ancrage absent du Corpus de la phase, `error` sinon ; la Question reste posée en Condition standard (le choix des Questions par phase relève de la 4.7).
+- medium, second avis 2 : `tier: 20` seul refusé à cause du Palier de 5. Corrigé : `tirer_chemins`/`tirer` prennent `tailles`, le runner et `verifier_paliers` ne tirent que les Paliers demandés ; message avec le Palier fautif et le remède. Emboîtement vérifié par test.
+- medium, second avis 3 : `answer_with_context` par défaut sans troncature ni `context_truncated`. Corrigé : passe par `build_arch_answer` (déplacé dans `ports` pour respecter les couches AD-1), test unitaire de troncature.
+- medium, revue : `retrieved` vide pour `retrieval_method: provided`, contraire à contracts.md §1 (« Passages fournis au Generator, dans l'ordre »). Corrigé dans le défaut et dans `long_context`.
+- medium, second avis 4 : `tier: all` inexécutable sur le split `dev` du Mini-corpus. Corrigé pour le message (Palier et remède) ; reporté : la 4.14 (Expériences livrées) doit poser `max_questions` ou un `tier` adapté pour toute Expérience à Paliers sur le Mini-corpus (vérifier `wl run` en code 0 sur chaque Expérience livrée).
+- low, second avis 5 : pas d'espion sur `check()` en contexte parfait. Corrigé (test qui échoue si `check()` est appelé).
+- low, second avis 6 : vérifier que la Réponse de référence n'est pas dans le prompt. Corrigé en partie : le test apparie chaque appel à sa génération, vérifie bloc par bloc que le Contexte ne reprend que les Passages fournis, et que la Réponse de référence n'y figure pas quand aucun Ancrage ne la contient (elle y figure légitimement sinon, c'est le principe du contexte parfait).
+- low, second avis 7 : prompts identiques entre Paliers. Consigné dans les Design Notes (le cache LLM absorbe le coût).
+- low, second avis 8 : `palier()` lève hors du `try`. Corrigé : un tirage en échec met la cellule en `error` sans arrêter l'Exécution.
+- low, second avis 9 : commentaire « 13 Documents ». Corrigé (12).
