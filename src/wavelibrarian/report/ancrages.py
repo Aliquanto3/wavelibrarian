@@ -127,6 +127,13 @@ class ResolveurCorpus:
                 ids.append(i)
         return ids
 
+    def textes(self, config_id: str, phase: Phase, q: Question) -> list[str]:
+        """Texte des Ancrages de référence résolus, celui que reçoivent les Juges
+        (`reference_texts`) ; liste vide dans les mêmes cas que `__call__`."""
+        ids = self(config_id, phase, q)
+        parse = self._corpus.get((self._parser_de.get(config_id, "auto"), phase))
+        return [parse.anchor_text(i) for i in ids] if parse is not None else []
+
     def alertes(self) -> list[str]:
         """Alertes à reprendre dans le Rapport, y compris les Ancrages non résolus."""
         lignes = list(self._alertes)

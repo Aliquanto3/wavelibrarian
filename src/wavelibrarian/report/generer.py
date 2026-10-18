@@ -269,6 +269,10 @@ def _calibration(ex: Execution) -> list[str]:
     seuil = donnees.get("kappa_threshold")
     intro = "Kappa juge-humain par Juge et par Critère"
     intro += f" (seuil {_nb(seuil)})." if isinstance(seuil, int | float) else "."
+    source = donnees.get("run_id")
+    if source != ex.run_dir.name:
+        # `judges.excluded_from` pointe en général vers la calibration d'une Exécution antérieure.
+        intro += f" Source : Exécution `{source}`." if source else " Source non identifiée."
     lignes: list[list[str]] = []
     for juge, fiche in sorted(donnees["judges"].items()):
         exclu = "oui" if fiche.get("excluded") is True else "non"

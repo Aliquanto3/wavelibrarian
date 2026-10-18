@@ -1,6 +1,7 @@
 """Story 8.9 : paquet d'annotation (export, aller-retour) et section de calibration du Rapport."""
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -212,3 +213,85 @@ def test_rapport_section_calibration(
     texte = md()
     assert "| ana et bob | correctness | 0,75 | 4 |" in texte
     assert "absent (aucune double" not in texte
+
+
+def test_dossier_deja_rempli_refuse_sans_ecraser(run_dir: Path, tmp_path: Path) -> None:
+    d = tmp_path / "p"
+    exporter_paquet(run_dir, d, annotateurs=["anael"], nombre=2)
+    _remplir(d)
+    saisi = (d / "anael.yaml").read_bytes()
+    with pytest.raises(ConfigError, match="--ecraser"):
+        exporter_paquet(run_dir, d, annotateurs=["anael"], nombre=2)
+    with pytest.raises(ConfigError, match="--ecraser"):
+        exporter_paquet(run_dir, d, annotateurs=["bob"], nombre=2)  # charger_dossier lirait tout
+    assert (d / "anael.yaml").read_bytes() == saisi
+    p = exporter_paquet(run_dir, d, annotateurs=["bob"], nombre=2, ecraser=True)
+    assert [f.name for f in p.autres] == ["anael.yaml"]
+    p = exporter_paquet(run_dir, d, annotateurs=["anael"], nombre=2, ecraser=True)
+    assert [f.name for f in p.autres] == ["bob.yaml"]
+    assert (d / "anael.yaml").read_bytes() != saisi
+
+
+@pytest.mark.parametrize("noms", [["Anael", "anael"], ["CON"], ["nul"], ["com1"]])
+def test_annotateurs_casse_et_noms_reserves_refuses(
+    run_dir: Path, tmp_path: Path, noms: list[str]
+) -> None:
+    with pytest.raises(ConfigError):
+        exporter_paquet(run_dir, tmp_path / "p", annotateurs=noms, nombre=2)
+    assert not (tmp_path / "p").exists()
+
+
+def test_contexte_des_juges_dans_le_paquet(run_dir: Path, tmp_path: Path) -> None:
+    def references(a: Any, q: Any) -> list[str]:
+        return [f"passage de référence de {q.id}"]
+
+    d = tmp_path / "p"
+    exporter_paquet(run_dir, d, annotateurs=["a"], nombre=500, textes_reference=references)
+    lignes = _lignes(d / "a.yaml")
+    assert all("reference_answer" in a for a in lignes)
+    premieres: dict[str, dict[str, Any]] = {}
+    for a in lignes:
+        premieres.setdefault(a["answer_id"], a)
+    for aid, a in premieres.items():
+        qid = aid.rsplit("/", 1)[1]
+        assert a["reference_passages"] == [f"passage de référence de {qid}"]
+        assert "context_passages" in a
+    autres = [a for a in lignes if premieres[a["answer_id"]] is not a]
+    assert autres and all("context_passages" not in a for a in autres)
+    # bm25_only fournit des Passages au Generator, no_context aucun.
+    assert any(a["context_passages"] for aid, a in premieres.items() if "/bm25/" in aid)
+    assert all(
+        not a["context_passages"] for aid, a in premieres.items() if "/sans-contexte/" in aid
+    )
+
+
+def test_bout_en_bout_export_calibrer_rapport(
+    run_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Paquet exporté par la CLI (Corpus relu), rempli, calibré au Faux LLM, lu par le Rapport."""
+    home = tmp_path / "home"
+    shutil.copytree(run_dir.parents[1], home)
+    monkeypatch.setenv("WL_HOME", str(home))
+    d = tmp_path / "annotations"
+    exp = run_dir.parents[2] / "exp.yaml"
+    args = ["annotations", "exporter", run_dir.name, "--vers", str(d), "--nombre", "6"]
+    r = CliRunner().invoke(app, [*args, "--annotateurs", "ana,bob", "--part-double", "0.5"])
+    assert r.exit_code == 0, r.output
+    lignes = _lignes(d / "ana.yaml")
+    assert any(a.get("reference_passages") for a in lignes)  # Corpus relu par la CLI
+    r = CliRunner().invoke(app, [*args, "--annotateurs", "ana"])
+    assert r.exit_code == 2 and "--ecraser" in r.output
+    _remplir(d)
+    r = CliRunner().invoke(
+        app, ["calibrer", str(exp), "--annotations", str(d), "--run", run_dir.name]
+    )
+    assert r.exit_code == 0, r.output
+    run = home / "runs" / run_dir.name
+    donnees = json.loads((run / "calibration.json").read_text(encoding="utf-8"))
+    assert donnees["judges"] and donnees["inter_annotator"]
+    generer_rapport(run)
+    texte = (run / "report" / "report.md").read_text(encoding="utf-8")
+    section = texte.split("## Calibration des Juges", 1)[1].split("\n## ", 1)[0]
+    for juge in donnees["judges"]:
+        assert f"| `{juge}` |" in section
+    assert "| ana et bob |" in section and "Source :" not in section

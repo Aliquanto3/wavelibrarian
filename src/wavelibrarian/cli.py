@@ -708,14 +708,21 @@ def annotations_exporter(
         float,
         typer.Option("--part-double", help="Part des Réponses annotées par tous, dans [0, 1]."),
     ] = 0.2,
+    ecraser: Annotated[
+        bool,
+        typer.Option("--ecraser", help="Remplacer les annotations déjà présentes dans --vers."),
+    ] = False,
 ) -> None:
     """Écrit un paquet d'annotation prérempli (format de `contracts.md` §4.6), verdicts vides.
 
-    Chaque ligne porte la Question, la Réponse et les Ancrages cités. Seules les Réponses `ok`
+    Chaque ligne porte la Question, la réponse de référence, la Réponse et les Ancrages cités ;
+    la première ligne de chaque Réponse donne aussi le texte des Ancrages de référence et les
+    Passages fournis au Generator (ce que reçoivent les Juges). Seules les Réponses `ok`
     sont tirées, y compris d'une Exécution `completed_with_errors`. Le tirage est stable à graine
-    égale. Avec un seul annotateur, aucune Réponse n'est doublement annotée. Remplir les verdicts
-    (`yes` ou `no`), puis lancer `wl calibrer`. Codes de sortie : 0 succès, 1 erreur, 2
-    Exécution introuvable ou non terminée, réglage invalide.
+    égale. Avec un seul annotateur, aucune Réponse n'est doublement annotée. Un dossier qui
+    contient déjà un YAML est refusé sans `--ecraser`. Remplir les verdicts (`yes` ou `no`), puis
+    lancer `wl calibrer`. Codes de sortie : 0 succès, 1 erreur, 2 Exécution introuvable ou non
+    terminée, réglage invalide, dossier déjà rempli.
     """
     wl_home = Path(os.environ.get("WL_HOME") or ".wl")
     dossier = wl_home / "runs" / run_id
@@ -730,6 +737,8 @@ def annotations_exporter(
             nombre=nombre,
             graine=graine,
             part_double=part_double,
+            ecraser=ecraser,
+            wl_home=wl_home,
         )
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
@@ -737,6 +746,15 @@ def annotations_exporter(
     except (WlError, OSError, ValueError) as erreur:
         typer.echo(f"Paquet non écrit : {erreur}", err=True)
         raise typer.Exit(1) from erreur
+    for alerte in paquet.alertes:
+        typer.echo(f"Avertissement : {alerte}", err=True)
+    if paquet.autres:
+        noms = ", ".join(f.name for f in paquet.autres)
+        typer.echo(
+            f"Avertissement : {noms} reste(nt) dans {vers} et sera(ont) chargé(s) par "
+            "`wl calibrer`.",
+            err=True,
+        )
     if paquet.n_reponses < nombre:
         typer.echo(
             f"Avertissement : {paquet.n_eligibles} Réponse(s) `ok` seulement, "
