@@ -12,7 +12,7 @@ from wavelibrarian.ports.gateway import LLMRequest
 
 _SCHEMA = (
     "CREATE TABLE IF NOT EXISTS responses "
-    "(key TEXT PRIMARY KEY, text TEXT NOT NULL, usage TEXT NOT NULL)"
+    "(key TEXT PRIMARY KEY, text TEXT NOT NULL, usage TEXT NOT NULL, latency_s REAL)"
 )
 
 
@@ -64,6 +64,7 @@ def cache_key(
 class CachedResponse:
     text: str
     usage: Usage
+    latency_s: float = 0.0  # latence de l'appel d'origine, retracée au rejeu (p50/p95, §7)
 
 
 class ResponseCache:
@@ -73,6 +74,9 @@ class ResponseCache:
         self._conn = connect(resolve_wl_home(wl_home) / "llm_cache.sqlite")
         try:
             self._conn.execute(_SCHEMA)
+            colonnes = {r[1] for r in self._conn.execute("PRAGMA table_info(responses)")}
+            if "latency_s" not in colonnes:  # cache d'avant la story 4.5 : latence inconnue (0)
+                self._conn.execute("ALTER TABLE responses ADD COLUMN latency_s REAL")
         except BaseException:
             self._conn.close()
             raise
@@ -81,12 +85,18 @@ class ResponseCache:
         self._conn.close()
 
     def get(self, key: str) -> CachedResponse | None:
-        row = self._conn.execute("SELECT text, usage FROM responses WHERE key=?", (key,)).fetchone()
+        row = self._conn.execute(
+            "SELECT text, usage, latency_s FROM responses WHERE key=?", (key,)
+        ).fetchone()
         if row is None:
             return None
-        return CachedResponse(text=row[0], usage=Usage.model_validate_json(row[1]))
+        return CachedResponse(
+            text=row[0], usage=Usage.model_validate_json(row[1]), latency_s=float(row[2] or 0.0)
+        )
 
-    def put(self, key: str, text: str, usage: Usage, *, replace: bool = False) -> None:
+    def put(
+        self, key: str, text: str, usage: Usage, *, replace: bool = False, latency_s: float = 0.0
+    ) -> None:
         """Première réponse gardée : une clé déjà présente n'est pas réécrite.
 
         `replace=True` (passerelle seule) remplace une entrée jugée invalide par une réponse
@@ -95,6 +105,6 @@ class ResponseCache:
         verbe = "INSERT OR REPLACE" if replace else "INSERT OR IGNORE"
         with transaction(self._conn) as c:
             c.execute(
-                f"{verbe} INTO responses (key, text, usage) VALUES (?, ?, ?)",  # noqa: S608
-                (key, text, usage.model_dump_json()),
+                f"{verbe} INTO responses (key, text, usage, latency_s) VALUES (?, ?, ?, ?)",  # noqa: S608
+                (key, text, usage.model_dump_json(), float(latency_s)),
             )

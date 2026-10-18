@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from wavelibrarian.core.ids import canonical_json, sha16
 from wavelibrarian.core.types import CostPost, ParsedCorpus, Usage
 from wavelibrarian.corpus.ingest import versions_parsers
+from wavelibrarian.measure.tracing import temps_propre
 from wavelibrarian.ports.architecture import ArchitectureBase
 
 if TYPE_CHECKING:
@@ -92,7 +93,7 @@ class IndexCache:
         key = index_key(corpus.fingerprint, arch)
         final = self.path(key)
         debut = time.perf_counter()
-        externe = ctx.traceur.latency_total
+        ecoule = ctx.traceur.elapsed_total
         hit = self.has(key)
         if not hit:
             self._construire(ctx, arch, corpus, key, post)
@@ -101,8 +102,8 @@ class IndexCache:
             neuve.load(final)
             # Latence propre au span `index` : celle des spans d'embedding ou d'appels déjà
             # tracés pendant la construction ou le chargement n'est pas comptée deux fois.
-            propre = time.perf_counter() - debut - (ctx.traceur.latency_total - externe)
-            _trace_index(ctx, hit=hit, latency_s=max(0.0, propre), key=key)
+            propre = temps_propre(time.perf_counter() - debut, ctx.traceur.elapsed_total - ecoule)
+            _trace_index(ctx, hit=hit, latency_s=propre, key=key)
         return neuve, key
 
     def _construire(

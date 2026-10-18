@@ -1,6 +1,7 @@
 """Traces OpenTelemetry (AD-8, AD-11, contracts.md §6) : un span par appel, écrit en JSONL local."""
 
 import json
+import logging
 import time
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
@@ -19,7 +20,24 @@ from wavelibrarian.measure.energy import EnergyMethod, spread_energy
 _LOCAUX = frozenset({"local", "embed", "rerank"})
 
 
+_log = logging.getLogger(__name__)
+
 _Retenu = tuple[str, int, int, float, dict[str, str | int | float | bool]]
+
+
+def temps_propre(mur_s: float, deja_traces_s: float) -> float:
+    """Temps d'une étape hors spans déjà tracés pendant elle ; un écart négatif (latence déclarée
+    par un provider supérieure au temps mural) est ramené à 0 et signalé."""
+    propre = mur_s - deja_traces_s
+    if propre < 0:
+        _log.warning(
+            "temps propre négatif (%.6f s : %.6f s mesurés, %.6f s déjà tracés), ramené à 0",
+            propre,
+            mur_s,
+            deja_traces_s,
+        )
+        return 0.0
+    return propre
 
 
 class TraceContext(Protocol):
@@ -88,7 +106,10 @@ class Tracer:
         if otlp_endpoint is not None:
             self._provider.add_span_processor(_otlp_processor(otlp_endpoint))
         self._tracer = self._provider.get_tracer("wavelibrarian")
-        self.latency_total = 0.0  # somme des latences de tous les spans enregistrés
+        self.latency_total = 0.0  # somme des `wl.latency_s` de tous les spans enregistrés
+        # Temps réellement passé dans ces spans : un hit du Cache de réponses porte la latence
+        # de l'appel d'origine (p50/p95 comparables au rejeu) mais n'a rien coûté en temps.
+        self.elapsed_total = 0.0
         self._phase: list[_Retenu] | None = None
 
     def begin_phase(self) -> None:
@@ -99,7 +120,8 @@ class Tracer:
         self._phase = []
 
     def end_phase(self, kwh: float | None, method: EnergyMethod = "estimated") -> None:
-        """Répartit `kwh` sur les spans locaux retenus (prorata de latence), puis les écrit."""
+        """Répartit `kwh` sur les spans locaux retenus (prorata du temps réellement passé, un
+        hit du cache ne compte pas), puis les écrit."""
         tampon, self._phase = self._phase, None
         if not tampon:
             return
@@ -172,10 +194,12 @@ class Tracer:
             attrs["gen_ai.provider.name"] = provider
         if model_id is not None:
             attrs["gen_ai.request.model"] = model_id
+        reel = 0.0 if from_cache else float(latency_s)
         self.latency_total += float(latency_s)
+        self.elapsed_total += reel
         local = kind in _LOCAUX or (kind == "llm" and provider == "ollama")
         if self._phase is not None and local:
-            self._phase.append((step, debut, fin, float(latency_s), attrs))
+            self._phase.append((step, debut, fin, reel, attrs))
             return
         self._emettre(step, debut, fin, attrs)
 

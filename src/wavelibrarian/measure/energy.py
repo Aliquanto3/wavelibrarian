@@ -35,11 +35,14 @@ def spread_energy(
 ) -> list[tuple[float | None, EnergyMethod]]:
     """Répartit l'énergie d'une phase sur ses spans locaux au prorata de leur latence.
 
-    Chaque span reçoit `(kWh, méthode)` ; sans énergie connue ou sans durée : `(None, "unknown")`.
+    Chaque span reçoit `(kWh, méthode)` ; sans énergie connue : `(None, "unknown")`. Si aucun
+    span n'a de durée, l'énergie relevée est répartie à parts égales plutôt que perdue.
     """
     total = sum(latencies_s)
-    if kwh is None or total <= 0:
+    if kwh is None or not latencies_s:
         return [(None, "unknown")] * len(latencies_s)
+    if total <= 0:
+        return [(kwh / len(latencies_s), method)] * len(latencies_s)
     return [(kwh * lat / total, method) for lat in latencies_s]
 
 

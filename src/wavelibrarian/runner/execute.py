@@ -10,7 +10,7 @@ l'Exécution continue ; `BudgetExceeded` l'arrête avec le manifeste `budget_exc
 import json
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
@@ -37,6 +37,7 @@ from wavelibrarian.evalset.freeze import select_questions, verify_frozen
 from wavelibrarian.evalset.io import QuestionsFile
 from wavelibrarian.llm.gateway import Providers
 from wavelibrarian.measure.energy import make_meter
+from wavelibrarian.measure.tracing import temps_propre
 from wavelibrarian.ports.architecture import ArchitectureBase
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.runner.context import Context
@@ -167,20 +168,51 @@ class _Runner:
     # --- énergie locale et latence (AD-17) -------------------------------------------------
 
     @contextmanager
-    def energie_de_phase(self, conf: ResolvedConfiguration, phase: str) -> Iterator[None]:
+    def energie_de_phase(
+        self,
+        conf: ResolvedConfiguration,
+        phase: str,
+        apres: Callable[[], None] | None = None,
+    ) -> Iterator[None]:
         """Relève l'énergie locale d'une phase (index ou query) d'une Configuration, puis la
-        répartit sur les spans locaux de la phase au prorata de leur latence."""
+        répartit sur les spans locaux de la phase au prorata de leur latence.
+
+        La phase est toujours refermée, même si le mesureur échoue au départ : une phase restée
+        ouverte ferait échouer toutes les Configurations suivantes. `apres` n'est appelé que si
+        les spans retenus ont été écrits : une Réponse n'est jamais écrite sans ses spans (AD-9).
+        Un échec de fermeture pendant une exception en vol est journalisé sans la remplacer
+        (un `BudgetExceeded` reste un `BudgetExceeded`).
+        """
         tracer = self.ctx.traceur
         tracer.begin_phase()
         kwh: float | None = None
-        self.meter.start(f"{conf.id}:{phase}")
+        en_vol = False
         try:
-            yield
+            self.meter.start(f"{conf.id}:{phase}")
+            try:
+                yield
+            except BaseException:
+                en_vol = True
+                raise
+            finally:
+                try:
+                    kwh = self.meter.stop()
+                except Exception as exc:
+                    if not en_vol:
+                        raise
+                    log.error("mesure d'énergie %s:%s non relevée : %s", conf.id, phase, exc)
+        except BaseException:
+            en_vol = True
+            raise
         finally:
             try:
-                kwh = self.meter.stop()
-            finally:
                 tracer.end_phase(kwh, getattr(self.meter, "method", "estimated"))
+                if apres is not None:
+                    apres()
+            except Exception as exc:
+                if not en_vol:
+                    raise
+                log.error("fin de phase %s:%s en échec : %s", conf.id, phase, exc)
 
     def poser(
         self, conf: ResolvedConfiguration, q: Question, arch: ArchitectureBase, methode: Any
@@ -193,7 +225,7 @@ class _Runner:
         erreur: Exception | None = None
         with self.ctx.scope(post="query", question_id=q.id):
             debut = time.perf_counter()
-            externe = tracer.latency_total
+            externe, ecoule = tracer.latency_total, tracer.elapsed_total
             try:
                 reponse = arch.answer(_question_input(q))
             except BudgetExceeded:
@@ -201,7 +233,7 @@ class _Runner:
             except Exception as exc:  # AD-11 : la Question suivante est posée
                 erreur = exc
             externe = tracer.latency_total - externe
-            propre = max(0.0, time.perf_counter() - debut - externe)
+            propre = temps_propre(time.perf_counter() - debut, tracer.elapsed_total - ecoule)
             tracer.record(
                 "answer",
                 "local",
@@ -308,9 +340,17 @@ class _Runner:
             self._vides(writer, conf, methode, "error", f"{type(erreur).__name__} : {erreur}")
             return
         log.info("étape answer : %s (index %s, %d Questions)", conf.id, cle, len(self.questions))
-        with self.energie_de_phase(conf, "query"):
+        # Réponses écrites après leurs spans retenus : un arrêt dur pendant la phase perd les
+        # deux à la fois, et la reprise (AD-11) repose ces Questions depuis les caches.
+        reponses: list[Answer] = []
+
+        def ecrire_reponses() -> None:
+            for answer in reponses:
+                self._ecrire(writer, answer)
+
+        with self.energie_de_phase(conf, "query", apres=ecrire_reponses):
             for q in self.questions:
-                self._ecrire(writer, self.poser(conf, q, arch, methode))
+                reponses.append(self.poser(conf, q, arch, methode))
 
 
 def run_experiment(

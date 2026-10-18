@@ -215,7 +215,7 @@ class MeteredGateway:
                 marquee, schema, nom, devise, cached.text, cached.usage,
                 cost=Decimal(0),
                 cost_uncached=self._catalog.cost(request.model_id, cached.usage),
-                latency_s=0.0, from_cache=True, stocker=None,
+                latency_s=cached.latency_s, from_cache=True, stocker=None,
             )  # fmt: skip
 
         estimation = self._catalog.cost(
@@ -307,7 +307,7 @@ class MeteredGateway:
             energy_kwh=energy_kwh,
         )  # fmt: skip
         if statut == "ok" and stocker is not None:
-            self._cache.put(stocker, texte, usage, replace=remplacer)
+            self._cache.put(stocker, texte, usage, replace=remplacer, latency_s=latency_s)
         if statut == "non_conformant":
             raise NonConformantOutput(
                 f"sortie de {request.model_id!r} non conforme au schéma "

@@ -280,3 +280,32 @@ def test_cle_refuse_un_system_sans_marqueur_de_role() -> None:
         cache_key(req(system="sys"), "fake")
     with pytest.raises(ValueError, match="marqueur"):
         cache_key(req(role="judge"), "fake")  # marqueur d'un autre rôle
+
+
+def test_cache_garde_la_latence_d_origine(wl_home: Path) -> None:
+    cache = ResponseCache(wl_home)
+    cle = cache_key(req(), "anthropic")
+    cache.put(cle, "r", Usage(), latency_s=1.25)
+    cache.close()
+    rel = ResponseCache(wl_home).get(cle)
+    assert rel is not None and rel.latency_s == 1.25
+
+
+def test_cache_d_avant_la_latence_migre(wl_home: Path) -> None:
+    """Un `llm_cache.sqlite` sans colonne `latency_s` est complété ; ses entrées valent 0."""
+    import sqlite3
+
+    conn = sqlite3.connect(wl_home / "llm_cache.sqlite")
+    conn.execute(
+        "CREATE TABLE responses (key TEXT PRIMARY KEY, text TEXT NOT NULL, usage TEXT NOT NULL)"
+    )
+    conn.execute("INSERT INTO responses VALUES ('k', 'ancien', ?)", (Usage().model_dump_json(),))
+    conn.commit()
+    conn.close()
+    cache = ResponseCache(wl_home)
+    rel = cache.get("k")
+    assert rel is not None and rel.text == "ancien" and rel.latency_s == 0.0
+    cache.put("k2", "neuf", Usage(), latency_s=0.5)
+    neuf = cache.get("k2")
+    assert neuf is not None and neuf.latency_s == 0.5
+    cache.close()

@@ -253,7 +253,9 @@ def test_fake_demarre_arrete_et_repartit_au_prorata() -> None:
 
 def test_repartition_sans_energie_ou_sans_duree() -> None:
     assert spread_energy(None, [1.0, 2.0], "measured") == [(None, "unknown")] * 2
-    assert spread_energy(1.0, [0.0, 0.0], "measured") == [(None, "unknown")] * 2
+    assert spread_energy(1.0, [], "measured") == []
+    # Aucune durée : l'énergie relevée est répartie à parts égales, jamais perdue.
+    assert spread_energy(1.0, [0.0, 0.0], "measured") == [(0.5, "measured")] * 2
 
 
 def test_energie_portee_par_les_spans(tmp_path: Path) -> None:
