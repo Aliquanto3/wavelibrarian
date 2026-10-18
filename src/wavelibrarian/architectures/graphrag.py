@@ -28,11 +28,13 @@ Simplifications documentées : un seul niveau de communautés (Louvain plat, pas
 Leiden) ; pas de score d'utilité par réponse de map ; le contrôle de fenêtre tronque avec un
 avertissement (jamais en silence).
 
-Mise à jour incrémentale (Poste `update`) : seuls les Passages ajoutés ou dont le texte a changé
-sont extraits ; `remove_passages` retire ceux des Documents supprimés ou remplacés ; seules les
-embeddings des entités modifiées sont recalculés ; seuls les rapports des communautés dont la
-composition change (signature : texte de leur contexte et Passages sources) sont régénérés, les
-autres sont repris tels quels.
+Mise à jour incrémentale (Poste `update`) : `remove_passages` retire les Passages des Documents
+supprimés ou remplacés ; un Passage dont le texte figure déjà au cache d'extraction
+(`extractions.json`, clé `sha16` du texte) y reprend son extraction sans appel, même si son id a
+changé (un Document modifié change de `doc_id`, donc d'ids de Passages) ; les autres sont
+extraits. Seuls les embeddings des entités modifiées sont recalculés ; seuls les rapports des
+communautés dont le contexte change (signature) sont régénérés, les autres reprennent leur texte
+avec les Ancrages actuels de leurs Passages sources.
 """
 
 import json
@@ -48,7 +50,7 @@ from wavelibrarian.architectures._passages import ecrire_passages, lire_passages
 from wavelibrarian.components.context import build_arch_answer
 from wavelibrarian.components.graph._texte import borner
 from wavelibrarian.components.graph.communities import detect_communities, louvain_seed
-from wavelibrarian.components.graph.extraction import EntityExtractor
+from wavelibrarian.components.graph.extraction import EntityExtractor, Extraction, ajouter
 from wavelibrarian.components.graph.reports import CommunityReporter, community_context
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import sha16
@@ -71,13 +73,50 @@ _VECTEURS = "vectors"
 _GRAPHE = "graph"
 _COMMUNAUTES = "communities.json"
 _ENTITES = "entities.json"
+_EXTRACTIONS = "extractions.json"
 _LOT = 64
 
+_REFUS_MAP = "AUCUN_POINT_UTILE"
 _SYSTEM_MAP = (
     "Tu reçois des rapports de communauté numérotés [R1], [R2]… puis une question. Résume en "
     "quelques phrases, dans la langue de la question, les points de ces rapports utiles pour y "
-    "répondre. Si aucun rapport n'est utile, réponds par un texte vide."
+    f"répondre. Si aucun rapport n'est utile, réponds exactement {_REFUS_MAP}, sans rien d'autre."
 )
+
+
+def _refus(points: str) -> bool:
+    """Sortie de map sans point utile : vide ou marqueur de refus."""
+    return not points or points.strip(" .").upper().startswith(_REFUS_MAP)
+
+
+def _cle_extraction(p: Passage) -> str:
+    return sha16("extraction", p.text)
+
+
+def _brut(x: Extraction) -> dict[str, Any]:
+    return {"entities": [list(e) for e in x.entities], "relations": [list(r) for r in x.relations]}
+
+
+def _depuis_brut(passage_id: str, brut: dict[str, Any]) -> Extraction:
+    return Extraction(
+        passage_id,
+        tuple((str(a), str(b), str(c), str(d)) for a, b, c, d in brut["entities"]),
+        tuple((str(a), str(b), str(c), float(w)) for a, b, c, w in brut["relations"]),
+    )
+
+
+def _reprendre(ancien: Passage, sources: list[Passage]) -> Passage | None:
+    """Rapport repris : son texte, avec les Ancrages et Passages sources actuels (AD-7)."""
+    ancres = sorted({a for s in sources for a in s.anchor_ids})
+    if not ancres:
+        return None
+    return ancien.model_copy(
+        update={
+            "anchor_ids": tuple(ancres),
+            "child_ids": tuple(s.passage_id for s in sources),
+            "doc_id": _doc_commun(sources),
+        }
+    )
 
 
 def _spec(nom: str) -> Any:
@@ -186,10 +225,11 @@ class GraphRag(ArchitectureBase):
     def index(self, corpus: ParsedCorpus, directory: Path) -> None:
         feuilles = [p for doc in corpus.documents for p in self.chunker.chunk(doc)]
         graphe = self._nouveau_graphe()
-        EntityExtractor(self.ctx, self._extract_model, self.p.extract_max_tokens).extract_into(
-            graphe, feuilles
-        )
-        self._finaliser(directory, feuilles, graphe, self._nouveau_vecteurs(), {}, {}, {})
+        extraites = EntityExtractor(
+            self.ctx, self._extract_model, self.p.extract_max_tokens
+        ).extract_into(graphe, feuilles)
+        cache = {_cle_extraction(p): _brut(x) for p, x in zip(feuilles, extraites, strict=True)}
+        self._finaliser(directory, feuilles, graphe, self._nouveau_vecteurs(), {}, {}, {}, cache)
 
     def update(
         self,
@@ -198,25 +238,29 @@ class GraphRag(ArchitectureBase):
         old_directory: Path,
         new_directory: Path,
     ) -> None:
-        """Extrait les seuls Passages nouveaux ou modifiés, retire ceux qui disparaissent."""
+        """Retire les Passages des Documents supprimés ou remplacés ; n'extrait que les Passages
+        nouveaux dont le texte n'est pas au cache d'extraction."""
         retires = set(change.removed) | {ancien for ancien, _ in change.modified}
         nouveaux_docs = [*change.added, *(doc for _, doc in change.modified)]
         anciens = [p for p in lire_passages(old_directory) if p.level == 0]
-        anciens_par_id = {p.passage_id: p for p in anciens}
         nouveaux = [p for doc in nouveaux_docs for p in self.chunker.chunk(doc)]  # type: ignore[attr-defined]
-        identiques = {
-            p.passage_id
-            for p in nouveaux
-            if p.passage_id in anciens_par_id and anciens_par_id[p.passage_id].text == p.text
-        }
-        a_retirer = [p.passage_id for p in anciens if p.doc_id in retires]
-        a_retirer = [i for i in a_retirer if i not in identiques]
-        a_extraire = [p for p in nouveaux if p.passage_id not in identiques]
+        chemin_cache = old_directory / _EXTRACTIONS
+        cache: dict[str, Any] = _lire_json(chemin_cache) if chemin_cache.exists() else {}
         graphe = self._nouveau_graphe()
         graphe.load(old_directory / _GRAPHE)
-        graphe.remove_passages(a_retirer)
-        EntityExtractor(self.ctx, self._extract_model, self.p.extract_max_tokens).extract_into(
-            graphe, a_extraire
+        graphe.remove_passages([p.passage_id for p in anciens if p.doc_id in retires])
+        a_extraire = []
+        for p in nouveaux:
+            brut = cache.get(_cle_extraction(p))
+            if brut is None:
+                a_extraire.append(p)
+            else:  # même texte : même extraction, rattachée au nouvel id
+                ajouter(graphe, _depuis_brut(p.passage_id, brut))
+        extraites = EntityExtractor(
+            self.ctx, self._extract_model, self.p.extract_max_tokens
+        ).extract_into(graphe, a_extraire)
+        cache.update(
+            {_cle_extraction(p): _brut(x) for p, x in zip(a_extraire, extraites, strict=True)}
         )
         vecteurs = self._nouveau_vecteurs()
         vecteurs.load(old_directory / _VECTEURS)
@@ -225,10 +269,11 @@ class GraphRag(ArchitectureBase):
             c["community_id"]: c for c in _lire_json(old_directory / _COMMUNAUTES)["communities"]
         }
         anciens_rapports = {p.passage_id: p for p in lire_passages(old_directory) if p.level == 1}
-        retirees = set(a_retirer)
-        gardes = [p for p in anciens if p.passage_id not in retirees]
-        gardes_ids = {p.passage_id for p in gardes}
-        feuilles = [*gardes, *(p for p in nouveaux if p.passage_id not in gardes_ids)]
+        rang = {d.doc_id: i for i, d in enumerate(corpus_after.documents)}
+        feuilles = sorted(
+            [*(p for p in anciens if p.doc_id not in retires), *nouveaux],
+            key=lambda p: rang.get(p.doc_id or "", len(rang)),
+        )  # tri stable : l'ordre d'une indexation complète
         self._finaliser(
             new_directory,
             feuilles,
@@ -237,6 +282,7 @@ class GraphRag(ArchitectureBase):
             empreintes,
             anciennes_communautes,
             anciens_rapports,
+            cache,
         )
 
     def _finaliser(
@@ -248,8 +294,9 @@ class GraphRag(ArchitectureBase):
         empreintes: dict[str, str],
         anciennes_communautes: dict[str, dict[str, Any]],
         anciens_rapports: dict[str, Passage],
+        extractions: dict[str, Any],
     ) -> None:
-        """Embeddings des entités changées, communautés, rapports régénérés si leur composition
+        """Embeddings des entités changées, communautés, rapports régénérés si leur contexte
         change, puis écriture de l'index."""
         g = graphe.graph()
         textes = {n: _texte_entite(d) for n, d in g.nodes(data=True)}
@@ -275,12 +322,14 @@ class GraphRag(ArchitectureBase):
         rapports: list[Passage] = []
         fiches: list[dict[str, Any]] = []
         for c in communautes:
-            sources = sorted({i for m in c.members for i in g.nodes[m]["passage_ids"]})
-            signature = sha16(community_context(g, c), *sources)
+            # le rapport ne dépend que du contexte de la communauté ; ses Ancrages, des Passages
+            # sources actuels, recalculés quand il est repris
+            signature = sha16("report", community_context(g, c))
             ancienne = anciennes_communautes.get(c.community_id)
+            ancien = anciens_rapports.get(ancienne["report_id"] or "") if ancienne else None
             rapport: Passage | None
-            if ancienne is not None and ancienne["signature"] == signature:
-                rapport = anciens_rapports.get(ancienne["report_id"] or "")
+            if ancienne is not None and ancien is not None and ancienne["signature"] == signature:
+                rapport = _reprendre(ancien, reporter.sources(g, c, par_id))
             else:
                 rapport = reporter.report(g, c, par_id)
             if rapport is not None:
@@ -298,6 +347,8 @@ class GraphRag(ArchitectureBase):
         graphe.save(directory / _GRAPHE)
         _ecrire_json(directory / _COMMUNAUTES, {"communities": fiches})
         _ecrire_json(directory / _ENTITES, nouvelles)
+        cles = {_cle_extraction(p) for p in feuilles}
+        _ecrire_json(directory / _EXTRACTIONS, {k: v for k, v in extractions.items() if k in cles})
 
     # -- chargement -----------------------------------------------------------------------------
 
@@ -470,9 +521,11 @@ class GraphRag(ArchitectureBase):
         return self._generer(question, sorties, classes, derives=True)
 
     def _map(self, question: QuestionInput, n: int, lot: list[Passage]) -> Passage | None:
-        """Un appel `global_map` sur un lot de rapports ; sortie vide : lot sans intérêt."""
+        """Un appel `global_map` sur un lot de rapports ; sortie vide ou refus : lot sans intérêt.
+        La sortie ne cite que les rapports que la fenêtre a laissé lire."""
         reserve = int(self.ctx.tokenizer_for(self._map_model).count(question.text)) + 32  # type: ignore[attr-defined]
-        rapports = "\n\n".join(f"[R{i}] {r.text}" for i, r in enumerate(lot, start=1))
+        segments = [f"[R{i}] {r.text}" for i, r in enumerate(lot, start=1)]
+        rapports = "\n\n".join(segments)
         texte = borner(
             self.ctx,
             self._map_model,
@@ -482,6 +535,17 @@ class GraphRag(ArchitectureBase):
             "global_map",
             reserve=reserve,
         )
+        lus: list[Passage] = []
+        debut = 0
+        for i, (r, segment) in enumerate(zip(lot, segments, strict=True), start=1):
+            if len(texte) <= debut + len(f"[R{i}] "):  # étiquette sans texte lu
+                break
+            lus.append(r)
+            debut += len(segment) + 2
+        if not lus:
+            _log.warning("graphrag.map.%d : aucun rapport ne tient dans la fenêtre, lot ignoré", n)
+            return None
+        lot = lus
         texte = f"{texte}\n\nQuestion : {question.text}"
         requete = LLMRequest(
             model_id=self._map_model,
@@ -494,7 +558,7 @@ class GraphRag(ArchitectureBase):
             inputs={"text": texte},
         )
         points = str(self.ctx.gateway.complete(requete).text).strip()  # type: ignore[attr-defined]
-        if not points:
+        if _refus(points):
             return None
         ids = tuple(sorted(r.passage_id for r in lot))
         return Passage(

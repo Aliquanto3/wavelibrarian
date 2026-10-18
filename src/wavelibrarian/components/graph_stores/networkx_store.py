@@ -32,7 +32,12 @@ class NetworkxGraphStore:
     mentionnée (ex æquo la plus accentuée, puis la plus petite), type extrait prioritaire sur le
     type générique `entity` (sinon le plus petit), description = la plus longue, poids = le plus
     grand, Passages = union. Une relation dont une extrémité est inconnue crée cette entité (forme
-    donnée, sans mention comptée, type `entity`). `remove_passages` ne recompte pas `noms`.
+    donnée, sans mention comptée, type `entity`).
+
+    Chaque apport (`upsert_entity`, `upsert_relation`) est journalisé avec ses Passages :
+    `remove_passages` retire ces Passages du journal puis le rejoue, si bien que noms, types,
+    descriptions et poids sont recalculés sans eux (le graphe obtenu est celui des seuls Passages
+    restants). Le journal est sauvegardé, trié, avec le graphe.
     """
 
     class Params(BaseModel):
@@ -40,6 +45,7 @@ class NetworkxGraphStore:
 
     def __init__(self, params: "NetworkxGraphStore.Params", ctx: Any) -> None:
         self._g: nx.Graph = nx.Graph()
+        self._journal: list[list[Any]] = []
 
     def upsert_entity(
         self,
@@ -49,6 +55,7 @@ class NetworkxGraphStore:
         description: str,
         passage_ids: Sequence[str],
     ) -> None:
+        self._journal.append(["entity", entity_id, name, kind, description, sorted(passage_ids)])
         self._upsert(entity_id, name, kind, description, passage_ids, mention=True)
 
     def _upsert(
@@ -92,6 +99,19 @@ class NetworkxGraphStore:
         weight: float,
         passage_ids: Sequence[str],
     ) -> None:
+        self._journal.append(
+            ["relation", source, target, description, float(weight), sorted(passage_ids)]
+        )
+        self._relation(source, target, description, weight, passage_ids)
+
+    def _relation(
+        self,
+        source: str,
+        target: str,
+        description: str,
+        weight: float,
+        passage_ids: Sequence[str],
+    ) -> None:
         a, b = slug_entite(source), slug_entite(target)
         if not a or not b:
             raise WlError(f"relation sans extrémité exploitable : {source!r} -> {target!r}")
@@ -118,22 +138,23 @@ class NetworkxGraphStore:
             )
 
     def remove_passages(self, passage_ids: Sequence[str]) -> None:
-        """Retire ces Passages ; une entité ou une relation sans Passage est retirée."""
+        """Retire ces Passages et rejoue le journal des apports restants : une entité ou une
+        relation sans Passage disparaît, les autres sont recalculées sans ces Passages."""
         retires = set(passage_ids)
         if not retires:
             return
-        for a, b, e in list(self._g.edges(data=True)):
-            restants = [p for p in e["passage_ids"] if p not in retires]
+        journal: list[list[Any]] = []
+        for op in self._journal:
+            restants = [p for p in op[-1] if p not in retires]
             if restants:
-                e["passage_ids"] = restants
+                journal.append([*op[:-1], restants])
+        self._g = nx.Graph()
+        self._journal = journal
+        for op in journal:
+            if op[0] == "entity":
+                self._upsert(op[1], op[2], op[3], op[4], op[5], mention=True)
             else:
-                self._g.remove_edge(a, b)
-        for cle, n in list(self._g.nodes(data=True)):
-            restants = [p for p in n["passage_ids"] if p not in retires]
-            if restants:
-                n["passage_ids"] = restants
-            else:
-                self._g.remove_node(cle)
+                self._relation(op[1], op[2], op[3], op[4], op[5])
 
     def graph(self) -> nx.Graph:
         return self._g
@@ -148,7 +169,12 @@ class NetworkxGraphStore:
             ),
             key=lambda e: (e["source"], e["target"]),
         )
-        contenu = json.dumps({"nodes": noeuds, "edges": aretes}, ensure_ascii=False, sort_keys=True)
+        journal = sorted(self._journal, key=lambda op: json.dumps(op, ensure_ascii=False))
+        contenu = json.dumps(
+            {"nodes": noeuds, "edges": aretes, "journal": journal},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
         (directory / _FICHIER).write_bytes(contenu.encode("utf-8"))
 
     def load(self, directory: Path) -> None:
@@ -161,6 +187,16 @@ class NetworkxGraphStore:
             for e in brut["edges"]:
                 e = dict(e)
                 g.add_edge(str(e.pop("source")), str(e.pop("target")), **e)
+            journal = [list(op) for op in brut.get("journal") or []]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise WlError(f"graphe illisible : {directory}") from exc
+        if not journal and g.number_of_nodes():  # graphe sans journal : un apport par élément
+            journal = [
+                ["entity", k, d["name"], d["kind"], d["description"], list(d["passage_ids"])]
+                for k, d in g.nodes(data=True)
+            ] + [
+                ["relation", a, b, d["description"], float(d["weight"]), list(d["passage_ids"])]
+                for a, b, d in g.edges(data=True)
+            ]
         self._g = g
+        self._journal = journal

@@ -353,3 +353,137 @@ def test_fenetre_du_generateur_ecarte_les_blocs_avec_avertissement(
     assert 0 < len(rep.context_texts) < len(entier.context_texts)
     assert "hors de la fenêtre" in caplog.text
     assert len(rep.retrieved) <= len(rep.context_texts)  # rien d'écarté dans `retrieved`
+
+
+# -- revue : mise à jour équivalente à une indexation complète ----------------------------------
+
+_FICHIERS = (
+    "passages.jsonl",
+    "communities.json",
+    "entities.json",
+    "extractions.json",
+    "graph/graph.json",
+)
+
+
+def _comme_index_complet(ctx: RunCtx, apres: ParsedCorpus, v2: Path, tmp_path: Path) -> None:
+    _indexer(ctx, apres, tmp_path / "complet")
+    for nom in _FICHIERS:
+        assert (v2 / nom).read_bytes() == (tmp_path / "complet" / nom).read_bytes(), nom
+
+
+def _fusion_de_blocs(doc: Any) -> tuple[Any, str]:
+    """Deux Blocks consécutifs fusionnés : même texte, un Ancrage de moins, nouveau
+    `doc_id` (comme un Document réellement modifié)."""
+    blocs = list(doc.blocks)
+    i = next(j for j in range(len(blocs) - 1) if blocs[j].anchor_id != blocs[j + 1].anchor_id)
+    perdu = blocs[i + 1].anchor_id
+    blocs[i] = blocs[i].model_copy(update={"text": f"{blocs[i].text} {blocs[i + 1].text}"})
+    del blocs[i + 1]
+    ancres = {k: v for k, v in doc.anchors.items() if k != perdu}
+    nouveau = doc.model_copy(update={"doc_id": "f" * 16, "blocks": tuple(blocs), "anchors": ancres})
+    return nouveau, perdu
+
+
+def test_store_remove_passages_recalcule_descriptions_et_noms(ctx: RunCtx) -> None:
+    s = ctx.build("graph_store", ComponentSpec(name="networkx"))
+    s.upsert_entity("orvane", "ORVANE", "entity", "description longue du Document retiré", ["p1"])
+    s.upsert_entity("orvane", "Orvane", "guilde", "courte", ["p2"])
+    s.upsert_entity("ellis", "Ellis", "personne", "e", ["p2"])
+    s.upsert_relation("Orvane", "Ellis", "relation longue venue de p1", 0.9, ["p1"])
+    s.upsert_relation("Orvane", "Ellis", "court", 0.2, ["p2"])
+    s.remove_passages(["p1"])
+    n = s.graph().nodes["orvane"]
+    assert (n["name"], n["kind"], n["description"]) == ("Orvane", "guilde", "courte")
+    e = s.graph().edges["orvane", "ellis"]
+    assert (e["description"], e["weight"], e["passage_ids"]) == ("court", 0.2, ["p2"])
+
+
+def test_update_suppression_egale_l_index_complet(
+    ctx: RunCtx, minicorpus: ParsedCorpus, index: Path, tmp_path: Path
+) -> None:
+    sans = minicorpus.model_copy(update={"documents": minicorpus.documents[1:]})
+    with ctx.scope(post="update"):
+        _arch(ctx).update(
+            CorpusChange(removed=(minicorpus.documents[0].doc_id,)), sans, index, tmp_path / "v2"
+        )
+    _comme_index_complet(ctx, sans, tmp_path / "v2", tmp_path)
+
+
+def test_update_document_modifie_nouveau_doc_id_reprend_les_extractions(
+    ctx: RunCtx, minicorpus: ParsedCorpus, index: Path, tmp_path: Path
+) -> None:
+    doc = max(minicorpus.documents, key=lambda d: len(d.blocks))
+    blocs = list(doc.blocks)
+    blocs[-1] = blocs[-1].model_copy(update={"text": blocs[-1].text + " Gorvane Ellis."})
+    nouveau = doc.model_copy(update={"doc_id": "e" * 16, "blocks": tuple(blocs)})
+    apres = minicorpus.model_copy(
+        update={"documents": tuple(nouveau if d is doc else d for d in minicorpus.documents)}
+    )
+    chunker = ctx.build("chunker", ComponentSpec(name="fixed_tokens"))
+    anciens_textes = {p.text for p in chunker.chunk(doc)}
+    attendus = {p.passage_id for p in chunker.chunk(nouveau) if p.text not in anciens_textes}
+    assert 0 < len(attendus) < len(chunker.chunk(nouveau))
+    n = len(_spans(ctx))
+    with ctx.scope(post="update"):
+        _arch(ctx).update(
+            CorpusChange(modified=((doc.doc_id, nouveau),)), apres, index, tmp_path / "v2"
+        )
+    extraits = {s["wl.step"] for s in _spans(ctx)[n:] if s["wl.step"].startswith("graph.extract.")}
+    assert extraits == {f"graph.extract.{i}" for i in attendus}
+    _comme_index_complet(ctx, apres, tmp_path / "v2", tmp_path)
+
+
+def test_update_fusion_de_blocs_ancrages_a_jour_sans_extraction(
+    ctx: RunCtx, minicorpus: ParsedCorpus, index: Path, tmp_path: Path
+) -> None:
+    doc = max(minicorpus.documents, key=lambda d: len(d.blocks))
+    nouveau, perdu = _fusion_de_blocs(doc)
+    apres = minicorpus.model_copy(
+        update={"documents": tuple(nouveau if d is doc else d for d in minicorpus.documents)}
+    )
+    assert perdu in {a for p in lire_passages(index) for a in p.anchor_ids}
+    n = len(_spans(ctx))
+    with ctx.scope(post="update"):
+        _arch(ctx).update(
+            CorpusChange(modified=((doc.doc_id, nouveau),)), apres, index, tmp_path / "v2"
+        )
+    nouveaux = _spans(ctx)[n:]
+    assert not [s for s in nouveaux if s["wl.step"].startswith("graph.extract.")]
+    assert not [s for s in nouveaux if s["wl.step"].startswith("graph.report.")]  # repris
+    v2 = lire_passages(tmp_path / "v2")
+    assert perdu not in {a for p in v2 for a in p.anchor_ids}
+    assert {a for p in v2 for a in p.anchor_ids} <= _existants(apres)
+    _comme_index_complet(ctx, apres, tmp_path / "v2", tmp_path)
+
+
+def test_global_map_refus_explicite_filtre(ctx: RunCtx, index: Path) -> None:
+    ctx.provider.script("global_map", "graphrag.map.*", "AUCUN_POINT_UTILE.")  # type: ignore[attr-defined]
+    avant = len(_spans(ctx, "generate"))
+    _, rep = _repondre(ctx, index, search="global")
+    assert rep.abstained and rep.citations == () and len(_spans(ctx, "generate")) == avant
+    assert (
+        "AUCUN_POINT_UTILE"
+        in __import__("wavelibrarian.architectures.graphrag", fromlist=["_SYSTEM_MAP"])._SYSTEM_MAP
+    )
+
+
+def test_global_map_ne_cite_que_les_rapports_lus(
+    ctx: RunCtx, index: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import wavelibrarian.architectures.graphrag as module
+
+    rapports = [p for p in lire_passages(index) if p.level == 1][:3]
+    premier = f"[R1] {rapports[0].text}"
+    monkeypatch.setattr(module, "borner", lambda *a, **k: premier + "\n\n[R2] ")
+    arch = _arch(ctx, search="global")
+    arch.load(index)
+    with ctx.scope(post="query", question_id="q-001"):
+        noeud = arch._map(_question(), 1, rapports)
+    assert noeud is not None and noeud.child_ids == (rapports[0].passage_id,)
+    assert set(noeud.anchor_ids) == set(rapports[0].anchor_ids)
+    monkeypatch.setattr(module, "borner", lambda *a, **k: "")
+    avant = len(_spans(ctx, "graphrag.map"))
+    with ctx.scope(post="query", question_id="q-001"):
+        assert arch._map(_question(), 2, rapports) is None
+    assert len(_spans(ctx, "graphrag.map")) == avant  # aucun appel sur un lot non lu
