@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 03:09 |
-| Story en cours | 4.6 (voie B, revue) ; 6.5 (voie A) |
-| Stories livrées | 36 / 56 |
+| Mis à jour | 2026-10-18 03:16 |
+| Story en cours | 6.5 (voie A) ; 4.7 (voie B) |
+| Stories livrées | 37 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -110,6 +110,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **4.14 (conformité)** : ajouter chaque Architecture de l'epic 6 (dès `naive_rag`) à `experiments/mini-test.yaml` et la faire passer dans `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` (story 6.1).
 - **4.8 (reprise)** : à la reprise, ne pas compter deux fois les spans `query` déjà émis pour une Question interrompue par `BudgetExceeded` (story 4.5).
 - **Rapport (4.12), Coût de possession** : exclure les spans `wl.llm_cache_hit=true` (latence d'origine, bornes fictives) de la durée des spans locaux (story 4.5).
+- **4.14 (Expériences livrées)** : toute Expérience à Paliers sur le Mini-corpus pose `max_questions` ou un `tier` adapté (split dev = 12 Documents requis) ; vérifier `wl run` en code 0 sur chacune (story 4.6).
 
 ## Journal de surveillance
 
@@ -155,6 +156,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 02:51 | Génération du banc terminée à 02:42 (« génération complète », 3 376 lignes, 0 ERROR) ; plus de réponses à mesurer. `generation.lock` encore présent, un `llama-server` (pid 11716) occupe toujours le GPU, sans `pilot-report.md` | 33 % | 18,0 Go | 10 s, 154 Mo, 136 thr | Contraintes Ollama/GPU maintenues jusqu'au contrôle de 5 h (consigne d'Anaël) ; on continue sur deux voies |
 | 02:54 | 16 tronq. (lfm2.5:8b-a1b-q4_K_M) : think_off reasoning/bbeh-mini 6 tronq., 14 s/tronq. (pas de réf.) ; think_off instructions/ifbench 4 tronq., 14 s/tronq. (pas de réf.) ; think_off extraction/jsonschemabench 3 tronq., 14 s/tronq. (pas de réf.) ; pire -1 % | 17 % | 19.1 Go | 11 s, 182 Mo, 106 thr (20 proc) | Sous les seuils ; seconde campagne du banc (replay) démarrée à 02:42, mesure et contrôle de fin adaptés ; on continue (6.4) |
 | 03:09 | 12 tronq. (lfm2.5:8b-a1b-q4_K_M) : think_off reasoning/bbeh-mini 7 tronq., 16 s/tronq. (pas de réf.) ; think_off reasoning/bbeh-mini 1 tronq., 15 s/tronq. (pas de réf.) ; think_off tools/bfcl-multi 1 tronq., 44 s/tronq. (pas de réf.) ; pire +0 % | 32 % | 19.1 Go | 4 s, 136 Mo, 113 thr (20 proc) | Sous les seuils : on continue (6.5) |
+| 03:16 | 21 tronq. (ling3-tiny:8b-q4_k_m) : think_off reasoning/bbeh-mini 8 tronq., 16 s/tronq. (pas de réf.) ; think_on extraction/extraction-fr 3 tronq., 16 s/tronq. (pas de réf.) ; think_on instructions/mifeval-fr 3 tronq., 16 s/tronq. (pas de réf.) ; pire +0 % | 37 % | 19.8 Go | 15 s, 179 Mo, 101 thr (20 proc) | Sous les seuils : on continue (4.7) |
 
 ## Journal des stories
 
@@ -196,3 +198,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 4.5 | 02:20 | 02:45 | 4d60217d0e9e588edea5b8bfc8e586a0f4f0ced5 | 0 $ | Revue : phase refermée si le mesureur échoue, Réponses écrites après les spans de leur phase, latence d'origine des hits conservée en cache et retracée (rejeu à l'identique), exceptions en vol préservées, kWh réparti sur phase sans durée. 7 corrigés. |
 | 6.3 | 02:39 | 02:54 | 71e8d7bbc1da6d11b83271ea1a0973110316034a | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : retriever hybrid refusé (il échouait après l'appel hyde payé), espion embed_queries vs embed_passages, test hyde_model / hyde_max_tokens, repli journalisé. 747 tests verts. |
 | 6.4 | 02:55 | 03:09 | 39ed8f788e1cf6eb33188002b8cb1fdf0d376dd4 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : schéma de notation borné à n scores passé à la passerelle (réponse fautive rejouée sans cache, jamais mise en cache), loop ajouté aux Protocols et au contrat §2. 759 tests verts. |
+| 4.6 | 02:46 | 03:16 | 06dcc99c3f6f971696b60a02340c71d812cef61f | 0 $ | Revue : Question ancrée sur un Document du Scénario → inapplicable en phase base, tirage limité aux Paliers demandés (emboîtement conservé), answer_with_context par défaut via build_arch_answer (déplacé dans ports), retrieved renseigné en provided, échec de Palier en error par cellule. |
