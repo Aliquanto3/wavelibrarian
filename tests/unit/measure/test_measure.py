@@ -458,3 +458,25 @@ def test_source_ecrite_dans_les_spans(tmp_path: Path) -> None:
     attrs = _lignes(chemin)
     assert [a["wl.energy_source"] for a in attrs] == ["windows_emi", "cpu_load", "unknown"]
     assert [a["wl.energy_method"] for a in attrs] == ["estimated", "estimated", "unknown"]
+
+
+def test_cas_mixtes_cpu_ram_gpu() -> None:
+    """Matériels réels de codecarbon 3.3 : la RAM n'a pas de mode (part estimée par formule)."""
+    ram = type("RAM", (), {})()
+    gpu_vide = type("GPU", (), {"gpu_ids": []})()
+    gpu_suivi = type("GPU", (), {"gpu_ids": [0]})()
+    cpu_emi = SimpleNamespace(_mode="windows_emi")
+    cpu_estime = SimpleNamespace(_mode="cpu_load")
+    cas = [
+        ([ram, gpu_vide, cpu_emi], True, "windows_emi"),  # poste de la mesure 8.6
+        ([ram, gpu_vide, cpu_estime], False, "cpu_load"),
+        ([ram, gpu_suivi, cpu_estime], True, "nvml"),  # CPU estimé + GPU mesuré
+        ([ram, cpu_emi, gpu_suivi], True, "nvml"),  # GPU prioritaire quel que soit l'ordre
+        ([ram], False, "unknown"),
+    ]
+    for materiels, mesure, source in cas:
+        tracker = SimpleNamespace(_hardware=materiels)
+        assert (energy.is_hardware_counter(tracker), energy.energy_source(tracker)) == (
+            mesure,
+            source,
+        )

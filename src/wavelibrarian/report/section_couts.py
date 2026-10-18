@@ -86,6 +86,11 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
     if couts.sources_energie:
         detail = ", ".join(f"`{k}` ({n})" for k, n in sorted(couts.sources_energie.items()))
         lignes.append(f"- Source de l'énergie (`wl.energy_source`, spans avec énergie) : {detail}.")
+    if any(ligne.kwh_measured for ligne in couts.lignes):
+        lignes.append(
+            "- Les kWh `measured` viennent d'un compteur CPU ou GPU ; codecarbon y ajoute la part "
+            "RAM, estimée par formule (aucun compteur DRAM lu)."
+        )
     if couts.spans_sans_energie:
         lignes.append(
             f"- {couts.spans_sans_energie} span(s) locaux sans énergie connue : comptés pour 0 kWh."

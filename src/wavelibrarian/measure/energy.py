@@ -77,7 +77,8 @@ class FakeEstimator:
 def energy_source(tracker: Any) -> str:
     """Mode du compteur lu par codecarbon (`wl.energy_source`, contracts.md §6) : `nvml` pour un
     GPU suivi, sinon le mode matériel s'il y en a un, sinon le premier mode connu, sinon
-    `unknown`. Toujours une chaîne, même sans compteur."""
+    `unknown`. Toujours une chaîne, même sans compteur. La RAM de codecarbon n'a pas de mode :
+    sa part est estimée par formule, quel que soit le compteur CPU ou GPU."""
     modes: list[str] = []
     for hw in getattr(tracker, "_hardware", None) or []:
         mode = str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
@@ -87,6 +88,8 @@ def energy_source(tracker: Any) -> str:
             mode = "nvml" if getattr(hw, "gpu_ids", None) else ""
         if mode:
             modes.append(mode)
+    if "nvml" in modes:  # le GPU domine l'énergie d'une phase qui en suit un
+        return "nvml"
     for mode in modes:
         if mode in _MODES_MATERIELS:
             return mode

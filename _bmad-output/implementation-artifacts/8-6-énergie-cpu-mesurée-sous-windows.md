@@ -44,5 +44,14 @@ Le compteur suit la charge : `windows_emi` est ajouté à `_MODES_MATERIELS`, la
 ## Reports
 
 - Reproduire la mesure sur un second poste Windows (autre CPU, ou Intel) avant de généraliser.
-- L'énergie `measured` de `windows_emi` couvre CPU et RAM du poste entier, pas le seul processus : le repos du poste (environ 44 W) y est inclus, comme pour RAPL.
+- L'énergie `measured` de `windows_emi` vient du compteur CPU du poste entier, pas du seul processus : le repos du poste (environ 44 W) y est inclus, comme pour RAPL. La part RAM n'est pas mesurée : codecarbon l'ajoute par formule (la RAM n'a pas de mode, `windows_emi` ne lit pas la DRAM). La phase reste `measured` (AC 2, arbitrage P4) ; le Rapport le rappelle dès qu'il y a des kWh `measured`.
+- **À arbitrer par Anaël** : faut-il une méthode `mixed` (ou une colonne à part) quand la part RAM d'une phase `measured` est estimée ? Aujourd'hui la règle P4 la compte `measured`.
 - Anciennes traces sans `wl.energy_source` : comptées sous `absent` au Rapport.
+
+## Revue
+
+- medium, second avis 1 : `measured` pour une phase dont la RAM est estimée par formule. Corrigé sans changer la règle (AC 2, P4) : spec rectifiée (« CPU et RAM mesurés » était faux), mention au Rapport dès qu'il y a des kWh `measured`, test du cas mixte (`test_cas_mixtes_cpu_ram_gpu`, matériels RAM sans mode, GPU vide, CPU `windows_emi`) ; question `mixed` reportée à Anaël.
+- low, second avis 2 : contrat §6 citait `rapl` et omettait `ecologits`, `fake`, `unknown`, `absent`. Corrigé : `contracts.md` aligné sur le code.
+- low, second avis 3 : la docstring annonçait `nvml` prioritaire, le code suivait l'ordre de `_hardware`. Corrigé : `nvml` prioritaire explicitement, testé dans les deux ordres.
+- low, second avis 4 : `_mode` lu avant la branche GPU. Rejeté : la branche GPU écrase le mode, aucun effet observable (le GPU de codecarbon n'a pas de `_mode`).
+- low, second avis 5 : pas de test mixte. Corrigé par le même test que le constat 1 (CPU estimé + GPU mesuré compris).

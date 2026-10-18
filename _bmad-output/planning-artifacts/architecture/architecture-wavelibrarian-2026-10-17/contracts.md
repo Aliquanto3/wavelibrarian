@@ -781,7 +781,7 @@ Chaque appel produit un span. Son `name` est l'étape, ses `start_time` et `end_
 | `wl.llm_cache_hit` | bool |
 | `wl.latency_s` | float |
 | `wl.energy_kwh`, `wl.energy_method` | float (absent si inconnu) ; `measured` \| `estimated` \| `unknown` |
-| `wl.energy_source` | mode du compteur (`rapl`, `windows_emi`, `nvml`…) ; `windows_emi` compte comme compteur matériel, donc `measured`, après vérification qu'il suit la charge (v0.2.0, P4) |
+| `wl.energy_source` | mode du compteur codecarbon (`intel_rapl`, `intel_power_gadget`, `apple_powermetrics`, `nvml`, `windows_emi`, ou un mode estimé : `cpu_load`, `tdp_constant`…), `ecologits` pour une API, `fake` pour le compteur factice, `unknown` si l'énergie est inconnue (au Rapport, `absent` : trace sans l'attribut) ; la part RAM ajoutée par codecarbon reste une formule ; `windows_emi` compte comme compteur matériel, donc `measured`, après vérification qu'il suit la charge (v0.2.0, P4) |
 | `wl.status` | `ok` \| `error` \| `budget_refused` \| `non_conformant` |
 | `wl.invalid_citations`, `wl.loop` | int (si pertinent) |
 
