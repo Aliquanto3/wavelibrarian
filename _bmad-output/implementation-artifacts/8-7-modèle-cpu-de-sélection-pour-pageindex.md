@@ -1,7 +1,7 @@
 ---
 story: "8.7"
 title: "Modèle CPU de sélection pour PageIndex"
-status: review
+status: done
 ---
 
 # Story 8.7 : Modèle CPU de sélection pour PageIndex
@@ -79,3 +79,17 @@ Contre-essai (profil `cpu` sans `repeat_penalty`, non commité ; PageIndex seul,
 | low | second avis 3 | `catalog_fingerprint` ne couvre pas le profil. | Rejeté : `experiment.resolved.yaml` porte `profile_settings.ollama.options`, l'empreinte de l'Expérience change avec le profil et une reprise le détecte. |
 | low | second avis 5, 6 | Dénominateurs et latences de l'étude à homogénéiser. | Rejeté : l'étude qualifie déjà ses latences d'indicatives ; le run de contrôle ci-dessus donne les chiffres d'un run complet. |
 | low | second avis 9 | Hors périmètre, préexistant. | Rejeté (hors story). |
+
+## Vérification réelle de l'option (c) (orchestrateur, 2026-10-18 13:02)
+
+`WL_HOME` neuf (scratchpad), `CUDA_VISIBLE_DEVICES=-1`, `OMP_NUM_THREADS=4`, profil `cpu`, code de `main` à `0587ec8` (stories 8.1 à 8.5 et 8.7 c). `uv run wl run experiments/mini-cpu.yaml` → `completed`, code 0, 560 s, run_id `20261018-110209-a8262d`.
+
+| Mesure | Référence (3e série) | Option (c) |
+|---|---|---|
+| Réponses ok / error | 7 / 1 | 8 / 0 (2 ok par Configuration) |
+| Lignes de verdicts | 49 | 56 ; 0 Critère sans verdict ; `causes: []` |
+| Spans `pageindex.select` arrêtés à `select_max_tokens` | 2 | 0 sur 3 |
+| Qualité PageIndex (n = 2) | 1,00 sur n = 1 | 0,50 (bm25, rag-naif, raptor : 0,50) |
+| `ollama ps` | — | granite4.2:3b et qwen3.5:4b, `size_vram: 0`, contexte 32768 |
+
+AC 2 vérifié : PageIndex répond sur toutes les Questions du run mini-cpu, aucune sortie à `select_max_tokens`. Modèles arrêtés (`ollama stop`), `ollama ps` vide ; Ollama rendu à Anaël.
