@@ -353,3 +353,81 @@ def test_taux_sans_affirmation_est_none(tmp_path: Path) -> None:
     )
     assert taux_fidelite(tmp_path) == {"c": None}
     assert "n/a" in section_fidelite(tmp_path)
+
+
+# -- revue de la story 7.3 ----------------------------------------------------------------------
+
+
+def test_juge_de_fidelite_par_defaut_d_une_autre_famille(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    """AD-14 : l'auteur des pages ne juge pas ses pages ; défaut = premier Juge du réservoir
+    d'une autre Famille que `compile_model`."""
+    for compile_model in ("fake-llm-a", "fake-llm-c"):
+        arch = _arch(ctx, compile_model=compile_model)
+        familles = {ctx.catalog.get(m).family for m in (compile_model, arch._fidelity_model)}
+        assert len(familles) == 2
+    # profil de test : réservoir [fake-llm-c, fake-llm-b, fake-llm-a]
+    assert _arch(ctx, compile_model="fake-llm-c")._fidelity_model == "fake-llm-b"
+    _indexer(ctx, minicorpus, tmp_path / "i", compile_model="fake-llm-a")
+    modeles = {s["gen_ai.request.model"] for s in _spans(ctx, "wiki.fidelity")}
+    assert modeles == {"fake-llm-c"}
+
+
+def test_juge_de_fidelite_de_la_meme_famille_refuse(ctx: RunCtx) -> None:
+    from wavelibrarian.core.errors import ConfigError
+
+    with pytest.raises(ConfigError, match="Famille"):
+        _arch(ctx, compile_model="fake-llm-a", fidelity_model="fake-llm-a")
+    assert _arch(ctx, compile_model="fake-llm-a", fidelity_model="fake-llm-b")
+
+
+def test_graine_dans_la_cle_un_hit_de_cache_ne_sert_pas_l_echantillon_d_une_autre_graine(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    spec = ComponentSpec(name="llm_wiki", params={"fidelity_sample": 1})
+
+    def fabrique() -> Any:
+        return ctx.build("architecture", spec)
+
+    cache = IndexCache(ctx.wl_home)
+    cles, tirages = set(), {}
+    for graine in range(1, 7):
+        ctx.seed = graine
+        _, cle = cache.build(ctx, fabrique, minicorpus)
+        cles.add(cle)
+        tirages[graine] = _json(cache.path(cle), "wiki_fidelity.json")["pages"][0]["passage_id"]
+        # même tirage qu'un index neuf de cette graine
+        _indexer(ctx, minicorpus, tmp_path / f"n{graine}", fidelity_sample=1)
+        neuf = _json(tmp_path / f"n{graine}", "wiki_fidelity.json")["pages"][0]["passage_id"]
+        assert tirages[graine] == neuf
+    assert len(cles) == 6 and len(set(tirages.values())) > 1
+    # sans échantillon, la graine n'invalide pas l'index
+    sans = ComponentSpec(name="llm_wiki", params={"fidelity_sample": 0})
+    ctx.seed = 1
+    _, c1 = cache.build(ctx, lambda: ctx.build("architecture", sans), minicorpus)
+    ctx.seed = 2
+    _, c2 = cache.build(ctx, lambda: ctx.build("architecture", sans), minicorpus)
+    assert c1 == c2
+
+
+def test_page_ne_garde_que_les_ancrages_de_son_document_source(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    a, b = minicorpus.documents[0], minicorpus.documents[1]
+    ancre_a, ancre_b = next(iter(a.anchors)), next(iter(b.anchors))
+
+    def sortie(req: Any) -> str:
+        if req.inputs["documents"][0]["source_path"] != b.source_path:
+            return json.dumps({"pages": []})
+        pages = [
+            {"title": "mixte", "body": "x", "anchor_ids": [ancre_a, ancre_b]},
+            {"title": "autre", "body": "y", "anchor_ids": [ancre_a]},
+        ]
+        return json.dumps({"pages": pages})
+
+    ctx.provider.script("wiki_compile", "wiki.compile", sortie)  # type: ignore[attr-defined]
+    _indexer(ctx, minicorpus, tmp_path / "i")
+    wiki = _json(tmp_path / "i", "wiki.json")
+    assert [(p["title"], p["anchor_ids"]) for p in wiki["pages"]] == [("mixte", [ancre_b])]
+    assert wiki["discarded_pages"] == 1

@@ -39,6 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from wavelibrarian.architectures._fenetre import borner_passages, couper
 from wavelibrarian.architectures._passages import ecrire_passages, lire_passages
 from wavelibrarian.components.context import build_arch_answer
+from wavelibrarian.config.panel import closed_book_judge
 from wavelibrarian.core.errors import ConfigError, WlError
 from wavelibrarian.core.ids import sha16
 from wavelibrarian.core.types import (
@@ -116,7 +117,9 @@ class LlmWiki(ArchitectureBase):
         fidelity_sample: int = Field(default=5, ge=0)
         compile_model: Annotated[str | None, ModelRefMeta("generator_models[0]")] = None
         compile_max_tokens: int = Field(default=1024, gt=0)
-        fidelity_model: Annotated[str | None, ModelRefMeta("generator_models[0]")] = None
+        # Sans `ModelRefMeta` : le défaut n'est pas un rôle du profil mais le premier Juge du
+        # réservoir d'une autre Famille que `compile_model` (AD-14), choisi à la construction.
+        fidelity_model: str | None = None
         fidelity_max_tokens: int = Field(default=64, gt=0)
 
     def __init__(self, params: Any, ctx: Any) -> None:
@@ -126,13 +129,45 @@ class LlmWiki(ArchitectureBase):
         self.generator = ctx.build("generator", params.generator)
         defaut = ctx.profile.defaults.generator_models[0]
         self._compile_model: str = params.compile_model or defaut
-        self._fidelity_model: str = params.fidelity_model or defaut
+        self._fidelity_model: str = self._juge_de_fidelite(params.fidelity_model)
         self._index: SearchIndex | None = None
+        self._sans_fenetre: set[str] = set()
+
+    def _juge_de_fidelite(self, explicite: str | None) -> str:
+        """Juge `wiki_fidelity` d'une autre Famille que l'auteur des pages (AD-14)."""
+        catalogue = self.ctx.catalog  # type: ignore[attr-defined]
+        if explicite is None:
+            pool = self.ctx.profile.defaults.judge_pool  # type: ignore[attr-defined]
+            return closed_book_judge(self._compile_model, pool, catalogue)
+        famille = catalogue.get(self._compile_model).family
+        if catalogue.get(explicite).family == famille:
+            raise ConfigError(
+                "fidelity_model",
+                f"`llm_wiki` : le Juge de fidélité {explicite!r} est de la Famille « {famille} » "
+                f"du modèle de compilation {self._compile_model!r} (AD-14)",
+            )
+        return explicite
+
+    def index_key(self) -> dict[str, Any]:
+        """Clé de base, plus le Juge de fidélité effectif et la graine du tirage : un index
+        servi par le cache porte l'échantillon de fidélité de cette graine et de ce Juge."""
+        cle = super().index_key()
+        cle["fidelity_model"] = self._fidelity_model
+        if self.params.fidelity_sample:  # type: ignore[attr-defined]
+            cle["fidelity_seed"] = self.ctx.seed  # type: ignore[attr-defined]
+        return cle
 
     # -- fenêtre --------------------------------------------------------------------------------
 
     def _fenetre(self, modele: str) -> int | None:
         fenetre: int | None = self.ctx.catalog.get(modele).context_window  # type: ignore[attr-defined]
+        if fenetre is None and modele not in self._sans_fenetre:
+            self._sans_fenetre.add(modele)
+            _log.warning(
+                "llm_wiki : `context_window` absent du Catalogue pour `%s`, aucun contrôle de "
+                "fenêtre",
+                modele,
+            )
         return fenetre
 
     # -- compilation ----------------------------------------------------------------------------
@@ -159,7 +194,13 @@ class LlmWiki(ArchitectureBase):
             cout = tokenizer.count(json.dumps(bloc, ensure_ascii=False)) + 2
             if fixe + cout > fenetre:  # un Block seul qui n'y tient pas : tronqué
                 vide = tokenizer.count(json.dumps({**bloc, "text": ""}, ensure_ascii=False)) + 2
-                texte = couper(bloc["text"], tokenizer, max(fenetre - fixe - vide, 0))
+                if fenetre - fixe - vide <= 0:
+                    raise ConfigError(
+                        "compile_max_tokens",
+                        f"`llm_wiki` : aucune place pour le texte d'un Block dans la fenêtre de "
+                        f"{fenetre} tokens de `{self._compile_model}`",
+                    )
+                texte = couper(bloc["text"], tokenizer, fenetre - fixe - vide)
                 _log.warning(
                     "llm_wiki : Block tronqué avant compilation (fenêtre de %d tokens)", fenetre
                 )
@@ -174,8 +215,11 @@ class LlmWiki(ArchitectureBase):
             lots.append(lot)
         return lots
 
-    def _compiler(self, doc: ParsedDocument, existants: set[str]) -> tuple[list[_Page], int]:
-        """Pages d'un Document (Ancrages filtrés sur `existants`) et nombre de pages écartées."""
+    def _compiler(self, doc: ParsedDocument) -> tuple[list[_Page], int]:
+        """Pages d'un Document et nombre de pages écartées. Une page ne garde que les Ancrages
+        déclarés qui existent dans son Document source : elle en est la synthèse, une page de A
+        ne cite pas B (un Ancrage d'un autre Document ou inexistant est retiré)."""
+        existants = set(doc.anchors)
         pages: list[_Page] = []
         ecartees = 0
         p: Any = self.params
@@ -345,11 +389,10 @@ class LlmWiki(ArchitectureBase):
 
     def index(self, corpus: ParsedCorpus, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
-        existants = {a for d in corpus.documents for a in d.anchors}
         pages: list[_Page] = []
         ecartees = 0
         for doc in corpus.documents:
-            faites, ecart = self._compiler(doc, existants)
+            faites, ecart = self._compiler(doc)
             pages.extend(faites)
             ecartees += ecart
         if ecartees:
@@ -394,7 +437,7 @@ class LlmWiki(ArchitectureBase):
             gardees.setdefault(page.source_doc_id, []).append(page)
         for doc in corpus_after.documents:
             if doc.doc_id in nouveaux | absents:
-                faites, ecart = self._compiler(doc, existants)
+                faites, ecart = self._compiler(doc)
                 gardees[doc.doc_id] = faites
                 ecartees += ecart
         pages = [p for d in corpus_after.documents for p in gardees.get(d.doc_id, [])]
