@@ -20,6 +20,7 @@ from wavelibrarian.core.types import CostPost, ParsedCorpus, Usage
 from wavelibrarian.corpus.ingest import versions_parsers
 from wavelibrarian.measure.tracing import temps_propre
 from wavelibrarian.ports.architecture import ArchitectureBase, CorpusChange
+from wavelibrarian.runner.wiki_fidelity import cle_de_copie, copier_fidelite
 
 if TYPE_CHECKING:
     from wavelibrarian.runner.context import Context
@@ -111,6 +112,8 @@ class IndexCache:
             # tracés pendant la construction ou le chargement n'est pas comptée deux fois.
             propre = temps_propre(time.perf_counter() - debut, ctx.traceur.elapsed_total - ecoule)
             _trace_index(ctx, hit=hit, latency_s=propre, key=key)
+        # Copie générique (story 7.3) : `wiki_fidelity.json` du dossier d'index, s'il existe.
+        copier_fidelite(final, ctx.run_dir, cle_de_copie(ctx.config_id, ctx.tier, post))
         return neuve, key
 
     def _construire(

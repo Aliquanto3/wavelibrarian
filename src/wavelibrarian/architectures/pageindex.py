@@ -34,6 +34,7 @@ from typing import Annotated, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wavelibrarian.architectures._fenetre import MARGE_GENERATE, borner_passages, couper
 from wavelibrarian.components.context import build_arch_answer
 from wavelibrarian.core.errors import ConfigError, WlError
 from wavelibrarian.core.ids import sha16
@@ -54,8 +55,8 @@ from wavelibrarian.registry import register
 
 _log = logging.getLogger(__name__)
 
-# Réserve pour le system du générateur et l'habillage du message (« Contexte : », « Question : »).
-_MARGE_GENERATE = 256
+_couper = couper
+_MARGE_GENERATE = MARGE_GENERATE
 
 _FICHIER = "tree.json"
 _SYSTEM_RESUME = (
@@ -80,14 +81,6 @@ class _Noeud:
     parent: str | None
     children: list[str] = field(default_factory=list)
     summary: str = ""
-
-
-def _couper(texte: str, tokenizer: Any, limite: int) -> str:
-    """Raccourcit `texte` (par pas de 20 %) jusqu'à tenir dans `limite` tokens."""
-    coupe = texte
-    while coupe and tokenizer.count(coupe) > limite:
-        coupe = coupe[: int(len(coupe) * 0.8)]
-    return coupe
 
 
 def _id_noeud(anchor_id: str) -> str:
@@ -393,51 +386,7 @@ class PageIndex(ArchitectureBase):
 
     def _borner_contexte(self, question: QuestionInput, lus: list[Passage]) -> list[Passage]:
         """Garde les sections lues qui tiennent dans la fenêtre du générateur (avertissement)."""
-        modele: str | None = getattr(self.generator, "model_id", None)
-        fenetre = self._fenetre(modele) if modele else None
-        if modele is None or fenetre is None or not lus:
-            return lus
-        tokenizer = self.ctx.tokenizer_for(modele)  # type: ignore[attr-defined]
-        fixe = (
-            int(tokenizer.count(question.text))
-            + sum(int(tokenizer.count(t.text)) for t in question.history)
-            + int(getattr(self.generator, "max_tokens", 0))
-            + _MARGE_GENERATE
-        )
-        if fixe >= fenetre:
-            raise ConfigError(
-                "generator",
-                f"`pageindex` : la question et la sortie réservée ({fixe} tokens) ne laissent "
-                f"aucune place dans la fenêtre de {fenetre} tokens de `{modele}`",
-            )
-
-        def taille(passages: list[Passage]) -> int:
-            return int(tokenizer.count(self.context_builder.build(passages).text)) + fixe
-
-        gardes = list(lus)
-        while len(gardes) > 1 and taille(gardes) > fenetre:
-            gardes.pop()
-        if len(gardes) < len(lus):
-            _log.warning(
-                "pageindex : %d section(s) lue(s) écartée(s), hors de la fenêtre de %d tokens",
-                len(lus) - len(gardes),
-                fenetre,
-            )
-        if taille(gardes) > fenetre:  # une seule section, trop longue : tronquée
-            seul = gardes[0]
-            habillage = taille([seul.model_copy(update={"text": ""})]) - fixe
-            texte = _couper(seul.text, tokenizer, fenetre - fixe - habillage)
-            if not texte:
-                raise ConfigError(
-                    "generator",
-                    f"`pageindex` : aucune section ne tient dans la fenêtre de {fenetre} tokens "
-                    f"de `{modele}`",
-                )
-            _log.warning(
-                "pageindex : section tronquée avant génération (fenêtre de %d tokens)", fenetre
-            )
-            gardes = [seul.model_copy(update={"text": texte})]
-        return gardes
+        return borner_passages(self, question, lus, "pageindex")
 
     def answer(self, question: QuestionInput) -> ArchAnswer:
         if not self._charge:
