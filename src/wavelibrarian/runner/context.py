@@ -127,7 +127,9 @@ class Context:
                 self._cache = ResponseCache(self._cache_jetable)
             else:
                 self._cache = ResponseCache(wl_home)
-            self.tracer: PortTracer = Tracer(self, self.run_dir / "traces.jsonl")
+            # `traceur` : le Tracer concret (phases d'énergie, latence cumulée), réservé au runner.
+            self.traceur = Tracer(self, self.run_dir / "traces.jsonl")
+            self.tracer: PortTracer = self.traceur
             self.tokenizer: Tokenizer = make_tokenizer(profile.tokenizer)
             mesuree = build_gateway(
                 catalog=catalog,

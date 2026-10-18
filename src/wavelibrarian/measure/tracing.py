@@ -13,6 +13,13 @@ from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.types import Condition, CostPost, Phase, Usage
+from wavelibrarian.measure.energy import EnergyMethod, spread_energy
+
+# Spans d'un calcul local : leur énergie est relevée par phase, puis répartie (AD-17).
+_LOCAUX = frozenset({"local", "embed", "rerank"})
+
+
+_Retenu = tuple[str, int, int, float, dict[str, str | int | float | bool]]
 
 
 class TraceContext(Protocol):
@@ -81,6 +88,41 @@ class Tracer:
         if otlp_endpoint is not None:
             self._provider.add_span_processor(_otlp_processor(otlp_endpoint))
         self._tracer = self._provider.get_tracer("wavelibrarian")
+        self.latency_total = 0.0  # somme des latences de tous les spans enregistrés
+        self._phase: list[_Retenu] | None = None
+
+    def begin_phase(self) -> None:
+        """Retient les spans locaux jusqu'à `end_phase` : leur énergie n'est connue qu'en fin de
+        phase et `traces.jsonl` n'est jamais réécrit (AD-17)."""
+        if self._phase is not None:
+            raise WlError("phase d'énergie déjà ouverte")
+        self._phase = []
+
+    def end_phase(self, kwh: float | None, method: EnergyMethod = "estimated") -> None:
+        """Répartit `kwh` sur les spans locaux retenus (prorata de latence), puis les écrit."""
+        tampon, self._phase = self._phase, None
+        if not tampon:
+            return
+        parts = spread_energy(kwh, [latence for *_, latence, _ in tampon], method)
+        for (step, debut, fin, _, attrs), (energie, methode) in zip(tampon, parts, strict=True):
+            if energie is not None:
+                attrs["wl.energy_kwh"] = energie
+                attrs["wl.energy_method"] = methode
+            else:
+                attrs.setdefault("wl.energy_method", "unknown")
+            self._emettre(step, debut, fin, attrs)
+
+    def _emettre(
+        self, step: str, debut: int, fin: int, attrs: dict[str, str | int | float | bool]
+    ) -> None:
+        avant = self.exporter.ecrits
+        span = self._tracer.start_span(step, start_time=debut, attributes=attrs)
+        span.end(end_time=fin)
+        if self.exporter.ecrits != avant + 1:
+            # Les traces sont la seule source des coûts : une ligne perdue arrête l'Exécution.
+            erreur, self.exporter.erreur = self.exporter.erreur, None
+            cause = f" : {erreur}" if erreur else " (SDK OpenTelemetry désactivé ?)"
+            raise WlError(f"trace `{step}` non écrite dans {self.exporter.path}{cause}") from erreur
 
     def record(
         self,
@@ -130,14 +172,12 @@ class Tracer:
             attrs["gen_ai.provider.name"] = provider
         if model_id is not None:
             attrs["gen_ai.request.model"] = model_id
-        avant = self.exporter.ecrits
-        span = self._tracer.start_span(step, start_time=debut, attributes=attrs)
-        span.end(end_time=fin)
-        if self.exporter.ecrits != avant + 1:
-            # Les traces sont la seule source des coûts : une ligne perdue arrête l'Exécution.
-            erreur, self.exporter.erreur = self.exporter.erreur, None
-            cause = f" : {erreur}" if erreur else " (SDK OpenTelemetry désactivé ?)"
-            raise WlError(f"trace `{step}` non écrite dans {self.exporter.path}{cause}") from erreur
+        self.latency_total += float(latency_s)
+        local = kind in _LOCAUX or (kind == "llm" and provider == "ollama")
+        if self._phase is not None and local:
+            self._phase.append((step, debut, fin, float(latency_s), attrs))
+            return
+        self._emettre(step, debut, fin, attrs)
 
 
 def _otlp_processor(endpoint: str) -> Any:

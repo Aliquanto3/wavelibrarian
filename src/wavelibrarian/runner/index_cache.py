@@ -92,13 +92,17 @@ class IndexCache:
         key = index_key(corpus.fingerprint, arch)
         final = self.path(key)
         debut = time.perf_counter()
+        externe = ctx.traceur.latency_total
         hit = self.has(key)
         if not hit:
             self._construire(ctx, arch, corpus, key, post)
         neuve = factory()
-        neuve.load(final)
-        with ctx.scope(post=post):
-            _trace_index(ctx, hit=hit, latency_s=time.perf_counter() - debut, key=key)
+        with ctx.scope(post=post):  # `load` aussi est imputé à l'indexation (AD-8)
+            neuve.load(final)
+            # Latence propre au span `index` : celle des spans d'embedding ou d'appels déjà
+            # tracés pendant la construction ou le chargement n'est pas comptée deux fois.
+            propre = time.perf_counter() - debut - (ctx.traceur.latency_total - externe)
+            _trace_index(ctx, hit=hit, latency_s=max(0.0, propre), key=key)
         return neuve, key
 
     def _construire(

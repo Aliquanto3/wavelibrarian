@@ -9,7 +9,11 @@ l'Exécution continue ; `BudgetExceeded` l'arrête avec le manifeste `budget_exc
 
 import json
 import logging
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,6 +27,7 @@ from wavelibrarian.core.types import (
     ParsedCorpus,
     Question,
     QuestionInput,
+    Usage,
 )
 from wavelibrarian.corpus.declare import DeclaredCorpus, declare
 from wavelibrarian.corpus.ingest import ingest
@@ -31,6 +36,7 @@ from wavelibrarian.evalset import io
 from wavelibrarian.evalset.freeze import select_questions, verify_frozen
 from wavelibrarian.evalset.io import QuestionsFile
 from wavelibrarian.llm.gateway import Providers
+from wavelibrarian.measure.energy import make_meter
 from wavelibrarian.ports.architecture import ArchitectureBase
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.runner.context import Context
@@ -121,6 +127,7 @@ class _Runner:
         self.corpus = corpus
         self.questions = questions
         self.index_cache = IndexCache(ctx.wl_home)
+        self.meter = make_meter(ctx.profile.energy)
         self._parses: dict[str, ParsedCorpus] = {}
         self._profils: dict[str, CorpusProfile] = {}
         self.inapplicables: dict[str, dict[str, Any]] = {}
@@ -157,6 +164,66 @@ class _Runner:
     def ecrire_applicabilite(self) -> None:
         _ecrire_json(self.dossier / "applicability.json", self.inapplicables)
 
+    # --- énergie locale et latence (AD-17) -------------------------------------------------
+
+    @contextmanager
+    def energie_de_phase(self, conf: ResolvedConfiguration, phase: str) -> Iterator[None]:
+        """Relève l'énergie locale d'une phase (index ou query) d'une Configuration, puis la
+        répartit sur les spans locaux de la phase au prorata de leur latence."""
+        tracer = self.ctx.traceur
+        tracer.begin_phase()
+        kwh: float | None = None
+        self.meter.start(f"{conf.id}:{phase}")
+        try:
+            yield
+        finally:
+            try:
+                kwh = self.meter.stop()
+            finally:
+                tracer.end_phase(kwh, getattr(self.meter, "method", "estimated"))
+
+    def poser(
+        self, conf: ResolvedConfiguration, q: Question, arch: ArchitectureBase, methode: Any
+    ) -> Answer:
+        """Pose une Question dans le Poste `query`. Le span `answer` est émis ici, jamais par
+        l'Architecture ; sa latence est le temps propre de `answer`, hors spans déjà tracés
+        (appels, embeddings). `Answer.latency_s` = somme des spans `query` de la Question."""
+        tracer = self.ctx.traceur
+        reponse: ArchAnswer | None = None
+        erreur: Exception | None = None
+        with self.ctx.scope(post="query", question_id=q.id):
+            debut = time.perf_counter()
+            externe = tracer.latency_total
+            try:
+                reponse = arch.answer(_question_input(q))
+            except BudgetExceeded:
+                raise
+            except Exception as exc:  # AD-11 : la Question suivante est posée
+                erreur = exc
+            externe = tracer.latency_total - externe
+            propre = max(0.0, time.perf_counter() - debut - externe)
+            tracer.record(
+                "answer",
+                "local",
+                model_id=None,
+                provider=None,
+                usage=Usage(),
+                cost=Decimal(0),
+                cost_uncached=Decimal(0),
+                currency="",
+                latency_s=propre,
+                from_cache=False,
+                status="ok" if erreur is None else "error",
+                extra={"wl.invalid_citations": reponse.invalid_citations if reponse else 0},
+            )
+        latence = externe + propre
+        if reponse is not None:
+            return self._answer(conf, q, reponse, "ok", latency_s=latence)
+        log.warning("Question %s (%s) en erreur : %s", q.id, conf.id, erreur)
+        vide = ArchAnswer(text="", abstained=False, retrieval_method=methode)
+        message = f"{type(erreur).__name__} : {erreur}"
+        return self._answer(conf, q, vide, "error", message, latency_s=latence)
+
     # --- Réponses --------------------------------------------------------------------------
 
     def _answer(
@@ -166,6 +233,8 @@ class _Runner:
         arch_answer: ArchAnswer,
         status: Literal["ok", "error", "inapplicable"],
         error: str | None = None,
+        *,
+        latency_s: float = 0.0,
     ) -> Answer:
         ctx = self.ctx
         return Answer.model_validate(
@@ -181,6 +250,7 @@ class _Runner:
                 "phase": ctx.phase,
                 "status": status,
                 "error": error,
+                "latency_s": latency_s,
             }
         )
 
@@ -229,7 +299,8 @@ class _Runner:
             return
         try:
             log.info("étape index : %s", conf.id)
-            arch, cle = self.index_cache.build(ctx, fabrique, parse)
+            with self.energie_de_phase(conf, "index"):
+                arch, cle = self.index_cache.build(ctx, fabrique, parse)
         except BudgetExceeded:
             raise
         except Exception as erreur:
@@ -237,18 +308,9 @@ class _Runner:
             self._vides(writer, conf, methode, "error", f"{type(erreur).__name__} : {erreur}")
             return
         log.info("étape answer : %s (index %s, %d Questions)", conf.id, cle, len(self.questions))
-        for q in self.questions:
-            try:
-                with ctx.scope(post="query", question_id=q.id):
-                    reponse = arch.answer(_question_input(q))
-                answer = self._answer(conf, q, reponse, "ok")
-            except BudgetExceeded:
-                raise
-            except Exception as erreur:  # AD-11 : la Question suivante est posée
-                log.warning("Question %s (%s) en erreur : %s", q.id, conf.id, erreur)
-                vide = ArchAnswer(text="", abstained=False, retrieval_method=methode)
-                answer = self._answer(conf, q, vide, "error", f"{type(erreur).__name__} : {erreur}")
-            self._ecrire(writer, answer)
+        with self.energie_de_phase(conf, "query"):
+            for q in self.questions:
+                self._ecrire(writer, self.poser(conf, q, arch, methode))
 
 
 def run_experiment(
