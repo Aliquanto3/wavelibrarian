@@ -31,6 +31,8 @@ class Provider(Protocol):
     - `schema_in_prompt` : vrai si le schéma de sortie compte comme tokens d'entrée (envoi par
       outil). Faux quand il part dans `format` (Ollama : grammaire, hors prompt).
     - `schema_prompt_overhead` : tokens fixes ajoutés au prompt par cet envoi, en plus du schéma.
+    - `cache_options(request)` : options natives hors `LLMRequest` (Ollama : profil, `num_ctx`),
+      reprises dans la clé de cache.
     """
 
     def complete(

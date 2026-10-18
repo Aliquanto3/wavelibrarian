@@ -2,6 +2,7 @@
 
 import hashlib
 from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,10 @@ def role_marker(role: str) -> str:
 
 
 def cache_key(
-    request: LLMRequest, provider: str, output_schema: dict[str, Any] | None = None
+    request: LLMRequest,
+    provider: str,
+    output_schema: dict[str, Any] | None = None,
+    provider_options: Mapping[str, Any] | None = None,
 ) -> str:
     """`sha256(canonical_json(model, params, system, messages, pass_id[, output_schema]))`.
 
@@ -35,6 +39,8 @@ def cache_key(
     `system` est pris tel quel : la passerelle y a déjà posé le marqueur de rôle, qui fait
     entrer le rôle dans la clé (le Faux LLM répond selon le rôle).
     Un system sans ce marqueur lève `ValueError` : la clé se calcule après le marquage.
+    `provider_options` (provider `ollama` seulement) : options du profil envoyées avec la
+    requête (`repeat_penalty`, `num_ctx`…), qui changent la réponse (story 8.7).
     """
     if not request.system.startswith(role_marker(request.role)):
         raise ValueError(
@@ -54,6 +60,7 @@ def cache_key(
     }
     if provider == "ollama":
         contenu["params"]["think"] = request.think  # None (omis) distinct de False
+        contenu["params"]["options"] = dict(provider_options or {})
     if provider == "fake":
         contenu["inputs"] = request.inputs
         contenu["step"] = request.step  # `script(role, step_glob, …)` : sortie selon l'étape

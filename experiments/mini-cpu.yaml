@@ -2,6 +2,9 @@
 # multilingual-e5-small sur CPU), sans aucun appel d'API. Le profil `cpu` met
 # `claude-haiku-5-5` en tête de `generator_models` : chaque modèle est donc nommé ici.
 # Prérequis : `uv sync --extra local` et `wl installer --profil cpu`.
+# Story 8.7 : la sélection PageIndex de minicpm5:1b tient grâce à `repeat_penalty: 1.15`, posé
+# dans `ollama.options` du profil `cpu` (l'Expérience n'a pas de champ `ollama`) ; il vaut pour
+# tous les appels Ollama de ce profil.
 experiment_id: mini-cpu
 seed: 42
 profile: cpu

@@ -716,3 +716,18 @@ def test_ollama_think_selon_la_requete(think: bool | None, attendu: bool | str) 
         assert "think" not in corps
     else:
         assert corps["think"] is attendu
+
+
+def test_ollama_repeat_penalty_du_profil_cpu_envoye_et_dans_les_options_de_cle() -> None:
+    """Story 8.7 : `repeat_penalty` part dans `options` ; `cache_options` le reprend (clé)."""
+    t = Transport(Resp(200, json=REPONSE_OLLAMA))
+    p = OllamaProvider(
+        load_profile("cpu").ollama, context_windows={MINICPM: 32768}, http_client=t.client(httpx)
+    )
+    p.complete(_req(MINICPM, seed=7), timeout_s=120)
+    assert t.body()["options"]["repeat_penalty"] == 1.15
+    assert p.cache_options(_req(MINICPM)) == {
+        "num_gpu": 0,
+        "repeat_penalty": 1.15,
+        "num_ctx": 32768,
+    }

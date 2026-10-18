@@ -125,19 +125,25 @@ class OllamaProvider:
         self._fenetres = dict(context_windows or {})
         self._http = http_client or httpx.Client()
 
+    def cache_options(self, request: LLMRequest) -> dict[str, Any]:
+        """Options envoyées hors des champs de `LLMRequest` (profil, `num_ctx`) : la passerelle
+        les fait entrer dans la clé de cache (story 8.7, `repeat_penalty` change la sortie)."""
+        options: dict[str, Any] = dict(self._settings.options)
+        if "num_ctx" not in options and request.model_id in self._fenetres:
+            options["num_ctx"] = self._fenetres[request.model_id]
+        return options
+
     def native_request(
         self, request: LLMRequest, output_schema: dict[str, Any] | None
     ) -> dict[str, Any]:
         options: dict[str, Any] = {
-            **self._settings.options,
+            **self.cache_options(request),
             "num_predict": request.max_tokens,
         }
         if request.temperature is not None:
             options["temperature"] = request.temperature
         if request.seed is not None:
             options["seed"] = request.seed
-        if "num_ctx" not in options and request.model_id in self._fenetres:
-            options["num_ctx"] = self._fenetres[request.model_id]
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
         if request.system:
             messages.insert(0, {"role": "system", "content": request.system})

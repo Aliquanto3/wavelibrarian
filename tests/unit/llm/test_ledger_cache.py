@@ -326,3 +326,15 @@ def test_cache_d_avant_la_latence_migre(wl_home: Path) -> None:
     neuf = cache.get("k2")
     assert neuf is not None and neuf.latency_s == 0.5
     cache.close()
+
+
+def test_options_ollama_dans_la_cle_seulement_pour_ollama() -> None:
+    """Story 8.7 : `repeat_penalty` change la clé ollama ; anthropic et fake inchangés."""
+    sans = cache_key(req(), "ollama", provider_options={"num_gpu": 0})
+    avec = cache_key(req(), "ollama", provider_options={"num_gpu": 0, "repeat_penalty": 1.15})
+    assert sans != avec
+    assert (
+        cache_key(req(), "ollama", provider_options={"repeat_penalty": 1.15, "num_gpu": 0}) == avec
+    )
+    assert cache_key(req(), "anthropic", provider_options={"x": 1}) == cache_key(req(), "anthropic")
+    assert cache_key(req(), "fake", provider_options={"x": 1}) == cache_key(req(), "fake")

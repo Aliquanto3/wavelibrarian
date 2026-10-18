@@ -230,7 +230,9 @@ class MeteredGateway:
             marquee = marquee.model_copy(update={"think": entry.think})
         schema_json = schema.model_json_schema() if schema is not None else None
         # Après le marquage : le rôle entre dans la clé ; le schéma aussi (il change la requête).
-        cle = cache_key(marquee, nom, schema_json)
+        # Story 8.7 : options Ollama du profil (`repeat_penalty`…) dans la clé, comme `think`.
+        options = getattr(provider, "cache_options", None) if nom == "ollama" else None
+        cle = cache_key(marquee, nom, schema_json, options(marquee) if options else None)
 
         cached = self._cache.get(cle) if use_cache else None
         if cached is not None:

@@ -588,3 +588,16 @@ class _CatalogueSurcharge:
 
     def cost(self, model_id: str, usage: Any) -> Any:
         return self._base.cost(model_id, usage)
+
+
+def test_les_options_ollama_du_profil_entrent_dans_la_cle(make_env: Callable[..., Env]) -> None:
+    """Story 8.7 : un `repeat_penalty` ajouté au profil ne rejoue pas les réponses d'avant."""
+    env = make_env("avant", "apres")
+    options: dict[str, Any] = {"num_gpu": 0}
+    env.provider.cache_options = lambda _r: dict(options)  # type: ignore[attr-defined]
+    assert not env.gw.complete(_req("minicpm5:1b-q4_k_m")).from_cache
+    options["repeat_penalty"] = 1.15
+    res = env.gw.complete(_req("minicpm5:1b-q4_k_m"))
+    assert not res.from_cache and res.text == "apres"
+    assert env.gw.complete(_req("minicpm5:1b-q4_k_m")).from_cache
+    assert len(env.provider.requests) == 2
