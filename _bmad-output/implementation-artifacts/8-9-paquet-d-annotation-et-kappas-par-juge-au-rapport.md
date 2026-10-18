@@ -52,3 +52,11 @@ Revue unique (Opus) avec la liste du second avis (Haiku).
 | 6 | low | second avis | Des YAML d'un export précédent restent dans `--vers` et sont chargés par `wl calibrer`. | Corrigé avec le n° 1 : refus sans `--ecraser` ; avec `--ecraser`, les YAML d'autres annotateurs sont signalés sur stderr. |
 | 7 | low | second avis | `calibration.json` lu sans contrôle de `run_id`. | Corrigé en partie : la section nomme l'Exécution source quand elle diffère (cas normal de `judges.excluded_from`, calibration d'une Exécution antérieure) ; pas de refus, ce serait le cas nominal. |
 | 8 | low | revue | Vérifié : clés du `calibration.json` réel (`runner/calibrer.py`) identiques à celles que lit la section ; tirage, part double et codes de sortie conformes aux AC. | Sans correctif. |
+
+## Paquet réel
+
+- Run source : `20261018-115941-a2a512` (story 8.8, `mini-cpu`, 19 Questions du split dev × 4 Configurations, 76 Réponses `ok`, statut `completed_with_errors` après la reprise : 7 Critères sans verdict de panel, sans effet sur le tirage).
+- Fichier : `corpora/minicorpus/annotations/anael.yaml` (annotateur `anael`, 304 Ko).
+- Contenu : 40 Réponses (92 lignes Réponse × Critère), 0 doublement annotée, verdicts vides. Sortie de la commande : « Paquet de 40 Réponse(s) dont 0 doublement annotée(s), 1 fichier(s) dans corpora\minicorpus\annotations ». Avertissement : 1 Question (q-044) a un Ancrage de référence non résolu sur le Corpus de la phase `base` (document créé par le Scénario).
+- Commande (reconstituée depuis la sortie, `--nombre 40` étant le seul réglage qui donne 40 Réponses, la valeur par défaut étant 30) : `wl annotations exporter 20261018-115941-a2a512 --vers corpora/minicorpus/annotations --annotateurs anael --nombre 40`, avec `WL_HOME=C:/Users/Utilisateur/Documents/GitHub/wl-runs-v0.2.0`. Graine par défaut (celle de l'Expérience).
+- Reste à Anaël : remplir `verdict` (`yes` ou `no`), puis `wl calibrer` (story 8.10). Pas de second annotateur, donc pas de kappa inter-annotateurs.
