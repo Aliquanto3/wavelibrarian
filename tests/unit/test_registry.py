@@ -142,7 +142,7 @@ def test_discover_recursif_et_idempotent(
     registry.discover()
     assert registry.get("reranker", "decouvert").__name__ == "Decouvert"
     registry.discover()  # sans effet, pas de doublon
-    assert registry.names("reranker") == ["decouvert"]
+    assert registry.names("reranker").count("decouvert") == 1  # le reranker réel `fake` coexiste
 
 
 def test_cli_registre() -> None:
