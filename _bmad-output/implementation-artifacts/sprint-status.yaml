@@ -119,9 +119,9 @@ development_status:
   8-3-statut-completed-with-errors-de-wl-run: done
   8-4-think-par-modèle-au-catalogue: done
   8-5-alignements-de-spec-du-catalogue-et-du-registre-de-dépense: done
-  8-6-énergie-cpu-mesurée-sous-windows: in-progress
+  8-6-énergie-cpu-mesurée-sous-windows: done
   8-7-modèle-cpu-de-sélection-pour-pageindex: done
-  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: backlog
+  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: in-progress
   8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: in-progress  # code intégré (862a16e), paquet réel après 8.8
   8-10-calibration-réelle-des-juges-ollama: backlog
   epic-8-retrospective: optional

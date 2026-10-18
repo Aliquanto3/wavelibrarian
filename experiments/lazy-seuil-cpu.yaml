@@ -1,0 +1,30 @@
+# Story 8.8 (arbitrage P8) : balayage de `relevance_threshold` de LazyGraphRAG sur le split dev,
+# profil `cpu`, mêmes modèles que `mini-cpu.yaml`. Les trois Configurations ne diffèrent que par
+# un paramètre de requête : l'index est construit une fois. La valeur par défaut (0,1) ne change
+# que sur décision d'Anaël.
+# Prérequis : `uv sync --extra local` et `wl installer --profil cpu`.
+experiment_id: lazy-seuil-cpu
+seed: 42
+profile: cpu
+corpus: ../corpora/minicorpus/corpus.yaml
+questions: ../corpora/minicorpus/questions.yaml
+split: dev
+conditions: [standard]
+judges:
+  pool: ["granite4.2:3b", "qwen3.5:4b"]  # Familles distinctes du Generator minicpm (AD-14)
+  panel_size: 2
+budget:
+  per_run: {anthropic: {amount: "0.00", currency: USD}}
+configurations:
+  - id: lazy-seuil-01
+    architecture: lazy_graphrag
+    params: &lazy
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+      decider: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+      relevance_threshold: 0.1
+  - id: lazy-seuil-03
+    architecture: lazy_graphrag
+    params: {<<: *lazy, relevance_threshold: 0.3}
+  - id: lazy-seuil-05
+    architecture: lazy_graphrag
+    params: {<<: *lazy, relevance_threshold: 0.5}

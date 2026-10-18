@@ -14,13 +14,13 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 13:12 |
-| Story en cours | 8.6 (mesure CPU locale) ; 8.9 (revue du code) |
-| Stories livrées | 6 / 9 (8.10 hors run) |
+| Mis à jour | 2026-10-18 13:58 |
+| Story en cours | 8.8 (runs réels mini-cpu split dev puis lazy-seuil-cpu) |
+| Stories livrées | 7 / 9 (8.10 hors run) |
 | Dépense Anthropic | ~0,0103 $ (SM-4 de 8.2) / plafond 5 $ |
 | Ollama | **disponible** (13:24) ; réservé à 8.8 et au paquet 8.9, lancés après la mesure de 8.6 |
 | Attentes envers Anaël | aucune (arbitrages non bloquants 8.2 et 8.3 ouverts) |
-| À arbitrer par Anaël | **8.2 (non bloquant)** : en profil `test`, la part matérielle de la possession locale (secondes CPU réelles des spans `local` : index, BM25) est classée fictive avec l'énergie factice, pour que `cost_eur_real` = 0 exactement (AC 2 littéral) ; une énergie `measured` reste réelle. Alternative : garder la part matérielle dans le réel et relire l'AC 2 comme « 0 hors possession ». Choix du run : le premier (spec 8-2, section « Revue »). **8.7 : tranché par Anaël, option (c)** (granite4.2:3b en select_model, sans repeat_penalty). Rappel : `repeat_penalty: 1.15` global au profil `cpu` remplit l'AC (8/8 ok, 0 sortie tronquée, 56 verdicts, Juges intacts) mais fait passer la qualité de PageIndex de 1,00 à 0,00 sur q-002 (n = 1 ; contre-essai sans pénalité : même nœud, Réponse « 1297 » au lieu de « More than 2000 », le Generator est dégradé). Choix : (b) garder la pénalité globale ; (c) `select_model: granite4.2:3b` sans pénalité (sélection 18-20 s, 5,1 Go) ; (d) étendre le schéma pour réserver `repeat_penalty` au rôle `select_nodes` ou à un modèle. Spec 8-7, section « Revue ». **8.3 (non bloquant)** : voir spec 8-3, section « À arbitrer par Anaël » (`all_failed` et `--tolerer-erreurs`, Configuration seulement `inapplicable`, reprise d'une Exécution d'avant 8.3). |
+| À arbitrer par Anaël | **8.2 (non bloquant)** : en profil `test`, la part matérielle de la possession locale (secondes CPU réelles des spans `local` : index, BM25) est classée fictive avec l'énergie factice, pour que `cost_eur_real` = 0 exactement (AC 2 littéral) ; une énergie `measured` reste réelle. Alternative : garder la part matérielle dans le réel et relire l'AC 2 comme « 0 hors possession ». Choix du run : le premier (spec 8-2, section « Revue »). **8.7 : tranché par Anaël, option (c)** (granite4.2:3b en select_model, sans repeat_penalty). Rappel : `repeat_penalty: 1.15` global au profil `cpu` remplit l'AC (8/8 ok, 0 sortie tronquée, 56 verdicts, Juges intacts) mais fait passer la qualité de PageIndex de 1,00 à 0,00 sur q-002 (n = 1 ; contre-essai sans pénalité : même nœud, Réponse « 1297 » au lieu de « More than 2000 », le Generator est dégradé). Choix : (b) garder la pénalité globale ; (c) `select_model: granite4.2:3b` sans pénalité (sélection 18-20 s, 5,1 Go) ; (d) étendre le schéma pour réserver `repeat_penalty` au rôle `select_nodes` ou à un modèle. Spec 8-7, section « Revue ». **8.3 (non bloquant)** : voir spec 8-3, section « À arbitrer par Anaël » (`all_failed` et `--tolerer-erreurs`, Configuration seulement `inapplicable`, reprise d'une Exécution d'avant 8.3). **8.6 (non bloquant)** : méthode `mixed` (ou colonne à part) quand la part RAM d'une phase `measured` est estimée par formule ? |
 
 ## Stories livrées
 
@@ -32,6 +32,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | 8.5 | — | 12:20 | 6a8f65c | 0 $ | Tests 1.8 (0,90 + 0,90 sous 2,00, soldes vérifiés, mois suivant par horloge injectée ; ancien test à 3,00 supprimé) et 1.4 (3,00 et 0,03 sur le Catalogue livré) ; relevé de prix recopié, aucun écart, Catalogue inchangé. 1181 tests verts. |
 | 8.3 | — | 12:41 | 36efec0 | 0 $ | completed_with_errors (aucune ok, Critère sans verdict, taux d'error > max_error_rate 0,2), causes au manifeste avec taux réel, code 1 ou 0 avec --tolerer-erreurs (all_failed compris, AC 2), budget_exceeded/3 prime, bandeau du Rapport, reprise des error et Critères sans verdict. 1195 tests verts. Points non bloquants soumis (spec 8-3). |
 | 8.7 | — | 13:12 | 76d6be3 | 0 $ | Option (c), décision d'Anaël : select_model granite4.2:3b pour PageIndex, sans repeat_penalty ; options Ollama dans la clé du Cache. Réel : mini-cpu completed, 8/8 ok, 56 verdicts, 0 sortie tronquée, 560 s. |
+| 8.6 | — | 13:58 | fa334b9 | 0 $ | windows_emi suit la charge (repos ~44 W, charge ~107 W, 4 processus, deux répétitions, écart ≈ 1 %) → measured ; wl.energy_source partout, nvml prioritaire, contracts.md §6 aligné ; part RAM estimée par formule signalée au Rapport. 1216+ tests verts. Point non bloquant : méthode mixed ? |
 
 ## Reports entre stories
 

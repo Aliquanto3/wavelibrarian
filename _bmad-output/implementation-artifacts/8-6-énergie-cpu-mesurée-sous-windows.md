@@ -1,7 +1,7 @@
 ---
 story: "8.6"
 title: "Énergie CPU mesurée sous Windows"
-status: review
+status: done
 ---
 
 # Story 8.6 : Énergie CPU mesurée sous Windows
