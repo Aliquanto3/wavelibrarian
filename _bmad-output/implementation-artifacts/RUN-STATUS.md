@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 04:14 |
-| Story en cours | 4.9 (voie B) ; 7.3 (voie A) |
-| Stories livrées | 42 / 56 |
+| Mis à jour | 2026-10-18 04:38 |
+| Story en cours | 4.9 (voie B, second avis) ; 7.4 (voie A) |
+| Stories livrées | 43 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -117,6 +117,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Quand Ollama sera libre (story 7.1)** : vérifier qu'une indexation RAPTOR par défaut sur `minicpm5` ne journalise aucune fenêtre pleine.
 - **4.11 (lecteurs du Rapport)** : tolérer une dernière ligne JSONL invalide non terminée (`answers.jsonl`, `traces.jsonl`) et terminer le fichier par `\n` avant tout ajout ; lire les Réponses par `read_answers` (dernière ligne d'une clé fait foi) ; ignorer les spans `wl.resumed: true` pour les appels et la latence ; ne jamais juger un `budget_exceeded` (story 4.8).
 - **Quand Ollama sera libre (story 7.2)** : vérifier qu'un long PDF ne remplit jamais la fenêtre de `minicpm5` avec PageIndex.
+- **Rapport (4.11 / 4.12), LLM Wiki** : appeler `report/wiki.py::section_fidelite` pour afficher le taux de fidélité ; le juge de fidélité par défaut suit `profil.judge_pool` (le Context ne porte pas `judges.pool`) ; `fidelity_model` explicite non contrôlé par `validate` (story 7.3).
 
 ## Journal de surveillance
 
@@ -168,6 +169,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 03:48 | 7 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 6 tronq., 20 s/tronq. (pas de réf.) ; think_off instructions/ifbench 1 tronq., 20 s/tronq. (pas de réf.) ; pire +0 % | 32 % | 17.2 Go | 8 s, 158 Mo, 114 thr (20 proc) | Sous les seuils : on continue (7.2) |
 | 04:11 | 5 tronq. (gemma4:e2b-it-qat) : think_off reasoning/bbeh-mini 2 tronq., 36 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 1 tronq., 23 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-niah 1 tronq., 30 s/tronq. (pas de réf.) ; pire +0 % | 21 % | 17.8 Go | 27 s, 184 Mo, 98 thr (20 proc) | Sous les seuils : on continue (4.9) |
 | 04:14 | 8 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 7 tronq., 36 s/tronq. (pas de réf.) ; think_off instructions/mifeval-fr 1 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 17 % | 16.7 Go | 1 s, 86 Mo, 79 thr (14 proc) | Sous les seuils : on continue (7.3) |
+| 04:38 | 16 tronq. (qwen3.5:4b) : think_on instructions/mifeval-fr 5 tronq., 35 s/tronq. (pas de réf.) ; think_on rag/piaf 4 tronq., 36 s/tronq. (pas de réf.) ; think_on writing/writing-fr 4 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 16 % | 12.8 Go | 1 s, 86 Mo, 77 thr (14 proc) | Sous les seuils : on continue (7.4) |
 
 ## Journal des stories
 
@@ -215,3 +217,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.1 | 03:31 | 03:48 | 8a54f504b778c5cb7d00f9b876b3a14225e58297 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : groupe refusé s'il dépasse la fenêtre du modèle de résumé (et contrôle avant chaque appel), group_max >= 2, pas de résumé d'une feuille unique, regroupement vectorisé, tests de bornes et d'Ancrages à tous niveaux. 805 tests verts. |
 | 4.8 | 03:42 | 04:11 | 653cc3d49cc7a5cef1ec4cfc548c335b26003c9c | 0 $ | Reprise --reprendre, Questions restantes en budget_exceeded, empreinte comparée à plafonds égaux. Revue : réponse conforme mise en cache même si settle est interrompu, empreintes du Corpus, du Scénario et du Catalogue au manifeste (reprise refusée si elles changent), run completed → code 0. |
 | 7.2 | 03:50 | 04:14 | 4274fba212307ddbe4aef0834e2af13cceefe781 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : sections lues bornées par la fenêtre avant generate, sélection découpée en lots (PDF de 150 pages), update d'un Document modifié testé sur le vrai Scénario, Document absent de l'ancien index reconstruit. |
+| 7.3 | 04:16 | 04:38 | 9ec982f85724c389eb25a8545cc3ef669c68418f | 0 $ | Livrée sous réserve de la conformité 4.14 ; affichage du taux reporté au Rapport. Revue : 1 high corrigé (juge de fidélité d'une autre Famille que le modèle de compilation, refus si même Famille), graine et juge dans l'index_key, Ancrages limités au Document source. |
