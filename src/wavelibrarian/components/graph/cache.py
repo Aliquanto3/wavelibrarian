@@ -36,14 +36,23 @@ def extraire_avec_cache(
     cache: dict[str, Any],
 ) -> list[Passage]:
     """Verse les Passages dans le graphe : cache d'abord, appel pour les autres ; met le cache à
-    jour. Renvoie les Passages extraits par un appel."""
+    jour. Un texte répété dans le lot n'est extrait qu'une fois. Renvoie les Passages extraits par
+    un appel."""
     a_extraire: list[Passage] = []
+    repetes: list[Passage] = []
+    en_attente: set[str] = set()
     for p in passages:
-        contenu = cache.get(cle_extraction(p))
-        if contenu is None:
-            a_extraire.append(p)
-        else:
+        cle = cle_extraction(p)
+        contenu = cache.get(cle)
+        if contenu is not None:
             ajouter(graphe, depuis_brut(p.passage_id, contenu))
+        elif cle in en_attente:
+            repetes.append(p)
+        else:
+            en_attente.add(cle)
+            a_extraire.append(p)
     extraites = extracteur.extract_into(graphe, a_extraire)
     cache.update({cle_extraction(p): brut(x) for p, x in zip(a_extraire, extraites, strict=True)})
+    for p in repetes:
+        ajouter(graphe, depuis_brut(p.passage_id, cache[cle_extraction(p)]))
     return a_extraire

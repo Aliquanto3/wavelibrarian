@@ -163,17 +163,20 @@ def test_requete_deux_niveaux_passages_dedoublonnes(
 
 
 def test_niveau_haut_apporte_des_passages_absents_du_niveau_bas(ctx: RunCtx, index: Path) -> None:
-    _, seul_bas = _repondre(ctx, index, k=50, k_entities=1, k_relations=1)
-    arch = _arch(ctx, k=50, k_entities=1, k_relations=1)
+    _, seul_bas = _repondre(ctx, index, k=50, k_entities=1, k_relations=3)
+    arch = _arch(ctx, k=50, k_entities=1, k_relations=3)
     arch.load(index)
     g = arch._graphe.graph()
     with ctx.scope(post="query", question_id="q-001"):
         q = np.asarray(arch.embedder.embed_queries([_question().text]), dtype=np.float32)[0]
     ((n, _),) = arch._vec_entites.search(q, 1)
-    ((r, _),) = arch._vec_relations.search(q, 1)
-    a, b, _ = arch._relations[r]
-    haut = set(g.edges[a, b]["passage_ids"])
+    haut = {
+        i
+        for r, _ in arch._vec_relations.search(q, 3)
+        for i in g.edges[arch._relations[r][0], arch._relations[r][1]]["passage_ids"]
+    }
     bas = set(g.nodes[n]["passage_ids"])
+    assert haut - bas  # le niveau haut apporte des Passages que le niveau bas ignore
     assert {s.passage.passage_id for s in seul_bas.retrieved} == bas | haut
 
 
@@ -307,7 +310,11 @@ def test_update_ne_reembarque_que_les_textes_changes(
             CorpusChange(removed=(minicorpus.documents[0].doc_id,)), sans, index, tmp_path / "v2"
         )
     total = len(_json(index, "entities.json")) + len(_json(index, "relations.json"))
-    assert sum(appels) < total
+    changes = 0
+    for nom in ("entities.json", "relations.json"):
+        avant, apres = _json(index, nom), _json(tmp_path / "v2", nom)
+        changes += sum(1 for i, h in apres.items() if avant.get(i) != h)
+    assert sum(appels) == changes < total  # exactement les textes changés
     # les index denses ne contiennent plus que ce qui reste dans le graphe
     nv = _arch(ctx)
     nv.load(tmp_path / "v2")
@@ -348,3 +355,67 @@ def test_cache_d_extraction_partage_avec_graphrag() -> None:
 
     assert graphrag.cle_extraction is cache.cle_extraction
     assert graphrag.extraire_avec_cache is cache.extraire_avec_cache
+
+
+def _extraction_par_paire(req: Any) -> str:
+    """Chaque Passage relie Orvane et Ellis avec une description qui lui est propre."""
+    return json.dumps(
+        {
+            "entities": [
+                {"name": "Orvane", "kind": "org", "description": f"guilde vue par {req.step}"},
+                {"name": "Ellis", "kind": "person", "description": "membre"},
+            ],
+            "relations": [
+                {
+                    "source": "Orvane",
+                    "target": "Ellis",
+                    "description": f"lien {req.step}",
+                    "weight": 0.5,
+                }
+            ],
+        }
+    )
+
+
+def test_toutes_les_descriptions_d_une_paire_sont_encodees(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    ctx.provider.script(  # type: ignore[attr-defined]
+        "extract_entities", "graph.extract.*", _extraction_par_paire
+    )
+    arch = _arch(ctx)
+    textes: list[str] = []
+    vrai = arch.embedder.embed_passages
+
+    def espion(lot: Any) -> Any:
+        textes.extend(lot)
+        return vrai(lot)
+
+    arch.embedder.embed_passages = espion
+    with ctx.scope(post="indexing"):
+        arch.index(minicorpus, tmp_path / "i")
+    etapes = {s["wl.step"] for s in _spans(ctx, "graph.extract.")}
+    assert len(etapes) > 1 and len(_json(tmp_path / "i", "relations.json")) == 1
+    (relation,) = [t for t in textes if t.startswith("Orvane - Ellis") or "Ellis - " in t]
+    assert all(f"lien {e}" in relation for e in etapes)
+    (entite,) = [t for t in textes if t.startswith("Orvane :")]
+    assert all(f"guilde vue par {e}" in entite for e in etapes)
+
+
+def test_texte_repete_extrait_une_seule_fois(ctx: RunCtx, tmp_path: Path) -> None:
+    from wavelibrarian.components.graph.cache import extraire_avec_cache
+    from wavelibrarian.components.graph.extraction import EntityExtractor
+    from wavelibrarian.core.types import Passage
+
+    def passage(i: str) -> Passage:
+        return Passage(passage_id=i, doc_id="d", text="Orvane recrute Ellis.", anchor_ids=("a",))
+
+    graphe = ctx.build("graph_store", ComponentSpec(name="networkx"))  # type: ignore[attr-defined]
+    cache: dict[str, Any] = {}
+    with ctx.scope(post="indexing"):
+        extraits = extraire_avec_cache(
+            EntityExtractor(ctx), graphe, [passage("p1"), passage("p2")], cache
+        )
+    assert [p.passage_id for p in extraits] == ["p1"] and len(_spans(ctx)) == 1
+    noeuds = graphe.graph().nodes(data=True)
+    assert noeuds and all({"p1", "p2"} <= set(d["passage_ids"]) for _, d in noeuds)

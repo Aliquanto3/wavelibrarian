@@ -6,7 +6,10 @@ Indexation (Poste `indexing` fixé par le runner) : découpage en Passages, un a
 `extract_entities` par Passage (step `graph.extract.<passage_id>`), fusion dans le GraphStore
 `networkx`, puis deux index denses séparés (`numpy_exact`) : `vectors_entities/` (« nom :
 description » de chaque entité) et `vectors_relations/` (« nom - nom : description » de chaque
-relation). Aucun rapport de communauté, aucune détection de communautés. Dossier d'index :
+relation). Le texte embarqué réunit toutes les descriptions distinctes extraites pour l'entité ou
+la paire d'entités (triées, séparées par « ; »), comme LightRAG concatène les descriptions de ses
+fusions ; pas de résumé LLM d'une description trop longue, que l'embedder tronque. Aucun rapport de
+communauté, aucune détection de communautés. Dossier d'index :
 `passages.jsonl` (feuilles seules), `graph/` (GraphStore), `entities.json` et `relations.json`
 (empreinte du texte embarqué), `extractions.json` (cache d'extraction par texte).
 
@@ -42,7 +45,7 @@ from wavelibrarian.components.context import build_arch_answer
 from wavelibrarian.components.graph.cache import cle_extraction, extraire_avec_cache
 from wavelibrarian.components.graph.extraction import EntityExtractor
 from wavelibrarian.core.errors import WlError
-from wavelibrarian.core.ids import sha16
+from wavelibrarian.core.ids import sha16, slug_entite
 from wavelibrarian.core.types import (
     ArchAnswer,
     ModelRefMeta,
@@ -70,8 +73,34 @@ def _spec(nom: str) -> Any:
     return Field(default_factory=lambda: ComponentSpec(name=nom))
 
 
-def _texte_entite(noeud: dict[str, Any]) -> str:
-    return f"{noeud['name']} : {noeud['description']}"
+_SEP = " ; "
+
+
+def _descriptions(
+    feuilles: list[Passage], extractions: dict[str, Any]
+) -> tuple[dict[str, set[str]], dict[tuple[str, str], set[str]]]:
+    """Descriptions distinctes extraites des Passages actuels, par entité et par paire (a < b).
+
+    Le GraphStore ne garde que la plus longue ; LightRAG les encode toutes."""
+    entites: dict[str, set[str]] = {}
+    relations: dict[tuple[str, str], set[str]] = {}
+    for p in feuilles:
+        x = extractions.get(cle_extraction(p))
+        if x is None:
+            continue
+        for eid, nom, _, d in x["entities"]:
+            cle = slug_entite(str(eid)) or slug_entite(str(nom))
+            if cle and d:
+                entites.setdefault(cle, set()).add(str(d))
+        for src, cib, d, _ in x["relations"]:
+            a, b = slug_entite(str(src)), slug_entite(str(cib))
+            if a and b and a != b and d:
+                relations.setdefault((min(a, b), max(a, b)), set()).add(str(d))
+    return entites, relations
+
+
+def _texte(nom: str, descriptions: set[str] | None, defaut: str) -> str:
+    return f"{nom} : {_SEP.join(sorted(descriptions)) if descriptions else defaut}"
 
 
 def _id_relation(a: str, b: str) -> str:
@@ -231,12 +260,20 @@ class LightRag(ArchitectureBase):
         extractions: dict[str, Any],
     ) -> None:
         g = graphe.graph()
-        entites = self._synchroniser(
-            vecteurs[0], {n: _texte_entite(d) for n, d in g.nodes(data=True)}, empreintes[0]
-        )
-        relations = self._synchroniser(
-            vecteurs[1], {i: t for i, (_, _, t) in _relations(g).items()}, empreintes[1]
-        )
+        desc_e, desc_r = _descriptions(feuilles, extractions)
+        textes_e = {
+            n: _texte(d["name"], desc_e.get(n), d["description"]) for n, d in g.nodes(data=True)
+        }
+        textes_r = {
+            i: _texte(
+                f"{g.nodes[a]['name']} - {g.nodes[b]['name']}",
+                desc_r.get((a, b)),
+                g.edges[a, b]["description"],
+            )
+            for i, (a, b, _) in _relations(g).items()
+        }
+        entites = self._synchroniser(vecteurs[0], textes_e, empreintes[0])
+        relations = self._synchroniser(vecteurs[1], textes_r, empreintes[1])
         ecrire_passages(directory, feuilles)
         vecteurs[0].save(directory / _VEC_ENTITES)
         vecteurs[1].save(directory / _VEC_RELATIONS)
