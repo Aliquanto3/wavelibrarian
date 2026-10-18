@@ -122,7 +122,7 @@ development_status:
   8-6-énergie-cpu-mesurée-sous-windows: backlog
   8-7-modèle-cpu-de-sélection-pour-pageindex: in-progress
   8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: backlog
-  8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: backlog
+  8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: in-progress
   8-10-calibration-réelle-des-juges-ollama: backlog
   epic-8-retrospective: optional
 action_items:
