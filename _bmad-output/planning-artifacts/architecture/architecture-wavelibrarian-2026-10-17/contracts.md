@@ -197,7 +197,7 @@ class FixedTokenChunker:
     def __init__(self, params: Params, ctx: RunContext) -> None: ...
 ```
 
-Les `kind` forment une liste fermée : `parser`, `chunker`, `embedder`, `vector_store`, `lexical_index`, `graph_store`, `retriever`, `reranker`, `context_builder`, `decider`, `generator`, `judge`, `query_rewriter`, `architecture`.
+Les `kind` forment une liste fermée : `parser`, `chunker`, `embedder`, `vector_store`, `lexical_index`, `graph_store`, `retriever`, `reranker`, `context_builder`, `decider`, `generator`, `judge`, `query_rewriter`, `architecture`. L'extracteur d'entités et le rédacteur de rapports de communauté ne sont pas des `kind` : ce sont des classes internes de `components/graph/`, réglées par les `Params` des Architectures en graphe (arbitrage P3, 2026-10-18).
 
 ```python
 class ComponentSpec(BaseModel):            # forme YAML de toute référence à un Composant
@@ -444,6 +444,7 @@ class ModelEntry(BaseModel):               # une entrée de models.yaml (§4.2)
     context_window: int | None = None; max_output_tokens: int | None = None
     tokenizer: Literal["reference", "approx"] = "reference"; token_factor: Decimal = Decimal("1.2")
     prompt_cache: bool = False; accepts_temperature: bool = True; min_cacheable_tokens: int | None = None
+    think: bool | None = False             # Ollama : valeur envoyée ; None = champ non envoyé (v0.2.0, P7)
     pricing: Pricing | None = None; dim: int | None = None; hf_repo: str | None = None
     query_prefix: str = ""; passage_prefix: str = ""
 
@@ -536,6 +537,8 @@ tiers:                                # optionnel (FR-54)
   seed: 42
   sizes: [5, 10, 20]
 ```
+
+`license` est un identifiant SPDX. Une licence est ouverte si elle figure dans une liste blanche d'identifiants exacts (CC0-1.0, CC-BY-4.0, CC-BY-SA-4.0, MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ODbL-1.0, PDDL-1.0, etalab-2.0, LO-2.0…) ; toute autre licence, dont les variantes `-NC` et `-ND` et toute valeur inconnue, est restrictive (v0.2.0, arbitrage P5). Le refus ne vaut que pour un `path` suivi par git.
 
 Les clés de `documents:` sont des `source_path`, relatifs à `path` (ici `docs`) ; la forme préfixée (`docs/charte.md`) est tolérée.
 
@@ -647,6 +650,7 @@ catalog: null                          # null = defaults/models.yaml
 costs: null                            # null = defaults/costs.yaml, puis <WL_HOME>/costs.yaml s'il existe (§4.2 bis)
 models_frozen_at: 2026-10-17           # FR-4 : date affichée au Rapport
 max_questions: null                    # tests réels : 5
+max_error_rate: 0.2                    # au-delà, par Configuration : statut completed_with_errors (v0.2.0, P9)
 budget:
   per_run: {anthropic: {amount: "5.00", currency: USD}}
   period:  {anthropic: {amount: "50.00", currency: USD}, azure: {amount: "50.00", currency: EUR}}   # mois civil UTC
@@ -740,7 +744,7 @@ operations:                            # appliquées dans l'ordre
 | Fichier | Contenu | Écrivain unique |
 | --- | --- | --- |
 | `experiment.resolved.yaml`, `experiment.sha256` | Expérience résolue et son empreinte | runner |
-| `manifest.json` | `status` (`running`, `completed`, `budget_exceeded`, `failed`), profil, `models_frozen_at`, liste des modèles, empreinte du Gel | runner |
+| `manifest.json` | `status` (`running`, `completed`, `completed_with_errors`, `budget_exceeded`, `failed`) ; `completed_with_errors` (v0.2.0, P9) : une Configuration sans Réponse `ok`, un Critère sans verdict de panel, ou un taux d'`error` d'une Configuration au-dessus de `max_error_rate` ; reprenable par `--reprendre`, profil, `models_frozen_at`, liste des modèles, empreinte du Gel | runner |
 | `corpus_profile.json` | Profil de corpus (FR-7) | runner, via `corpus/profile.py` |
 | `answers.jsonl` | un `Answer` par (config_id, condition, tier, phase, question_id) | runner |
 | `panel.jsonl` | verdict agrégé par (answer_id, criterion) : `verdict`, `tie: bool`, juges admissibles | runner, via `scoring/panel.py` |
@@ -773,6 +777,7 @@ Chaque appel produit un span. Son `name` est l'étape, ses `start_time` et `end_
 | `wl.llm_cache_hit` | bool |
 | `wl.latency_s` | float |
 | `wl.energy_kwh`, `wl.energy_method` | float (absent si inconnu) ; `measured` \| `estimated` \| `unknown` |
+| `wl.energy_source` | mode du compteur (`rapl`, `windows_emi`, `nvml`…) ; `windows_emi` compte comme compteur matériel, donc `measured`, après vérification qu'il suit la charge (v0.2.0, P4) |
 | `wl.status` | `ok` \| `error` \| `budget_refused` \| `non_conformant` |
 | `wl.invalid_citations`, `wl.loop` | int (si pertinent) |
 
@@ -808,7 +813,7 @@ Fichiers produits :
 
 ## 8. Commandes `wl` — `cli.py` (typer)
 
-Les noms des sous-commandes suivent le PRD (§5). Chaque commande a son aide `--help` en français. Les codes de sortie sont : 0 succès, 1 erreur, 2 configuration invalide, 3 plafond atteint, 4 préflight échoué (Ollama injoignable, modèle ou clé absents).
+Les noms des sous-commandes suivent le PRD (§5). Chaque commande a son aide `--help` en français. Les codes de sortie sont : 0 succès, 1 erreur (dont une Exécution `completed_with_errors`, sauf `--tolerer-erreurs`), 2 configuration invalide, 3 plafond atteint, 4 préflight échoué (Ollama injoignable, modèle ou clé absents).
 
 | Commande | Effet | FR |
 | --- | --- | --- |
@@ -818,7 +823,7 @@ Les noms des sous-commandes suivent le PRD (§5). Chaque commande a son aide `--
 | `wl questions controler <questions.yaml> --corpus <corpus.yaml> [--scenario <scenario.yaml>]` | Comptes par statut et par type, écart à `target_count`, ancrages introuvables (code 2) ; `--scenario` résout les Questions `scenario_target` dans le Corpus après mise à jour | FR-9, FR-11 |
 | `wl questions closed-book <questions.yaml> [--modeles …]` | Remplit `contaminated_by` | FR-12 |
 | `wl questions geler <questions.yaml> [--dev-ratio 0.4] [--graine 42]` | Attribue `split`, écrit `freeze` | FR-13 |
-| `wl run <experience.yaml> [--reprendre <run_id>]` | Validation, préflight, Exécution, puis Rapport (`cli.py` enchaîne runner et `report/`, AD-1) | FR-1, FR-33 |
+| `wl run <experience.yaml> [--reprendre <run_id>] [--tolerer-erreurs]` | Validation, préflight, Exécution, puis Rapport (`cli.py` enchaîne runner et `report/`, AD-1) | FR-1, FR-33 |
 | `wl rapport <run_id> [--exporter-front <front> --vers <fichier>]` | Régénère le Rapport ; exporte un front | FR-40, FR-41 |
 | `wl calibrer <experience.yaml> --annotations <dossier> --run <run_id>` | Écrit `calibration.json` | FR-38 |
 | `wl registre [--kind …]` | Liste les Composants et les Architectures, leurs Params et leur description | FR-2 |

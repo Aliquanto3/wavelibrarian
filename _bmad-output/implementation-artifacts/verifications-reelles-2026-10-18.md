@@ -66,7 +66,7 @@ Commande : `WL_HOME=<scratchpad>/home1 uv run wl run experiments/mini-cpu.yaml`.
 
 ### Recommandations (provisoires)
 
-- Seuil lazy_graphrag : aucune donnée ; garder 0,4 par défaut jusqu'à mesure (plage à tester 0,3 à 0,5).
+- Seuil lazy_graphrag : aucune donnée. Correction (rétro du 2026-10-18, P8) : la valeur livrée par défaut est 0,1 (`lazy_graphrag.py:131`), pas 0,4 ; elle est gardée jusqu'à la mesure sur le split dev complet (plage à tester 0,1 à 0,5).
 - Generator CPU : `minicpm5:1b` échoue au schéma dans un tiers des appels et sur tous ceux de PageIndex ; prévoir un Generator de 3-4 B (`granite4.2:3b`, 5,1 Go à 32 768) ou des relances, après avoir vérifié le `format` Ollama.
 
 ## Troisième série (correctif des sorties structurées)

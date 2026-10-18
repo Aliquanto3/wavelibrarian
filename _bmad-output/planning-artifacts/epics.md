@@ -219,6 +219,11 @@ Anaël ajoute au comparatif les Architectures qui construisent une structure à 
 **FR couvertes :** FR-23, FR-24, FR-25, FR-26, FR-27.
 **Notes :** AD-7 (Citations des nœuds de résumé), AD-18 (protocole JSON). Une story par Architecture ; si le run s'arrête, chaque Architecture livrée passe la conformité.
 
+### Epic 8 : Résultats réels fiables (lot v0.2.0)
+Anaël obtient d'un run réel un statut, des coûts et une calibration auxquels il peut se fier, et les 4 Configurations CPU tournent sans erreur sur tout le split dev. Source : rétrospective des epics 1 à 7 (`implementation-artifacts/epics-1-7-retro-2026-10-18.md`, items A à H, arbitrages P1 à P9).
+**FR couvertes :** FR-5 (licences), FR-29 (coût réel), FR-1 et FR-40 (statut et Rapport), FR-30 et FR-33 (alignements de spec), FR-32 (énergie Windows), FR-24 (PageIndex CPU), FR-38 et SM-5 (calibration réelle).
+**Notes :** ordre imposé F, B, A, G, H, E, D, run du split dev, C. Les stories 8.8 et 8.10 sont des stories réelles (Ollama, CPU) ; 8.10 attend les annotations d'Anaël. Toute story qui écrit un test `real_*` l'exécute au moins une fois avant `done`, ou le marque en attente dans le sprint status (action 4 de la rétro).
+
 ## Epic 1 : Un banc configurable, mesuré et testable sans réseau
 
 Anaël valide une Expérience YAML avant tout appel et liste ce que le banc sait faire. Tout appel de modèle passe par une passerelle unique qui applique le Plafond de dépense et le Cache de réponses, et qui trace coût, tokens et énergie. Un agent de développement ajoute un Composant et le teste avec le Faux LLM et le faux embedder, sans réseau ni clé.
@@ -344,7 +349,8 @@ So that chaque modèle, chaque prix et chaque option CPU ou GPU soient déclaré
 
 **Given** `Usage(input_tokens=1_000_000, output_tokens=1_000_000)` pour `claude-haiku-5-5`
 **When** on appelle `catalog.cost`
-**Then** le résultat est `Decimal("0.60")`, en USD
+**Then** le résultat est `Decimal("3.00")`, en USD : l'entrée dépasse 100 000 tokens, le palier ×5 s'applique (arbitrage P1, rétro du 2026-10-18)
+**And** `Usage(input_tokens=50_000, output_tokens=50_000)` coûte `Decimal("0.03")`, au prix de base
 **And** pour un prompt dont l'entrée plus les lectures et écritures de cache dépassent 100 000 tokens, le multiplicateur 5 s'applique à tous les postes de la requête, y compris le cache
 **And** les tarifs `cache_read` et `cache_write` sont appliqués aux tokens correspondants
 
@@ -478,9 +484,9 @@ So that aucun appel ne dépasse mon plafond et qu'aucun appel identique ne soit 
 **Then** la seconde réservation est refusée par `BudgetExceeded` (0,40 + 0,70 > 1,00), et le solde affiché vaut 0,60
 **And** chaque écriture se fait en transaction `BEGIN IMMEDIATE`
 
-**Given** deux Exécutions successives de 1,50 USD réglés chacune dans le même mois civil UTC
-**When** une troisième réserve 0,10
-**Then** elle est refusée au titre du plafond de période ; au 1er du mois suivant (horloge injectée), elle est acceptée
+**Given** deux Exécutions successives de 0,90 USD réglés chacune dans le même mois civil UTC (1,80 USD ; arbitrage P2, rétro du 2026-10-18)
+**When** une troisième réserve 0,10, puis une quatrième réserve 0,30
+**Then** la réservation de 0,10 est acceptée (1,90 ≤ 2,00) et celle de 0,30 est refusée au titre du plafond de période (2,20 > 2,00) ; au 1er du mois suivant (horloge injectée), elle est acceptée
 
 **Given** une réservation non réglée laissée par un arrêt brutal
 **When** le registre est rouvert
@@ -1899,7 +1905,7 @@ So that chaque variante assemble les mêmes briques au lieu de réimplémenter l
 **Then** les entités et les relations qui n'ont plus de Passage sont retirées, et `save` puis `load` redonnent le même graphe
 **And** deux mentions d'une entité dont les noms ne diffèrent que par la casse ou les accents sont fusionnées, par `slug`
 
-**Given** l'extracteur d'entités LLM (rôle `extract_entities`), enregistré comme Composant réutilisable, et le Faux LLM
+**Given** l'extracteur d'entités LLM (rôle `extract_entities`), classe réutilisable de `components/graph/` partagée par les Architectures en graphe (pas un `kind` du registre : arbitrage P3, rétro du 2026-10-18), et le Faux LLM
 **When** on extrait trois Passages du Mini-corpus
 **Then** chaque entité et chaque relation est rattachée aux `passage_id` d'où elle vient, et une sortie non conforme est réessayée une fois puis lève `NonConformantOutput` (AD-4)
 
@@ -1992,3 +1998,258 @@ So that je mesure le compromis qualité, coût de mise à jour qu'elle revendiqu
 **Given** la fin de l'epic
 **When** on lance `tests/e2e/test_sm3.py`
 **Then** `mini-test.yaml` couvre les 15 Architectures du registre et le Rapport compare les Baselines et les 12 Architectures du niveau 1
+
+## Epic 8 : Résultats réels fiables (lot v0.2.0)
+
+Anaël obtient d'un run réel un statut, des coûts et une calibration auxquels il peut se fier, et les 4 Configurations CPU de `experiments/mini-cpu.yaml` tournent sans erreur sur tout le split dev. L'epic reprend les items A à H de la rétrospective des epics 1 à 7 (`implementation-artifacts/epics-1-7-retro-2026-10-18.md`) et les arbitrages P1 à P9 déjà reportés dans les stories 1.4, 1.8 et 7.5 et dans `contracts.md`.
+
+Règles communes aux stories de l'epic 8 :
+- L'ordre est imposé : 8.1 (F), 8.2 (B), 8.3 (A), 8.4 (G), 8.5 (H), 8.6 (E), 8.7 (D), 8.8 (run du split dev), puis 8.9 et 8.10 (C).
+- Toute story qui écrit un test `real_*` l'exécute au moins une fois avant `done`, ou le marque explicitement en attente dans le sprint status.
+- Chaque exemple chiffré d'un AC est recalculé contre la règle qu'il illustre lors de `create-story`.
+
+### Story 8.1 : Licences SPDX par liste blanche exacte
+
+As a Anaël,
+I want qu'une licence ne soit ouverte que si son identifiant SPDX figure exactement dans une liste blanche,
+So that un corpus `CC-BY-NC` ou `CC-BY-ND` ne puisse pas entrer dans le dépôt public.
+
+**Exigences :** FR-5, NFR-4 ; AD-19 ; `contracts.md` §4.1 (arbitrage P5). Correctif : `corpus/declare.py:119` compare par préfixe, et `cc-by` laisse passer `cc-by-nc-*`.
+
+**Acceptance Criteria:**
+
+**Given** `LICENCES_OUVERTES` remplacée par une liste d'identifiants SPDX exacts (CC0-1.0, CC-BY-4.0, CC-BY-SA-4.0, MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ODbL-1.0, PDDL-1.0, etalab-2.0, LO-2.0), comparés sans casse et sans espaces de bord
+**When** on déclare un Corpus dont le `path` est suivi par git
+**Then** `CC-BY-NC-4.0`, `CC-BY-ND-4.0`, `CC-BY-NC-SA-4.0` et une licence inconnue (`maison`) sont refusées comme restrictives, avec un message en français qui nomme la licence
+**And** `CC-BY-4.0`, `cc-by-4.0` et `MIT` sont acceptées
+
+**Given** un Corpus sous `CC-BY-NC-4.0` dont le `path` est hors du dépôt ou ignoré par git
+**When** on le déclare puis on l'ingère
+**Then** il reste utilisable, comme aujourd'hui pour `publishable: false`
+
+**Given** deux Documents au contenu identique
+**When** on ingère le Corpus
+**Then** le message de refus nomme les deux fichiers
+
+**Given** le Mini-corpus et les corpus livrés
+**When** on lance la suite complète
+**Then** leurs licences passent la nouvelle liste sans modification de leurs fichiers, ou la story corrige la déclaration et le signale
+
+### Story 8.2 : Coûts factices hors du coût réel
+
+As a Anaël,
+I want que `cost_eur_real` ne compte que les appels d'un fournisseur réel,
+So that le coût affiché d'un run réel égale ce que j'ai dépensé, même quand des Juges factices tournent à côté.
+
+**Exigences :** FR-29, FR-31, SM-4 ; AD-8, AD-9 ; `contracts.md` §6, §7. Limite L2 : `report/couts.py:186` additionne `wl.cost` de tous les spans.
+
+**Acceptance Criteria:**
+
+**Given** des spans dont `gen_ai.provider.name` vaut `fake` et d'autres `anthropic` ou `ollama`
+**When** le Rapport calcule les coûts
+**Then** `cost_eur_real` ne somme que les spans dont le fournisseur n'est pas `fake`
+**And** les coûts des spans `fake` vont dans une colonne séparée `cost_eur_fake`, affichée comme fictive, pour que les fronts de Pareto restent lisibles en Faux LLM
+
+**Given** une Exécution entièrement en Faux LLM (profil `test`)
+**When** on génère le Rapport
+**Then** `cost_eur_real` vaut 0, `cost_eur_fake` porte les coûts fictifs, et les fronts de Pareto en Faux LLM se calculent sur `cost_eur_fake` avec une mention explicite
+
+**Given** `experiments/mini-real-haiku.yaml` et le test SM-4 (`real_api`)
+**When** on le lance
+**Then** `cost_eur_real` égale la dépense du Registre Anthropic de l'Exécution, convertie en euros, et SM-4 reste vert (coût tracé égal au coût recalculé par le Catalogue)
+
+### Story 8.3 : Statut `completed_with_errors` de `wl run`
+
+As a Anaël,
+I want qu'une Exécution qui a échoué en partie le dise par son statut, son code de sortie et le Rapport,
+So that je ne prenne pas pour un résultat un run où une Architecture n'a rien répondu ou où le panel n'a rien jugé.
+
+**Exigences :** FR-1, FR-40 ; AD-11 ; `contracts.md` §5 (`manifest.json`, `max_error_rate`), §8 (codes de sortie, `--tolerer-erreurs`) (arbitrage P9). Limite L1 : `runner/execute.py:75` ne connaît que `completed` et `budget_exceeded`.
+
+**Acceptance Criteria:**
+
+**Given** `RunStatus` (`runner/execute.py`) et `Status` (`runner/rundir.py`) étendus à `completed_with_errors`, et `max_error_rate: 0.2` par défaut dans l'Expérience
+**When** une Exécution se termine
+**Then** son statut est `completed_with_errors` si au moins une Configuration n'a aucune Réponse `ok`, si un Critère reste sans verdict de panel, ou si le taux d'`error` d'une Configuration dépasse `max_error_rate` ; sinon `completed`
+**And** `manifest.json` liste les causes par Configuration (Configuration, cause, compte)
+
+**Given** une Exécution `completed_with_errors`
+**When** `wl run` se termine
+**Then** il sort en code 1, avec un résumé des causes en français ; avec `--tolerer-erreurs`, il sort en code 0 et affiche le même résumé
+**And** un plafond atteint garde `budget_exceeded` et le code 3, qui priment
+
+**Given** le Rapport d'une Exécution `completed_with_errors`
+**When** on le génère (`report/generer.py`, `_bandeau`)
+**Then** `report.md` commence par un avertissement qui nomme les Configurations et les causes
+
+**Given** une Exécution `completed_with_errors`
+**When** on lance `wl run --reprendre <run_id>`
+**Then** la reprise rejoue les Questions en `error` et les Critères sans verdict ; `resume.deja_terminee` ne la considère pas comme terminée
+
+**Given** un scénario Faux LLM qui reproduit le run mini-cpu d'avant correctif (PageIndex 0 `ok` sur 2, panel vide) et un scénario sain
+**When** on les exécute
+**Then** le premier sort en `completed_with_errors` et code 1, le second en `completed` et code 0
+**And** `max_error_rate` hors de [0, 1] est refusé à la validation (code 2)
+
+### Story 8.4 : `think` par modèle au Catalogue
+
+As a Anaël,
+I want régler par modèle l'envoi du champ `think` à Ollama,
+So that un modèle qui ne connaît pas ce champ, ou qui doit réfléchir, ne reçoive pas `think: false` d'office.
+
+**Exigences :** FR-30 ; AD-3, AD-4 ; `contracts.md` §4.2 (`ModelEntry.think`, arbitrage P7). Aujourd'hui `llm/providers/ollama.py:154` envoie `"think": False` à tous les modèles.
+
+**Acceptance Criteria:**
+
+**Given** `ModelEntry.think: bool | None = False` au Catalogue
+**When** le provider Ollama construit sa requête
+**Then** il envoie `think: false` pour `False`, `think: true` pour `True`, et n'envoie pas le champ pour `None`
+**And** des tests unitaires couvrent les trois valeurs, sans réseau
+
+**Given** `think` change pour un modèle
+**When** on calcule la clé du Cache de réponses
+**Then** la clé tient compte de la valeur effective, comme pour `accepts_temperature` (story 4.15)
+
+**Given** `defaults/models.yaml` sans changement de valeur (défaut `False`)
+**When** on relance `experiments/mini-cpu.yaml` en réel, ou `pytest -m real_local`
+**Then** les résultats sont inchangés (même nombre de Réponses `ok` et de verdicts que la série de vérification du 2026-10-18)
+
+### Story 8.5 : Alignements de spec du Catalogue et du Registre de dépense
+
+As a Anaël,
+I want que les tests des stories 1.4 et 1.8 suivent leurs AC réécrits et que le palier tarifaire soit vérifié contre la page de prix,
+So that la spec, les tests et le Catalogue disent la même chose.
+
+**Exigences :** FR-30, FR-33 ; AD-9 ; stories 1.4 et 1.8 (arbitrages P1 et P2).
+
+**Acceptance Criteria:**
+
+**Given** l'AC réécrit de la story 1.8 (deux Exécutions de 0,90 USD, plafond de période 2,00 USD)
+**When** on lit `tests/unit/llm/test_ledger_cache.py` (aujourd'hui un plafond de 3,00 USD, ligne 72)
+**Then** le test réserve 0,90 puis 0,90, accepte 0,10 (1,90 ≤ 2,00), refuse 0,30 (2,20 > 2,00), et accepte 0,30 au 1er du mois suivant (horloge injectée)
+
+**Given** l'AC réécrit de la story 1.4
+**When** on lit `tests/unit/config/test_catalog.py`
+**Then** il vérifie 1 M + 1 M → `Decimal("3.00")` et 50 000 + 50 000 → `Decimal("0.03")` pour `claude-haiku-5-5`
+
+**Given** le palier `tiers: [{above_prompt_tokens: 100000, multiplier: "5"}]` de `defaults/models.yaml`
+**When** on le compare à la page de prix officielle d'Anthropic
+**Then** le résultat est consigné dans le journal de la story avec la date de relevé et l'URL ; un écart est signalé à Anaël avant toute modification du Catalogue
+
+### Story 8.6 : Énergie CPU mesurée sous Windows
+
+As a Anaël,
+I want que le compteur `windows_emi` compte comme mesure matérielle s'il suit vraiment la charge,
+So that l'énergie de mes runs CPU sous Windows soit marquée `measured` à juste titre, et sa source visible.
+
+**Exigences :** FR-32 ; AD-17 ; `contracts.md` §6 (`wl.energy_source`, arbitrage P4). Aujourd'hui `measure/energy.py:23` ne connaît pas `windows_emi`.
+
+**Acceptance Criteria:**
+
+**Given** un poste Windows et codecarbon
+**When** on mesure le compteur au repos puis sous une charge CPU calibrée (même durée)
+**Then** l'écart est consigné dans le journal de la story (valeurs, durée, version de codecarbon)
+
+**Given** le compteur suit la charge
+**When** on ajoute `windows_emi` à `_MODES_MATERIELS`
+**Then** la méthode vaut `measured` sous Windows, et les spans et le Rapport portent `wl.energy_source=windows_emi`
+
+**Given** le compteur ne bouge pas avec la charge
+**When** on conclut la story
+**Then** la méthode reste `estimated`, `wl.energy_source` est tout de même écrit, et le constat est consigné
+
+**Given** les autres modes (`intel_rapl`, `nvml`…) et le mode inconnu
+**When** on lance les tests unitaires de `measure/energy.py`
+**Then** chaque mode donne sa méthode et sa source, sans réseau ni compteur réel (mode injecté)
+
+### Story 8.7 : Modèle CPU de sélection pour PageIndex
+
+As a Anaël,
+I want que PageIndex réponde sur toutes les Questions du run mini-cpu,
+So that ses scores CPU ne soient plus faussés par des sorties tronquées.
+
+**Exigences :** FR-24 ; AD-4 (rôle `select_nodes`), AD-14 ; `experiments/mini-cpu.yaml`, profil `cpu`. Limite L4 : `minicpm5:1b` atteint `select_max_tokens = 256` à chaque essai sur q-004.
+
+**Acceptance Criteria:**
+
+**Given** q-004 et au moins trois autres Questions du split dev
+**When** on essaie, dans cet ordre, (a) `select_max_tokens: 512`, (b) `repeat_penalty` dans `ollama.options`, (c) un `select_model` de 3 à 4 B (`granite4.2:3b` ou `qwen3.5:4b`)
+**Then** chaque option est consignée (Réponses `ok`, sorties arrêtées à `select_max_tokens`, latence, RAM) et l'on retient la moins coûteuse qui passe
+
+**Given** l'option retenue
+**When** on la reporte dans `experiments/mini-cpu.yaml` et dans le profil `cpu`
+**Then** PageIndex répond sur toutes les Questions du run mini-cpu et aucune sortie ne s'arrête à `select_max_tokens`
+
+**Given** un `select_model` de la Famille d'un Juge du réservoir
+**When** on valide l'Expérience
+**Then** le Panel de la Configuration PageIndex reste celui d'avant : `config/resolve.py` ne marque pas `select_model` comme `answer_producer` (AD-14 ne vise que le Generator), et un test le vérifie
+
+### Story 8.8 : Run mini-cpu sur tout le split dev et seuil de LazyGraphRAG
+
+As a Anaël,
+I want un run réel des 4 Configurations CPU sur tout le split dev, et une mesure du seuil de pertinence de LazyGraphRAG,
+So that j'aie la base du paquet d'annotation et une valeur mesurée pour `relevance_threshold`.
+
+**Exigences :** FR-1, FR-26 ; SM-3 ; arbitrage P8 ; `experiments/mini-cpu.yaml` (aujourd'hui `max_questions: 2`). Story réelle : Ollama, profil `cpu`.
+
+**Acceptance Criteria:**
+
+**Given** `experiments/mini-cpu.yaml` sans `max_questions` (19 Questions du split dev) et les stories 8.1 à 8.7 livrées
+**When** on lance `wl run`
+**Then** l'Exécution se termine en `completed`, avec des Réponses `ok` pour les 4 Configurations et un verdict de panel pour chaque Critère jugé
+**And** si elle se termine en `completed_with_errors`, les causes sont analysées et corrigées, ou consignées et soumises à Anaël avant `done`
+
+**Given** une Expérience dédiée à LazyGraphRAG sur le split dev, avec `relevance_threshold` dans {0,1 ; 0,3 ; 0,5}
+**When** on l'exécute
+**Then** les scores, le nombre de Passages retenus et la latence par seuil sont consignés dans une série de vérifications réelles datée ; la valeur par défaut de `lazy_graphrag.py` n'est changée que si la mesure le justifie, sur décision d'Anaël
+**And** si la durée sur CPU devient déraisonnable, l'essai est arrêté et la limite consignée, sans bloquer la story
+
+**Given** l'Exécution du split dev
+**When** on la conclut
+**Then** son `run_id`, sa durée, la RAM observée et la dépense sont consignés, et le `run_id` est noté comme source de la story 8.9
+
+### Story 8.9 : Paquet d'annotation et kappas par Juge au Rapport
+
+As a Anaël,
+I want exporter d'une Exécution un paquet d'annotation prêt à remplir, et voir au Rapport les kappas et l'instabilité de chaque Juge,
+So that je puisse annoter sans recopier les Réponses à la main et lire la fiabilité du panel dans le Rapport.
+
+**Exigences :** FR-38, FR-40, SM-5 ; AD-14 ; `contracts.md` §4.6 (format des annotations), §8. Item C, parties (1) et (4) ; report « kappas et instabilités par Juge au Rapport » (`RUN-STATUS.md:135`).
+
+**Acceptance Criteria:**
+
+**Given** une Exécution terminée
+**When** on lance la commande d'export (nom et options en français, ajoutés à `contracts.md` §8 par la story)
+**Then** elle écrit un fichier par annotateur au format de `contracts.md` §4.6, prérempli avec, pour chaque Réponse retenue, la Question, la Réponse, les Ancrages cités et les Critères à annoter, verdicts vides
+**And** le nombre de Réponses, la graine et la part doublement annotée sont réglables ; le tirage est stable à graine égale
+
+**Given** un paquet rempli puis rechargé
+**When** on le charge (story 5.1)
+**Then** il passe la validation sans retouche de structure
+
+**Given** un `calibration.json`
+**When** on génère le Rapport
+**Then** une section affiche, par Juge et par Critère, le kappa juge-humain, le taux d'instabilité, le nombre d'items et l'exclusion éventuelle, ainsi que le kappa inter-annotateurs
+
+### Story 8.10 : Calibration réelle des Juges Ollama
+
+As a Anaël,
+I want calibrer le panel réel sur mes annotations,
+So that SM-5 soit mesuré sur des données réelles et que les Juges trop peu fiables soient écartés.
+
+**Exigences :** FR-38, FR-34 (`pass_id`), SM-5 ; AD-14. Limite L3. Story réelle, bloquée tant qu'Anaël n'a pas annoté le paquet de la story 8.9.
+
+**Acceptance Criteria:**
+
+**Given** le paquet de la story 8.9, tiré de l'Exécution de la story 8.8, annoté par Anaël (au moins 30 Réponses ; une double annotation partielle si un second annotateur est disponible)
+**When** on lance `wl calibrer` réel sur les Juges Ollama du profil `cpu`
+**Then** `calibration.json` est produit sur ces annotations, avec un kappa par Juge et par Critère
+
+**Given** les passes 1 à 4
+**When** on lit les spans de calibration
+**Then** chacune va au fournisseur (`wl.llm_cache_hit=false`)
+
+**Given** `kappa_threshold: 0.6`
+**When** on conclut la story
+**Then** l'exclusion d'un Juge sous le seuil est constatée, ou son absence est justifiée par les valeurs ; le kappa inter-annotateurs n'est rapporté que s'il y a une double annotation, sinon son absence est signalée
+**And** le résultat (kappas, instabilités, exclusions, taille de l'échantillon) est consigné dans une série de vérifications réelles datée

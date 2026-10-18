@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-18-2026 09:20
+last_updated: 10-18-2026 10:30
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ development_status:
   1-10-rôles-llm-faux-llm-et-faux-embedder: done
   1-11-providers-anthropic-et-ollama: done
   1-12-préflight-wl-installer-et-embedder-sentence-transformers: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: done
   2-1-déclaration-d-un-corpus: done
@@ -58,7 +58,7 @@ development_status:
   2-5-mini-corpus-fictif: done
   2-6-application-d-un-scénario-de-mise-à-jour-à-un-corpus: done
   2-7-paliers-de-volume-et-commande-wl-corpus-paliers: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: done
   3-1-format-des-questions-et-commande-wl-questions-controler: done
@@ -68,7 +68,7 @@ development_status:
   3-5-filtre-closed-book-et-commande-wl-questions-closed-book: done
   3-6-gel-et-séparation-développement-test: done
   3-7-jeu-d-évaluation-de-référence-du-mini-corpus: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   epic-4: done
   4-1-découpage-contexte-étiqueté-et-generator-llm: done
@@ -86,12 +86,12 @@ development_status:
   4-13-rapport-fraîcheur-paliers-fronts-de-pareto-et-export-du-fron: done
   4-14-suite-de-conformité-expériences-livrées-et-test-de-bout-en-b: done
   4-15-test-réel-sm-4-sur-claude-haiku-5-5: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: done
   5-1-annotations-humaines-et-kappa-de-cohen: done
   5-2-commande-wl-calibrer-et-exclusion-des-juges: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-6: done
   6-1-rag-naïf: done
@@ -99,7 +99,7 @@ development_status:
   6-3-hyde: done
   6-4-corrective-rag: done
   6-5-cag: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
 
   epic-7: done
   7-1-raptor: done
@@ -110,4 +110,66 @@ development_status:
   7-6-graphrag-recherche-locale-et-globale: done
   7-7-lazygraphrag: done
   7-8-lightrag: done
-  epic-7-retrospective: optional
+  epic-7-retrospective: done
+
+  # Lot v0.2.0 (rétro epics 1-7, items F, B, A, G, H, E, D, run du split dev, C) : ordre imposé
+  epic-8: backlog
+  8-1-licences-spdx-par-liste-blanche-exacte: backlog
+  8-2-coûts-factices-hors-du-coût-réel: backlog
+  8-3-statut-completed-with-errors-de-wl-run: backlog
+  8-4-think-par-modèle-au-catalogue: backlog
+  8-5-alignements-de-spec-du-catalogue-et-du-registre-de-dépense: backlog
+  8-6-énergie-cpu-mesurée-sous-windows: backlog
+  8-7-modèle-cpu-de-sélection-pour-pageindex: backlog
+  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: backlog
+  8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: backlog
+  8-10-calibration-réelle-des-juges-ollama: backlog
+  epic-8-retrospective: optional
+action_items:
+  - id: "epic-7-retro-item-1-trancher-les-points-p1-à-p9-et-reporter"
+    epic: 7
+    action: "Trancher les points P1 à P9 et reporter les décisions dans epics.md et
+      contracts.md"
+    owner: "Anaël"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
+  - id: "epic-7-retro-item-2-auditer-les-72-reports-de-run-status-md"
+    epic: 7
+    action: "Auditer les 72 reports de RUN-STATUS.md (soldé / ouvert) avant de figer
+      v0.2.0"
+    owner: "orchestrateur"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
+  - id: "epic-7-retro-item-3-créer-les-stories-v0-2-0-a-à-d-statut-wl"
+    epic: 7
+    action: "Créer les stories v0.2.0 A à D (statut wl run, coûts factices, PageIndex
+      CPU, calibration réelle)"
+    owner: "Anaël + PM"
+    status: done
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
+  - id: "epic-7-retro-item-4-toute-story-qui-écrit-un-test-real_-l-ex"
+    epic: 7
+    action: "Toute story qui écrit un test real_* l exécute au moins une fois avant
+      done, ou le marque en attente"
+    owner: "orchestrateur"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
+  - id: "epic-7-retro-item-5-un-test-réel-par-rôle-à-sortie-structuré"
+    epic: 7
+    action: "Un test réel par rôle à sortie structurée sur le plus petit modèle local
+      du profil"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
+  - id: "epic-7-retro-item-6-recalculer-chaque-exemple-chiffré-d-ac-c"
+    epic: 7
+    action: "Recalculer chaque exemple chiffré d AC contre sa règle lors de create-story"
+    owner: "PM"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
+  - id: "epic-7-retro-item-7-documenter-vider-le-cache-de-réponses-ap"
+    epic: 7
+    action: "Documenter : vider le Cache de réponses après mise à jour d un provider"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epics-1-7-retro-2026-10-18.md"
