@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 06:11 |
-| Story en cours | 4.12 (voie B) ; 7.7 en dev (voie A) |
-| Stories livrées | 49 / 56 |
+| Mis à jour | 2026-10-18 06:30 |
+| Story en cours | 7.8 (voie A) ; 4.12 en revue (voie B) |
+| Stories livrées | 50 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -125,6 +125,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Story 4.14 (de 7.6)** : Configuration graphrag en deux entrées (search local et global) et conformité ; test real_* vérifiant qu'un vrai modèle respecte le marqueur AUCUN_POINT_UTILE.
 - **Stories 7.7 et 7.8 (de 7.6)** : graph.json porte un journal des apports rejoué par remove_passages (coût linéaire en mentions) ; le cache extractions.json (reprise par texte quand un Document modifié change de doc_id) est propre à graphrag, à reprendre en 7.8.
 - **H13 (de 7.6)** : min_community_size=1 (un appel community_report par entité isolée) et troncature max_map_batches sans compteur au Rapport.
+- **Story 4.14 (de 7.7)** : Configuration lazy_graphrag et conformité ; calibrer relevance_threshold en réel (0.3 à 0.5 ?) et vérifier en real_* la notation par lots.
+- **Story 7.8 (de 7.7)** : pour un poids d'arête cumulé, ajouter un paramètre au GraphStore plutôt que recompter hors du store comme lazy_graphrag.
 
 ## Journal de surveillance
 
@@ -235,3 +237,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.5 | 05:05 | 05:34 | 95a07c2f76f13b300a7ffa4a23ddbfb69a262cca | 0 $ | GraphStore networkx, extraction, Louvain à graine dérivée, rapports de communauté. Revue : fusion des entités indépendante de l'ordre (type extrait > générique, nom le plus mentionné), slug_entite (’ et œ/æ), réserve du schéma, couper() dans core/fenetre.py, test PYTHONHASHSEED. 945 tests verts. |
 | 7.6 | 05:36 | 06:04 | 0d3bf3f98e3f73eb84a4c01252f038a0894d3230 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : un Document modifié change de doc_id, donc extraction reprise par texte (extractions.json) ; graphe recalculé sans les Passages retirés (journal rejoué, partagé avec 7.5) ; rapports repris avec les Ancrages actuels ; map ne cite que les rapports lus, marqueur AUCUN_POINT_UTILE filtré. 978 tests verts. |
 | 4.11 | 05:22 | 06:11 | f8153c84ac1ff85741fe11a4936c9698032e0fdc | 0 $ | Revue : empreinte du Corpus relu comparée au manifeste (recherche non mesurée et alerte si écart), lire_jsonl décode ligne par ligne (troncature multioctet ignorée), échec du Rapport sans perte du code 3, Ancrages non résolus comptés au Rapport. 1002 tests verts. |
+| 7.7 | 06:10 | 06:30 | 5f7a26824beb1ad7c4513fe352fb00938376ac9c | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : notation par le Decider (step paramétrable, défaut crag inchangé), relevance_threshold 0.1 strict, mots outils écartés des concepts, preuve sans appel LLM à l'indexation et à update par un provider qui lève. 1023 tests verts. |

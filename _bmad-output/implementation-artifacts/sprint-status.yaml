@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-18-2026 06:11
+last_updated: 10-18-2026 06:30
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -108,6 +108,6 @@ development_status:
   7-4-recherche-agentique: done
   7-5-graphe-de-connaissances-graphstore-extraction-communautés-et: done
   7-6-graphrag-recherche-locale-et-globale: done
-  7-7-lazygraphrag: backlog
+  7-7-lazygraphrag: done
   7-8-lightrag: backlog
   epic-7-retrospective: optional
