@@ -1,7 +1,7 @@
 ---
 story: "8.1"
 title: "Licences SPDX par liste blanche exacte"
-status: review
+status: done
 ---
 
 # Story 8.1 : Licences SPDX par liste blanche exacte

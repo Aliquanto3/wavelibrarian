@@ -14,9 +14,9 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 |
-| Story en cours | voie A : 8.1 ; voie B : 8.4 |
-| Stories livrées | 0 / 9 (8.10 hors run) |
+| Mis à jour | 2026-10-18 10:45 |
+| Story en cours | voie A : 8.2 ; voie B : 8.4 |
+| Stories livrées | 1 / 9 (8.10 hors run) |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Ollama | **disponible** (feu vert d'Anaël, 2026-10-18) ; profil `cpu`, `num_gpu: 0`, `CUDA_VISIBLE_DEVICES=-1` ; un seul serveur |
 | Attentes envers Anaël | aucune |
@@ -26,6 +26,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 
 | Story | Début | Fin | Commit d'intégration | Dépense | Notes |
 | --- | --- | --- | --- | --- | --- |
+| 8.1 | — | 10:45 | d9d285c | 0 $ | Liste blanche SPDX exacte, message nommant la licence ; Mini-corpus CC-BY-4.0 inchangé. Revue : AC 2 couvert (licence restrictive hors dépôt ou ignorée : declare puis ingest), refus d'une licence ignorée mais suivie. 1172 tests verts. |
 
 ## Reports entre stories
 
