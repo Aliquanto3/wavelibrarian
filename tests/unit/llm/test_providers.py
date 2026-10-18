@@ -493,6 +493,36 @@ def _ollama(transport: Transport, profil: str = "cpu") -> OllamaProvider:
     return OllamaProvider(load_profile(profil).ollama, http_client=transport.client(httpx))
 
 
+def _ollama_contenu(contenu: str) -> Resp:
+    return Resp(200, json={"message": {"role": "assistant", "content": contenu},
+                           "prompt_eval_count": 40, "eval_count": 20})  # fmt: skip
+
+
+def test_ollama_schema_des_juges_sans_ref_ni_defs_et_think_desactive() -> None:
+    """Le schéma imbriqué du Juge part en ligne (pas de `$ref`) et `think` est coupé."""
+    from wavelibrarian.components.judges.llm import _schema
+
+    schema = _schema(["correctness", "faithfulness"]).model_json_schema()
+    assert "$defs" in schema  # le défaut d'origine : Pydantic factorise les modèles imbriqués
+    t = Transport(_ollama_contenu("{}"))
+    _ollama(t).complete(_req(MINICPM), timeout_s=5, output_schema=schema)
+    corps = t.body()
+    envoye = json.dumps(corps["format"])
+    assert "$ref" not in envoye and "$defs" not in envoye
+    verdict = corps["format"]["properties"]["verdicts"]["properties"]["correctness"]
+    assert verdict["properties"]["verdict"]["enum"] == ["yes", "no"]
+    assert corps["think"] is False
+
+
+def test_ollama_retire_les_blocs_think_et_la_cloture_markdown() -> None:
+    brut = '<think>\nje réfléchis {"x": 1}\n</think>\n```json\n{"reponse": "Paris"}\n```'
+    rep = _ollama(Transport(_ollama_contenu(brut))).complete(_req(MINICPM), timeout_s=5)
+    assert Sortie.model_validate_json(rep.text).reponse == "Paris"
+    seul = _ollama(Transport(_ollama_contenu('pensée</think>{"reponse": "Lyon"}')))
+    texte = seul.complete(_req(MINICPM), timeout_s=5).text
+    assert Sortie.model_validate_json(texte).reponse == "Lyon"
+
+
 def test_ollama_corps_du_profil_cpu_avec_schema() -> None:
     t = Transport(Resp(200, json=REPONSE_OLLAMA))
     schema = Sortie.model_json_schema()

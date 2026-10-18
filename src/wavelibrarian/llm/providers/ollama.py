@@ -12,6 +12,7 @@ avertissement : le prompt a probablement été tronqué.
 """
 
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -24,6 +25,44 @@ from wavelibrarian.llm.providers.base import ProviderResponse
 from wavelibrarian.ports.gateway import LLMRequest
 
 _log = logging.getLogger(__name__)
+
+
+_THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
+_FENCE = re.compile(r"^```[a-zA-Z]*\s*(.*?)\s*```$", re.DOTALL)
+
+
+def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """Schéma JSON sans `$defs`/`$ref` : chaque référence est remplacée par sa définition.
+
+    La grammaire d'Ollama (`format`) ne résout pas les `$ref` : un schéma imbriqué (Pydantic en
+    génère dès qu'un modèle en contient un autre) contraignait mal ou pas la sortie.
+    """
+    defs: dict[str, Any] = schema.get("$defs", {})
+
+    def resoudre(noeud: Any, pile: tuple[str, ...]) -> Any:
+        if isinstance(noeud, list):
+            return [resoudre(x, pile) for x in noeud]
+        if not isinstance(noeud, dict):
+            return noeud
+        ref = noeud.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            nom = ref.removeprefix("#/$defs/")
+            if nom in defs and nom not in pile:  # une définition récursive reste en l'état
+                reste = {k: v for k, v in noeud.items() if k != "$ref"}
+                return {**resoudre(defs[nom], (*pile, nom)), **resoudre(reste, pile)}
+        return {k: resoudre(v, pile) for k, v in noeud.items() if k != "$defs"}
+
+    resolu: dict[str, Any] = resoudre(schema, ())
+    return resolu
+
+
+def clean_content(texte: str) -> str:
+    """Retire les blocs `<think>…</think>` et une clôture markdown autour du JSON."""
+    texte = _THINK.sub("", texte).strip()
+    if "</think>" in texte:  # ouverture perdue : on garde ce qui suit la fermeture
+        texte = texte.rsplit("</think>", 1)[1].strip()
+    m = _FENCE.match(texte)
+    return m.group(1) if m else texte
 
 
 class OllamaProvider:
@@ -64,9 +103,12 @@ class OllamaProvider:
             "stream": False,
             "keep_alive": self._settings.keep_alive,
             "options": options,
+            # Un modèle à raisonnement (qwen3.5) dépenserait `num_predict` en réflexion, hors de
+            # `message.content` : la sortie structurée arriverait vide ou tronquée.
+            "think": False,
         }
         if output_schema is not None:
-            corps["format"] = output_schema
+            corps["format"] = inline_refs(output_schema)
         return corps
 
     def complete(
@@ -97,7 +139,7 @@ class OllamaProvider:
             )
         try:
             donnees = reponse.json()
-            texte = str(donnees["message"]["content"])
+            texte = clean_content(str(donnees["message"]["content"]))
             usage = Usage(
                 input_tokens=int(donnees.get("prompt_eval_count") or 0),
                 output_tokens=int(donnees.get("eval_count") or 0),
