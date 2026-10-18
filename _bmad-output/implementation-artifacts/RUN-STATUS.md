@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 05:34 |
-| Story en cours | 4.11 (voie B) ; 7.6 (voie A) |
-| Stories livrées | 47 / 56 |
+| Mis à jour | 2026-10-18 06:03 |
+| Story en cours | 7.7 (voie A) ; 4.11 en revue (voie B) |
+| Stories livrées | 48 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -122,6 +122,9 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Story 4.15 / vraie Exécution** : vérifier que le plafond couvre les appels des Juges (2 par Réponse ok) (story 4.9).
 - **4.11 (Rapport, statistiques)** : appeler `graine_derivee(seed_experience, config_id, condition, tier, phase, critère ou paire)` pour chaque IC et comparaison ; traiter `None` de `compare()` (pas de « Qualité égale » ni de point mort) ; signaler l'absence de correction de multiplicité à côté de `pairs.csv` ; écrire `pairs.csv` et `pareto.csv` (story 4.10).
 - **7.6 (GraphRAG)** : brancher `louvain_seed(ctx.seed)` et le GraphStore `networkx` ; utiliser `components/graph/` (extraction, communautés, rapports) ; vérifier le majorant de 400 tokens contre `count_tokens` Anthropic en 4.15 (story 7.5).
+- **Story 4.14 (de 7.6)** : Configuration graphrag en deux entrées (search local et global) et conformité ; test real_* vérifiant qu'un vrai modèle respecte le marqueur AUCUN_POINT_UTILE.
+- **Stories 7.7 et 7.8 (de 7.6)** : graph.json porte un journal des apports rejoué par remove_passages (coût linéaire en mentions) ; le cache extractions.json (reprise par texte quand un Document modifié change de doc_id) est propre à graphrag, à reprendre en 7.8.
+- **H13 (de 7.6)** : min_community_size=1 (un appel community_report par entité isolée) et troncature max_map_batches sans compteur au Rapport.
 
 ## Journal de surveillance
 
@@ -230,3 +233,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.4 | 04:39 | 05:00 | 57ac1280e6b483ca8d5d6d91682986e3f89fa0e2 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : coût des tentatives non conformes rendu par LLMResult.retry_cost_uncached et compté dans la borne, answer imposé au dernier pas, schéma compté dans la réserve, ConfigError si les résultats ne tiennent pas, agentic.json malformé → WlError. |
 | 4.10 | 05:02 | 05:21 | aae51740d069cb4b8e20e27464140c4ea875e7ab | 0 $ | Revue : IC apparié testé contre scipy.stats.bootstrap et p-valeur contre une valeur théorique, graine_derivee conforme à AD-20, compare() sans Question commune → None, NaN refusés. 922 tests verts. |
 | 7.5 | 05:05 | 05:34 | 95a07c2f76f13b300a7ffa4a23ddbfb69a262cca | 0 $ | GraphStore networkx, extraction, Louvain à graine dérivée, rapports de communauté. Revue : fusion des entités indépendante de l'ordre (type extrait > générique, nom le plus mentionné), slug_entite (’ et œ/æ), réserve du schéma, couper() dans core/fenetre.py, test PYTHONHASHSEED. 945 tests verts. |
+| 7.6 | 05:36 | 06:04 | 0d3bf3f7 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : un Document modifié change de doc_id, donc extraction reprise par texte (extractions.json) ; graphe recalculé sans les Passages retirés (journal rejoué, partagé avec 7.5) ; rapports repris avec les Ancrages actuels ; map ne cite que les rapports lus, marqueur AUCUN_POINT_UTILE filtré. 978 tests verts. |
