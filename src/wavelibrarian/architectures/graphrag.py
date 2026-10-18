@@ -49,8 +49,9 @@ from wavelibrarian.architectures._fenetre import borner_passages
 from wavelibrarian.architectures._passages import ecrire_passages, lire_passages
 from wavelibrarian.components.context import build_arch_answer
 from wavelibrarian.components.graph._texte import borner
+from wavelibrarian.components.graph.cache import brut, cle_extraction, extraire_avec_cache
 from wavelibrarian.components.graph.communities import detect_communities, louvain_seed
-from wavelibrarian.components.graph.extraction import EntityExtractor, Extraction, ajouter
+from wavelibrarian.components.graph.extraction import EntityExtractor
 from wavelibrarian.components.graph.reports import CommunityReporter, community_context
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import sha16
@@ -87,22 +88,6 @@ _SYSTEM_MAP = (
 def _refus(points: str) -> bool:
     """Sortie de map sans point utile : vide ou marqueur de refus."""
     return not points or points.strip(" .").upper().startswith(_REFUS_MAP)
-
-
-def _cle_extraction(p: Passage) -> str:
-    return sha16("extraction", p.text)
-
-
-def _brut(x: Extraction) -> dict[str, Any]:
-    return {"entities": [list(e) for e in x.entities], "relations": [list(r) for r in x.relations]}
-
-
-def _depuis_brut(passage_id: str, brut: dict[str, Any]) -> Extraction:
-    return Extraction(
-        passage_id,
-        tuple((str(a), str(b), str(c), str(d)) for a, b, c, d in brut["entities"]),
-        tuple((str(a), str(b), str(c), float(w)) for a, b, c, w in brut["relations"]),
-    )
 
 
 def _reprendre(ancien: Passage, sources: list[Passage]) -> Passage | None:
@@ -228,7 +213,7 @@ class GraphRag(ArchitectureBase):
         extraites = EntityExtractor(
             self.ctx, self._extract_model, self.p.extract_max_tokens
         ).extract_into(graphe, feuilles)
-        cache = {_cle_extraction(p): _brut(x) for p, x in zip(feuilles, extraites, strict=True)}
+        cache = {cle_extraction(p): brut(x) for p, x in zip(feuilles, extraites, strict=True)}
         self._finaliser(directory, feuilles, graphe, self._nouveau_vecteurs(), {}, {}, {}, cache)
 
     def update(
@@ -249,18 +234,11 @@ class GraphRag(ArchitectureBase):
         graphe = self._nouveau_graphe()
         graphe.load(old_directory / _GRAPHE)
         graphe.remove_passages([p.passage_id for p in anciens if p.doc_id in retires])
-        a_extraire = []
-        for p in nouveaux:
-            brut = cache.get(_cle_extraction(p))
-            if brut is None:
-                a_extraire.append(p)
-            else:  # même texte : même extraction, rattachée au nouvel id
-                ajouter(graphe, _depuis_brut(p.passage_id, brut))
-        extraites = EntityExtractor(
-            self.ctx, self._extract_model, self.p.extract_max_tokens
-        ).extract_into(graphe, a_extraire)
-        cache.update(
-            {_cle_extraction(p): _brut(x) for p, x in zip(a_extraire, extraites, strict=True)}
+        extraire_avec_cache(
+            EntityExtractor(self.ctx, self._extract_model, self.p.extract_max_tokens),
+            graphe,
+            nouveaux,
+            cache,
         )
         vecteurs = self._nouveau_vecteurs()
         vecteurs.load(old_directory / _VECTEURS)
@@ -347,7 +325,7 @@ class GraphRag(ArchitectureBase):
         graphe.save(directory / _GRAPHE)
         _ecrire_json(directory / _COMMUNAUTES, {"communities": fiches})
         _ecrire_json(directory / _ENTITES, nouvelles)
-        cles = {_cle_extraction(p) for p in feuilles}
+        cles = {cle_extraction(p) for p in feuilles}
         _ecrire_json(directory / _EXTRACTIONS, {k: v for k, v in extractions.items() if k in cles})
 
     # -- chargement -----------------------------------------------------------------------------
