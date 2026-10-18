@@ -1,7 +1,7 @@
 ---
 story: "8.5"
 title: "Alignements de spec du Catalogue et du Registre de dépense"
-status: review
+status: done
 ---
 
 # Story 8.5 : Alignements de spec du Catalogue et du Registre de dépense
