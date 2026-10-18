@@ -15,8 +15,15 @@ des nœuds choisis forment la liste suivante ; sinon la navigation s'arrête. Un
 lu : abstention sans appel `generate`. `max_nodes_read` est vérifié avant chaque appel de
 sélection et avant chaque lecture. Réponse en `retrieval_method: provided`, aucun embedding.
 
-Fenêtre : le texte envoyé au résumé est tronqué (avertissement) pour tenir dans celle du modèle ;
-une liste de sélection qui n'y tient pas lève `ConfigError` plutôt que d'être tronquée.
+Fenêtre : le texte envoyé au résumé est tronqué (avertissement) pour tenir dans celle du modèle.
+Une liste de sélection qui n'y tient pas est découpée en lots consécutifs, un appel (et un span)
+par lot, la borne vérifiée avant chacun ; un `done` vrai arrête la navigation après lecture, sans
+présenter les lots suivants. Les sections lues qui ne tiennent pas dans la fenêtre du générateur
+sont écartées en partant de la dernière lue (avertissement), et une section seule trop longue est
+tronquée (avertissement). Une fenêtre qui ne laisse aucune place lève `ConfigError`.
+
+Navigation : un nœud choisi est lu même si `done` est faux (ses enfants sont alors proposés à
+l'étape suivante) ; la descente ne revient jamais à un niveau déjà parcouru.
 """
 
 import json
@@ -47,6 +54,9 @@ from wavelibrarian.registry import register
 
 _log = logging.getLogger(__name__)
 
+# Réserve pour le system du générateur et l'habillage du message (« Contexte : », « Question : »).
+_MARGE_GENERATE = 256
+
 _FICHIER = "tree.json"
 _SYSTEM_RESUME = (
     "Résume en une ou deux phrases, dans la langue du texte, la section suivante d'un document. "
@@ -70,6 +80,14 @@ class _Noeud:
     parent: str | None
     children: list[str] = field(default_factory=list)
     summary: str = ""
+
+
+def _couper(texte: str, tokenizer: Any, limite: int) -> str:
+    """Raccourcit `texte` (par pas de 20 %) jusqu'à tenir dans `limite` tokens."""
+    coupe = texte
+    while coupe and tokenizer.count(coupe) > limite:
+        coupe = coupe[: int(len(coupe) * 0.8)]
+    return coupe
 
 
 def _id_noeud(anchor_id: str) -> str:
@@ -157,10 +175,14 @@ class PageIndex(ArchitectureBase):
             return texte
         tokenizer = self.ctx.tokenizer_for(self._summary_model)  # type: ignore[attr-defined]
         reserve = self.params.summary_max_tokens + tokenizer.count(_SYSTEM_RESUME)  # type: ignore[attr-defined]
-        limite = max(fenetre - reserve, 1)
-        coupe = texte
-        while len(coupe) > 1 and tokenizer.count(coupe) > limite:
-            coupe = coupe[: int(len(coupe) * 0.8)]
+        limite = fenetre - reserve
+        if limite < 1:
+            raise ConfigError(
+                "summary_max_tokens",
+                f"`pageindex` : la sortie réservée et le system ({reserve} tokens) ne laissent "
+                f"aucune place dans la fenêtre de {fenetre} tokens de `{self._summary_model}`",
+            )
+        coupe = _couper(texte, tokenizer, limite)
         if coupe != texte:
             _log.warning(
                 "pageindex : section tronquée avant résumé (fenêtre de %d tokens)", fenetre
@@ -226,9 +248,20 @@ class PageIndex(ArchitectureBase):
         nouveaux = {d.doc_id for d in change.added} | {d.doc_id for _, d in change.modified}
         par_doc: dict[str, list[_Noeud]] = {}
         for n in self._lire(old_directory):
-            if n.doc_id not in retires:
+            if n.doc_id not in retires and n.doc_id not in nouveaux:
                 par_doc.setdefault(n.doc_id, []).append(n)
-        a_faire = tuple(d for d in corpus_after.documents if d.doc_id in nouveaux)
+        # Un Document dit inchangé mais absent de l'ancien index est reconstruit, pas perdu.
+        absents = {
+            d.doc_id
+            for d in corpus_after.documents
+            if d.doc_id not in nouveaux and d.doc_id not in par_doc and d.anchors
+        }
+        if absents:
+            _log.warning(
+                "pageindex : %d Document(s) inchangé(s) hors de l'ancien index, reconstruit(s)",
+                len(absents),
+            )
+        a_faire = tuple(d for d in corpus_after.documents if d.doc_id in nouveaux | absents)
         for n in self._arbres(a_faire):
             par_doc.setdefault(n.doc_id, []).append(n)
         ordonnes = [n for d in corpus_after.documents for n in par_doc.get(d.doc_id, [])]
@@ -242,12 +275,43 @@ class PageIndex(ArchitectureBase):
 
     # -- navigation -----------------------------------------------------------------------------
 
+    @staticmethod
+    def _items(noeuds: list[_Noeud]) -> list[dict[str, str]]:
+        return [{"id": n.node_id, "title": n.title, "summary": n.summary} for n in noeuds]
+
+    @staticmethod
+    def _contenu(question: QuestionInput, liste: list[dict[str, str]], restant: int) -> str:
+        corps = json.dumps(liste, ensure_ascii=False)
+        return f"Question : {question.text}\nmax : {restant}\nNoeuds : {corps}"
+
+    def _lots(self, question: QuestionInput, proposes: list[_Noeud]) -> list[list[_Noeud]]:
+        """Découpe la liste du niveau en lots consécutifs qui tiennent dans la fenêtre."""
+        fenetre = self._fenetre(self._select_model)
+        if fenetre is None:
+            return [proposes]
+        tokenizer = self.ctx.tokenizer_for(self._select_model)  # type: ignore[attr-defined]
+        p: Any = self.params
+        entete = _SYSTEM_SELECTION + "\n" + self._contenu(question, [], p.max_nodes_read)
+        fixe = tokenizer.count(entete) + p.select_max_tokens
+        lots: list[list[_Noeud]] = []
+        lot: list[_Noeud] = []
+        taille = fixe
+        for noeud, item in zip(proposes, self._items(proposes), strict=True):
+            cout = tokenizer.count(json.dumps(item, ensure_ascii=False)) + 2  # virgule, arrondi
+            if lot and taille + cout > fenetre:
+                lots.append(lot)
+                lot, taille = [], fixe
+            lot.append(noeud)
+            taille += cout
+        if lot:
+            lots.append(lot)
+        return lots
+
     def _selectionner(
         self, question: QuestionInput, proposes: list[_Noeud], restant: int, etape: int
     ) -> SelectNodesOutput:
-        liste = [{"id": n.node_id, "title": n.title, "summary": n.summary} for n in proposes]
-        corps = json.dumps(liste, ensure_ascii=False)
-        contenu = f"Question : {question.text}\nmax : {restant}\nNoeuds : {corps}"
+        liste = self._items(proposes)
+        contenu = self._contenu(question, liste, restant)
         fenetre = self._fenetre(self._select_model)
         p: Any = self.params
         if fenetre is not None:
@@ -287,39 +351,98 @@ class PageIndex(ArchitectureBase):
         lus: list[Passage] = []
         vus: set[str] = set()
         etape = 0
-        while proposes and len(lus) < borne:  # borne vérifiée avant chaque appel
-            etape += 1
-            sortie = self._selectionner(question, proposes, borne - len(lus), etape)
-            offerts = {n.node_id for n in proposes}
-            valides: list[_Noeud] = []
-            inconnus = 0
-            for node_id in dict.fromkeys(sortie.node_ids):
-                if node_id in offerts:
-                    valides.append(self._noeuds[node_id])
-                else:
-                    inconnus += 1
-            if inconnus:
-                _log.warning(
-                    "pageindex : %d identifiant(s) de noeud inconnu(s) ignoré(s) à l'étape %d",
-                    inconnus,
-                    etape,
-                )
-            for noeud in valides:
-                if len(lus) >= borne:  # borne vérifiée avant chaque lecture
+        while proposes and len(lus) < borne:
+            suivants: list[_Noeud] = []
+            choisis = False
+            arret = False
+            for lot in self._lots(question, proposes):
+                if len(lus) >= borne:  # borne vérifiée avant chaque appel
                     break
-                if noeud.node_id in vus or not noeud.text.strip():
-                    continue
-                vus.add(noeud.node_id)
-                lus.append(self._passage(noeud))
-            if sortie.done or not valides:
+                etape += 1
+                sortie = self._selectionner(question, lot, borne - len(lus), etape)
+                offerts = {n.node_id for n in lot}
+                valides: list[_Noeud] = []
+                inconnus = 0
+                for node_id in dict.fromkeys(sortie.node_ids):
+                    if node_id in offerts:
+                        valides.append(self._noeuds[node_id])
+                    else:
+                        inconnus += 1
+                if inconnus:
+                    _log.warning(
+                        "pageindex : %d identifiant(s) de noeud inconnu(s) ignoré(s) à l'étape %d",
+                        inconnus,
+                        etape,
+                    )
+                for noeud in valides:
+                    if len(lus) >= borne:  # borne vérifiée avant chaque lecture
+                        break
+                    if noeud.node_id in vus or not noeud.text.strip():
+                        continue
+                    vus.add(noeud.node_id)
+                    lus.append(self._passage(noeud))
+                choisis = choisis or bool(valides)
+                suivants.extend(self._noeuds[c] for n in valides for c in n.children)
+                if sortie.done:
+                    arret = True
+                    break
+            if arret or not choisis:
                 break
-            proposes = [self._noeuds[c] for n in valides for c in n.children]
+            proposes = suivants
         return lus
+
+    def _borner_contexte(self, question: QuestionInput, lus: list[Passage]) -> list[Passage]:
+        """Garde les sections lues qui tiennent dans la fenêtre du générateur (avertissement)."""
+        modele: str | None = getattr(self.generator, "model_id", None)
+        fenetre = self._fenetre(modele) if modele else None
+        if modele is None or fenetre is None or not lus:
+            return lus
+        tokenizer = self.ctx.tokenizer_for(modele)  # type: ignore[attr-defined]
+        fixe = (
+            int(tokenizer.count(question.text))
+            + sum(int(tokenizer.count(t.text)) for t in question.history)
+            + int(getattr(self.generator, "max_tokens", 0))
+            + _MARGE_GENERATE
+        )
+        if fixe >= fenetre:
+            raise ConfigError(
+                "generator",
+                f"`pageindex` : la question et la sortie réservée ({fixe} tokens) ne laissent "
+                f"aucune place dans la fenêtre de {fenetre} tokens de `{modele}`",
+            )
+
+        def taille(passages: list[Passage]) -> int:
+            return int(tokenizer.count(self.context_builder.build(passages).text)) + fixe
+
+        gardes = list(lus)
+        while len(gardes) > 1 and taille(gardes) > fenetre:
+            gardes.pop()
+        if len(gardes) < len(lus):
+            _log.warning(
+                "pageindex : %d section(s) lue(s) écartée(s), hors de la fenêtre de %d tokens",
+                len(lus) - len(gardes),
+                fenetre,
+            )
+        if taille(gardes) > fenetre:  # une seule section, trop longue : tronquée
+            seul = gardes[0]
+            habillage = taille([seul.model_copy(update={"text": ""})]) - fixe
+            texte = _couper(seul.text, tokenizer, fenetre - fixe - habillage)
+            if not texte:
+                raise ConfigError(
+                    "generator",
+                    f"`pageindex` : aucune section ne tient dans la fenêtre de {fenetre} tokens "
+                    f"de `{modele}`",
+                )
+            _log.warning(
+                "pageindex : section tronquée avant génération (fenêtre de %d tokens)", fenetre
+            )
+            gardes = [seul.model_copy(update={"text": texte})]
+        return gardes
 
     def answer(self, question: QuestionInput) -> ArchAnswer:
         if not self._charge:
             raise RuntimeError("`load` doit précéder `answer`")
-        lus = self._naviguer(question)
+        lus = self._borner_contexte(question, self._naviguer(question))
         contexte = self.context_builder.build(lus)
         tokenizer = self.ctx.tokenizer_for(self.generator.model_id)  # type: ignore[attr-defined]
         if not lus:

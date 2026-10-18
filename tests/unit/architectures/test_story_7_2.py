@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 
 from wavelibrarian import registry
-from wavelibrarian.architectures.pageindex import PageIndex
+from wavelibrarian.architectures.pageindex import _SYSTEM_RESUME, PageIndex
 from wavelibrarian.core.errors import ConfigError
-from wavelibrarian.core.types import ParsedCorpus, QuestionInput
+from wavelibrarian.core.types import Anchor, Block, ParsedCorpus, ParsedDocument, QuestionInput
 from wavelibrarian.llm.providers.fake import FakeProvider
 from wavelibrarian.ports.architecture import CorpusChange
 from wavelibrarian.ports.components import ComponentSpec
@@ -270,11 +270,182 @@ def test_section_tronquee_avant_resume(
     ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     arch = _arch(ctx)
-    arch._fenetre = lambda modele: 200
+    arch._fenetre = lambda modele: 400
+    tok = ctx.tokenizer_for(arch._summary_model)
+    reserve = 128 + tok.count(_SYSTEM_RESUME)
     long = "mot " * 5000
-    assert len(arch._tronquer(long)) < len(long)
+    with caplog.at_level(logging.WARNING, logger="wavelibrarian.architectures.pageindex"):
+        coupe = arch._tronquer(long)
+    assert 0 < tok.count(coupe) <= 400 - reserve < tok.count(long)
+    assert long.startswith(coupe)
+    assert any("tronquée avant résumé" in r.getMessage() for r in caplog.records)
+    caplog.clear()
+    court = "mot " * 10
+    with caplog.at_level(logging.WARNING, logger="wavelibrarian.architectures.pageindex"):
+        assert arch._tronquer(court) == court
+    assert not caplog.records
     arch._fenetre = lambda modele: None
     assert arch._tronquer(long) == long
+    # fenêtre plus petite que la réserve : refus explicite, pas un résumé d'un caractère
+    arch._fenetre = lambda modele: reserve
+    with pytest.raises(ConfigError, match="summary_max_tokens"):
+        arch._tronquer(long)
+
+
+def _pdf(n_pages: int, mots_par_page: int = 20, doc_id: str = "d" * 16) -> ParsedDocument:
+    ancres = {
+        f"{doc_id}#p{i}": Anchor(
+            anchor_id=f"{doc_id}#p{i}", doc_id=doc_id, source_path="long.pdf", page=i
+        )
+        for i in range(1, n_pages + 1)
+    }
+    blocs = tuple(
+        Block(text=f"Page {i} : " + "contenu " * mots_par_page, anchor_id=a, kind="text")
+        for i, a in enumerate(ancres, start=1)
+    )
+    return ParsedDocument(
+        doc_id=doc_id, source_path="long.pdf", format="pdf", lang="fr", blocks=blocs, anchors=ancres
+    )
+
+
+def _taille_requete(ctx: RunCtx, req: Any) -> int:
+    """Tokens de la requête telle qu'envoyée (system, messages, sortie réservée)."""
+    tok = ctx.tokenizer_for(req.model_id)
+    texte = "\n".join([req.system, *(m.content for m in req.messages)])
+    return int(tok.count(texte)) + int(req.max_tokens)
+
+
+def test_selection_paginee_pour_un_pdf_a_beaucoup_de_pages(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    corpus = minicorpus.model_copy(update={"documents": (_pdf(150),)})
+    _indexer(ctx, corpus, tmp_path / "i")
+    racines = [n["node_id"] for n in _arbres(tmp_path / "i").values() if n["parent"] is None]
+    assert len(racines) == 150
+    fenetre = 1500
+    vus: list[list[str]] = []
+    tailles: list[int] = []
+    cible = racines[-1]
+
+    def selection(req: Any) -> str:
+        ids = [n["id"] for n in req.inputs["nodes"]]
+        vus.append(ids)
+        tailles.append(_taille_requete(ctx, req))
+        return json.dumps({"node_ids": [cible] if cible in ids else [], "done": cible in ids})
+
+    ctx.provider.script("select_nodes", "pageindex.select.*", selection)  # type: ignore[attr-defined]
+    arch = _arch(ctx, generator={"name": "llm", "params": {"max_tokens": 64}})
+    arch.load(tmp_path / "i")
+    arch._fenetre = lambda modele: fenetre
+    avant = len(_spans(ctx))
+    with ctx.scope(post="query", question_id="q-001"):
+        rep = arch.answer(_question())
+    assert len(vus) >= 3  # liste découpée en plusieurs lots
+    assert [i for lot in vus for i in lot] == racines  # tous présentés, dans l'ordre, une fois
+    assert max(tailles) <= fenetre
+    etapes = [s["wl.step"] for s in _spans(ctx)[avant:] if s["wl.step"].startswith("pageindex.s")]
+    assert etapes == [f"pageindex.select.{i}" for i in range(1, len(vus) + 1)]
+    assert [s.passage.anchor_ids[0] for s in rep.retrieved] == [
+        corpus.documents[0].doc_id + "#p150"
+    ]
+
+
+def test_contexte_borne_par_la_fenetre_du_generateur(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    corpus = minicorpus.model_copy(update={"documents": (_pdf(8, mots_par_page=200),)})
+    _indexer(ctx, corpus, tmp_path / "i")
+    racines = [n["node_id"] for n in _arbres(tmp_path / "i").values()]
+    ctx.provider.script(  # type: ignore[attr-defined]
+        "select_nodes", "pageindex.select.*", json.dumps({"node_ids": racines, "done": True})
+    )
+    envoyes: list[int] = []
+
+    def generation(req: Any) -> str:
+        envoyes.append(_taille_requete(ctx, req))
+        return json.dumps({"answer": "x", "citations": ["S1"], "abstain": False})
+
+    ctx.provider.script("generate", "generate", generation)  # type: ignore[attr-defined]
+    arch: Any = None
+    for fenetre, unique in ((1500, False), (500, True)):
+        envoyes.clear()
+        caplog.clear()
+        arch = _arch(ctx, generator={"name": "llm", "params": {"max_tokens": 64}})
+        arch.load(tmp_path / "i")
+        arch._fenetre = lambda modele, f=fenetre: f
+        with (
+            caplog.at_level(logging.WARNING, logger="wavelibrarian.architectures.pageindex"),
+            ctx.scope(post="query", question_id="q-001"),
+        ):
+            rep = arch.answer(_question())
+        assert envoyes and envoyes[0] <= fenetre  # la requête envoyée tient dans la fenêtre
+        lus = [s.passage.anchor_ids[0] for s in rep.retrieved]
+        ordre = list(corpus.documents[0].anchors)
+        if not unique:  # sections écartées depuis la dernière lue
+            assert 1 < len(lus) < 8 and lus == ordre[: len(lus)]
+            assert any("écartée" in r.getMessage() for r in caplog.records)
+        else:  # une seule section, tronquée
+            assert lus == ordre[:1]
+            texte = rep.retrieved[0].passage.text
+            assert texte and corpus.documents[0].blocks[0].text.startswith(texte)
+            assert len(texte) < len(corpus.documents[0].blocks[0].text)
+            assert any("tronquée avant génération" in r.getMessage() for r in caplog.records)
+    arch._fenetre = lambda modele: 64 + 200
+    # fenêtre sans place pour le contexte : refus explicite avant tout appel `generate`
+    with pytest.raises(ConfigError, match="generator"):
+        arch._borner_contexte(_question(), [arch._passage(next(iter(arch._noeuds.values())))])
+
+
+def test_update_scenario_reel_document_modifie(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    from wavelibrarian.corpus.scenario import appliquer_fichier
+
+    scenario = Path(__file__).resolve().parents[3] / "corpora/minicorpus/scenario/scenario.yaml"
+    change, apres = appliquer_fichier(minicorpus, scenario, parser="markdown")
+    assert change.modified and all(ancien != doc.doc_id for ancien, doc in change.modified)
+    _indexer(ctx, minicorpus, tmp_path / "v1")
+    v1 = _arbres(tmp_path / "v1")
+    n_v1 = len(_spans(ctx, "summarize"))
+    with ctx.scope(post="update"):
+        _arch(ctx).update(change, apres, tmp_path / "v1", tmp_path / "v2")
+    entrants = [*change.added, *(doc for _, doc in change.modified)]
+    attendus = sum(
+        1
+        for d in entrants
+        for a in d.anchors
+        if any(b.anchor_id == a and b.text.strip() for b in d.blocks)
+    )
+    nouveaux = _spans(ctx, "summarize")[n_v1:]
+    assert len(nouveaux) == attendus and {s["wl.post"] for s in nouveaux} == {"update"}
+    v2 = _arbres(tmp_path / "v2")
+    sortants = set(change.removed) | {ancien for ancien, _ in change.modified}
+    assert not sortants & {n["doc_id"] for n in v2.values()}
+    assert [n["anchor_id"] for n in v2.values()] == [a for d in apres.documents for a in d.anchors]
+    # les nœuds des Documents inchangés sont repris tels quels (résumés compris)
+    inchanges = {d.doc_id for d in apres.documents} - {d.doc_id for d in entrants}
+    assert inchanges
+    for i, n in v2.items():
+        if n["doc_id"] in inchanges:
+            assert v1[i] == n
+    neuve = _arch(ctx)
+    neuve.load(tmp_path / "v2")
+    with ctx.scope(post="query", question_id="q-001"):
+        neuve.answer(_question())
+
+
+def test_update_reconstruit_un_document_absent_de_l_ancien_index(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    docs = minicorpus.documents
+    _indexer(ctx, minicorpus.model_copy(update={"documents": docs[1:]}), tmp_path / "v1")
+    with (
+        caplog.at_level(logging.WARNING, logger="wavelibrarian.architectures.pageindex"),
+        ctx.scope(post="update"),
+    ):
+        _arch(ctx).update(CorpusChange(), minicorpus, tmp_path / "v1", tmp_path / "v2")
+    assert docs[0].doc_id in {n["doc_id"] for n in _arbres(tmp_path / "v2").values()}
+    assert any("ancien index, reconstruit" in r.getMessage() for r in caplog.records)
 
 
 def test_update_incremental_ne_resume_que_les_documents_changes(
