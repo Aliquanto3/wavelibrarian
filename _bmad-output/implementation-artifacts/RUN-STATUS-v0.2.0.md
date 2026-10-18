@@ -55,3 +55,4 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 - 2026-10-18 13:24 : « Ollama de nouveau disponible ». 8.8 démarre après la mesure de 8.6 et l'intégration de 8.6 et 8.9.
 - 2026-10-18 13:44 : code de 8.9 intégré (862a16e, 1216 tests verts) ; reste le paquet réel depuis le run_id de 8.8.
 - 2026-10-18 13:59 : 8.8 lancée : WL_HOME neuf C:/Users/Utilisateur/Documents/GitHub/wl-runs-v0.2.0 (hors dépôt), mini-cpu (19 Questions) puis lazy-seuil-cpu ; RAM libre et ollama ps relevés chaque minute dans ram.log. Sorties : mini-cpu.out, lazy-seuil-cpu.out.
+- 2026-10-18 14:42 : script des runs 8.8 arrêté par Claude Code (mémoire système critique, ~1,3 Go libres : Juges granite + qwen 9,3 Go à 32k sans GPU). Le processus wl run mini-cpu (run 20261018-115941-a2a512) a survécu : 76 Réponses produites, Juges en cours. Anaël : le laisser finir. lazy-seuil-cpu non lancé ; ne rien relancer sans son accord.
