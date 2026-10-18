@@ -23,6 +23,7 @@ BASELINES = [
     {"id": "bm25", "architecture": "bm25_only"},
 ]
 LIEES_TEST = {"q-045", "q-046", "q-047"}  # Questions de Scénario du split `test`
+N_TEST = 28  # Questions du split `test`, toutes reposées en `after_update`
 
 
 def _experience(tmp_path: Path, numero: int = 1, **champs: Any) -> Path:
@@ -88,7 +89,7 @@ def _changement(wl_home: Path) -> tuple[CorpusChange, set[str]]:
 # --- AC 1 : phases base puis after_update, update, nouvelle clé, ancien dossier intact ----------
 
 
-def test_phase_apres_mise_a_jour_pose_les_questions_liees_et_ne_touche_pas_l_ancien_index(
+def test_phase_apres_mise_a_jour_repose_toutes_les_questions_et_ne_touche_pas_l_ancien_index(
     tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     appels: list[tuple[str, CorpusChange, Path, Path, dict[str, str]]] = []
@@ -104,10 +105,11 @@ def test_phase_apres_mise_a_jour_pose_les_questions_liees_et_ne_touche_pas_l_anc
     reponses = _jsonl(dossier / "answers.jsonl")
     base = [a for a in reponses if a["phase"] == "base"]
     apres = [a for a in reponses if a["phase"] == "after_update"]
-    assert len(base) == 3 * 28  # toutes les Questions du split en base
-    # Seules les Questions liées au Scénario sont reposées, par Configuration.
-    assert {a["question_id"] for a in apres} == LIEES_TEST
-    assert len(apres) == 3 * len(LIEES_TEST)
+    assert len(base) == 3 * N_TEST  # toutes les Questions du split en base
+    # Toutes les Questions sont reposées (Fraîcheur et régression), par Configuration.
+    assert {a["question_id"] for a in apres} == {a["question_id"] for a in base}
+    assert LIEES_TEST <= {a["question_id"] for a in apres}
+    assert len(apres) == 3 * N_TEST
     assert all(a["tier"] is None and a["condition"] == "standard" for a in apres)
     assert all("/standard/all/after_update/" in a["answer_id"] for a in apres)
     assert len({a["answer_id"] for a in reponses}) == len(reponses)
@@ -165,7 +167,7 @@ def test_reindexation_complete_par_defaut_spans_au_poste_update_et_energie(
     # `load` aussi est imputé au Poste `update` ; les questions, au Poste `query`.
     assert {s["wl.post"] for s in apres if s["name"] == "index"} == {"update"}
     reponses = [s for s in apres if s["name"] == "answer"]
-    assert len(reponses) == len(LIEES_TEST)
+    assert len(reponses) == N_TEST
     assert all(s["wl.post"] == "query" for s in reponses)
     # Énergie locale relevée pour la phase `update` (report 4.5), comme pour `index`.
     assert index[0]["wl.energy_method"] == "estimated"
@@ -188,12 +190,13 @@ def test_apres_mise_a_jour_aucun_ancien_doc_id_et_ancrages_vers_les_nouveaux(
     change, nouveaux = _changement(wl_home)
     anciens = set(change.removed) | {ancien for ancien, _ in change.modified}
     assert anciens and not anciens & nouveaux
-    apres = [a for a in _jsonl(dossier / "answers.jsonl") if a["phase"] == "after_update"]
+    toutes = [a for a in _jsonl(dossier / "answers.jsonl") if a["phase"] == "after_update"]
+    assert len(toutes) == N_TEST and all(a["status"] == "ok" for a in toutes)
+    apres = [a for a in toutes if a["question_id"] in LIEES_TEST]  # contrôle limité aux liées
     assert {a["question_id"] for a in apres} == LIEES_TEST
     modifies = {doc.doc_id for _, doc in change.modified}
     retrouves = 0
     for a in apres:
-        assert a["status"] == "ok", a
         docs = {r["passage"]["doc_id"] for r in a["retrieved"]}
         docs |= {x.split("#", 1)[0] for r in a["retrieved"] for x in r["passage"]["anchor_ids"]}
         docs |= {c["anchor_id"].split("#", 1)[0] for c in a["citations"]}
@@ -215,8 +218,10 @@ def test_contexte_parfait_apres_mise_a_jour_ancrages_nouveaux_et_ancrage_supprim
     _, nouveaux = _changement(wl_home)
     base = {a["question_id"]: a for a in reponses if a["phase"] == "base"}
     apres = {a["question_id"]: a for a in reponses if a["phase"] == "after_update"}
-    assert set(apres) == LIEES_TEST
+    assert set(apres) == set(base) and LIEES_TEST <= set(apres)
     assert all(a["condition"] == "perfect_context" for a in apres.values())
+    # Questions non liées : leurs Ancrages existent toujours après la mise à jour.
+    assert all(a["status"] == "ok" for q, a in apres.items() if q not in LIEES_TEST)
     # Ancrage du Document modifié : retrouvé sous son nouveau doc_id ; supprimé : inapplicable.
     for qid in ("q-045", "q-046"):
         assert apres[qid]["status"] == "ok"
@@ -279,9 +284,58 @@ def test_scenario_applique_avec_la_langue_du_corpus_et_le_parser_de_la_configura
     assert vus[0]["chemin"] == SCENARIO
 
 
-def test_scenario_avec_paliers_refuse_en_2_avant_tout_appel(tmp_path: Path, wl_home: Path) -> None:
-    _wl_run(_experience(tmp_path, split="dev", tier=20), wl_home, code=2)
-    assert not (wl_home / "runs").exists()
+def test_scenario_avec_paliers_applique_le_scenario_au_sous_corpus_de_chaque_palier(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Palier tiré sur le Corpus de base (Documents visés par le Scénario requis), puis Scénario
+    appliqué au sous-corpus : l'index après mise à jour du Palier a la taille du Palier, plus
+    l'ajout, moins la suppression (4.13 : Fraîcheur par Palier)."""
+    vus: list[tuple[int, int, int, int]] = []
+    original = ArchitectureBase.update
+
+    def espion(self: Any, change: CorpusChange, apres: Any, ancien: Path, nouveau: Path) -> None:
+        vus.append(
+            (len(apres.documents), len(change.added), len(change.removed), len(change.modified))
+        )
+        original(self, change, apres, ancien, nouveau)
+
+    monkeypatch.setattr(ArchitectureBase, "update", espion)
+    champs: dict[str, Any] = {"split": "dev", "max_questions": 3, "tier": "all"}
+    dossier = _wl_run(
+        _experience(tmp_path, configurations=BASELINES[2:], conditions=["standard"], **champs),
+        wl_home,
+    )
+    assert dossier is not None
+    tailles = declare(RACINE / "corpus.yaml").spec.tiers.sizes  # type: ignore[union-attr]
+    # Palier de n Documents : +1 ajout, -1 suppression, 1 modification.
+    assert sorted(vus) == sorted((t, 1, 1, 1) for t in tailles)
+    reponses = _jsonl(dossier / "answers.jsonl")
+    apres = [a for a in reponses if a["phase"] == "after_update"]
+    assert {a["tier"] for a in apres} == set(tailles)
+    assert len(apres) == len(tailles) * 3
+    assert all(a["status"] == "ok" for a in apres)
+    assert all(f"/standard/{a['tier']}/after_update/" in a["answer_id"] for a in apres)
+    assert len({a["answer_id"] for a in reponses}) == len(reponses)
+    # Chaque index de Palier après mise à jour a sa propre clé.
+    assert len({s["wl.index_key"] for s in _index_spans(dossier, "after_update")}) == len(tailles)
+
+
+def test_scenario_avec_paliers_refuse_en_2_si_les_cibles_ne_tiennent_pas(
+    tmp_path: Path, wl_home: Path
+) -> None:
+    """Documents visés par le Scénario requis dans le plus petit Palier : tirage à blanc en 2."""
+    faux = tmp_path / "scenario.yaml"
+    cibles = "\n".join(
+        f"  - {{id: op-{i}, op: delete, target: {d.source_path}}}"
+        for i, d in enumerate(declare(RACINE / "corpus.yaml").documents[:6])
+    )
+    faux.write_text(
+        f"scenario_id: s\ncorpus_id: minicorpus\noperations:\n{cibles}\n", encoding="utf-8"
+    )
+    chemin = _experience(tmp_path, split="dev", max_questions=1, tier=5, scenario=str(faux))
+    _wl_run(chemin, wl_home, code=2)
+    res = CliRunner().invoke(app, ["run", str(chemin)])
+    assert "Documents requis" in res.output, res.output
 
 
 def test_scenario_invalide_refuse_en_2(tmp_path: Path, wl_home: Path) -> None:
@@ -292,14 +346,60 @@ def test_scenario_invalide_refuse_en_2(tmp_path: Path, wl_home: Path) -> None:
     (tmp_path / "updates").mkdir()
     for source in (RACINE / "scenario" / "updates").iterdir():
         (tmp_path / "updates" / source.name).write_bytes(source.read_bytes())
-    res = CliRunner().invoke(app, ["run", str(_experience(tmp_path, scenario=str(faux)))])
-    assert res.exit_code == 2, res.output
+    _wl_run(_experience(tmp_path, scenario=str(faux)), wl_home, code=2)  # sans dossier créé
 
 
-def test_scenario_sans_question_liee_n_execute_pas_la_phase(tmp_path: Path, wl_home: Path) -> None:
+def test_scenario_sans_question_liee_repose_quand_meme_les_questions(
+    tmp_path: Path, wl_home: Path
+) -> None:
     dossier = _wl_run(_experience(tmp_path, split="dev", max_questions=3), wl_home)
     assert dossier is not None
-    assert {a["phase"] for a in _jsonl(dossier / "answers.jsonl")} == {"base"}
+    reponses = _jsonl(dossier / "answers.jsonl")
+    base = {a["question_id"] for a in reponses if a["phase"] == "base"}
+    apres = {a["question_id"] for a in reponses if a["phase"] == "after_update"}
+    assert len(base) == 3 and apres == base
+
+
+def test_architecture_incrementale_naive_rag_appelle_son_update_sans_reindexer(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`naive_rag` (`incremental_update: true`) : son `update` n'encode que les Documents
+    ajoutés ou modifiés ; `index` n'est appelé qu'en phase `base`."""
+    from wavelibrarian.architectures.naive_rag import NaiveRag
+    from wavelibrarian.components.embedders.fake import FakeEmbedder
+
+    appels: list[str] = []
+    encodes: list[int] = []
+    index_orig, update_orig = NaiveRag.index, NaiveRag.update
+    embed_orig = FakeEmbedder.embed_passages
+
+    def index(self: Any, *a: Any) -> None:
+        appels.append("index")
+        index_orig(self, *a)
+
+    def update(self: Any, *a: Any) -> None:
+        appels.append("update")
+        update_orig(self, *a)
+
+    def embed(self: Any, textes: Any) -> Any:
+        encodes.append(len(textes))
+        return embed_orig(self, textes)
+
+    monkeypatch.setattr(NaiveRag, "index", index)
+    monkeypatch.setattr(NaiveRag, "update", update)
+    monkeypatch.setattr(FakeEmbedder, "embed_passages", embed)
+    conf = {"id": "rag", "architecture": "naive_rag", "params": {"embedder": {"name": "fake"}}}
+    dossier = _wl_run(
+        _experience(tmp_path, configurations=[conf], conditions=["standard"]), wl_home
+    )
+    assert dossier is not None
+    assert appels == ["index", "update"]
+    spans = _index_spans(dossier, "after_update")
+    assert len(spans) == 1 and spans[0]["wl.post"] == "update"
+    # `update` encode moins de Passages que l'index complet de la base.
+    assert len(encodes) >= 2 and sum(encodes[1:]) < encodes[0]
+    reponses = [a for a in _jsonl(dossier / "answers.jsonl") if a["phase"] == "after_update"]
+    assert len(reponses) == N_TEST and all(a["status"] == "ok" for a in reponses)
 
 
 def test_charger_le_scenario_du_mini_corpus_reste_valide(wl_home: Path) -> None:

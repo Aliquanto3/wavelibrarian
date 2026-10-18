@@ -17,7 +17,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
+from wavelibrarian.config.defaults import charger_yaml
 from wavelibrarian.config.experiment import ResolvedConfiguration, ResolvedExperiment
+from wavelibrarian.config.schemas import valider
 from wavelibrarian.core.errors import BudgetExceeded, ConfigError
 from wavelibrarian.core.ids import answer_id, canonical_json, new_run_id, sha16
 from wavelibrarian.core.types import (
@@ -33,7 +35,7 @@ from wavelibrarian.core.types import (
 from wavelibrarian.corpus.declare import DeclaredCorpus, TiersSpec, declare
 from wavelibrarian.corpus.ingest import ingest
 from wavelibrarian.corpus.profile import profile as profil_corpus
-from wavelibrarian.corpus.scenario import appliquer_fichier
+from wavelibrarian.corpus.scenario import Scenario, appliquer_fichier, charger
 from wavelibrarian.corpus.tiers import tirer, tirer_chemins
 from wavelibrarian.evalset import io
 from wavelibrarian.evalset.freeze import select_questions, verify_frozen
@@ -94,14 +96,15 @@ def load_questions(experience: ResolvedExperiment) -> FrozenQuestions:
     return FrozenQuestions(freeze_sha256=doc.freeze.sha256, questions=tuple(choisies))
 
 
-def _hors_perimetre(experience: ResolvedExperiment) -> None:
-    """Refus explicite (code 2) de ce que le runner ne sait pas exécuter : un Scénario combiné à
-    des Paliers. Le Scénario s'applique au Corpus entier ; un Palier est un sous-corpus tiré avant
-    la mise à jour, donc la phase `after_update` n'aurait pas de Palier correspondant."""
-    if experience.scenario is not None and experience.tier is not None:
-        raise ConfigError(
-            "scenario", "un Scénario de mise à jour ne se combine pas avec des Paliers (`tier`)"
-        )
+def cibles_du_scenario(scenario: str | Path | None, presents: Iterable[str]) -> tuple[str, ...]:
+    """Documents du Corpus de base que le Scénario modifie ou supprime. Avec des Paliers, ils
+    sont requis dans chaque Palier (`required_paths`) : le Scénario s'applique alors au
+    sous-corpus du Palier, et ses ajouts y entrent. Schéma invalide : `ConfigError` (code 2)."""
+    if scenario is None:
+        return ()
+    chemin = Path(scenario)
+    operations = valider(Scenario, charger_yaml(chemin), str(chemin)).operations
+    return tuple(sorted({op.target for op in operations if op.op != "add"} & set(presents)))
 
 
 def verifier_paliers(
@@ -124,6 +127,7 @@ def verifier_paliers(
     if questions is not None:  # tirage à blanc : requis hors Corpus ou plus nombreux que le Palier
         presents = [d.source_path for d in corpus.documents]
         requis = chemins_requis(questions.questions, presents)
+        requis = tuple(sorted({*requis, *cibles_du_scenario(experience.scenario, presents)}))
         tirer_chemins(presents, tiers, requis, _tailles_demandees(experience.tier, tiers))
 
 
@@ -197,7 +201,9 @@ class _Runner:
     ) -> None:
         self.ctx = ctx
         self.scenario = scenario
-        self._apres: dict[str, tuple[CorpusChange, ParsedCorpus, CorpusProfile]] = {}
+        self._apres: dict[
+            tuple[str, int | None], tuple[CorpusChange, ParsedCorpus, CorpusProfile]
+        ] = {}
         self.tier: int | Literal["all"] | None = tier
         self.dossier = dossier
         self.corpus = corpus
@@ -208,7 +214,9 @@ class _Runner:
         self._profils: dict[str, CorpusProfile] = {}
         self._paliers: dict[str, dict[int, ParsedCorpus]] = {}
         self._profils_paliers: dict[tuple[str, int], CorpusProfile] = {}
-        self.requis = chemins_requis(questions, (d.source_path for d in corpus.documents))
+        presents = [d.source_path for d in corpus.documents]
+        requis = {*chemins_requis(questions, presents), *cibles_du_scenario(scenario, presents)}
+        self.requis = tuple(sorted(requis))
         self.inapplicables: dict[str, dict[str, Any]] = {}
         self.counts: dict[str, int] = {"ok": 0, "error": 0, "inapplicable": 0}
 
@@ -259,16 +267,23 @@ class _Runner:
             )
         return sous, self._profils_paliers[(parser, taille)]
 
-    def apres_mise_a_jour(self, parser: str) -> tuple[CorpusChange, ParsedCorpus, CorpusProfile]:
-        """Scénario appliqué au Corpus de base (story 2.6) : changement net, Corpus après mise à
-        jour et son Profil, une fois par parser. `lang` et `parser` sont ceux du `corpus.yaml` et
-        de la Configuration, comme à l'ingestion directe. `ConfigError` (code 2) si le Scénario ne
-        s'applique pas."""
-        if parser not in self._apres:
+    def apres_mise_a_jour(
+        self, parser: str, taille: int | None = None
+    ) -> tuple[CorpusChange, ParsedCorpus, CorpusProfile]:
+        """Scénario appliqué au Corpus de base (story 2.6), ou au sous-corpus du Palier `taille`
+        (tiré sur le Corpus de base, les Documents visés par le Scénario y sont requis ; les
+        ajouts du Scénario y entrent) : changement net, Corpus après mise à jour et son Profil,
+        une fois par (parser, Palier). `lang` et `parser` sont ceux du `corpus.yaml` et de la
+        Configuration, comme à l'ingestion directe. `ConfigError` si le Scénario ne s'applique
+        pas."""
+        if (parser, taille) not in self._apres:
             if self.scenario is None:
                 raise ConfigError("scenario", "aucun Scénario déclaré")
-            parse, _ = self.preparer(parser)
-            log.info("étape scénario : %s (parser %s)", self.scenario.name, parser)
+            parse = self.preparer(parser)[0] if taille is None else self.palier(parser, taille)[0]
+            palier = "all" if taille is None else taille
+            log.info(
+                "étape scénario : %s (parser %s, palier %s)", self.scenario.name, parser, palier
+            )
             change, apres = appliquer_fichier(
                 parse, self.scenario, lang=self.corpus.spec.lang, parser=parser
             )
@@ -278,8 +293,8 @@ class _Runner:
                 tokenizer=self.ctx.tokenizer,
                 volatility=self.corpus.spec.volatility,
             )
-            self._apres[parser] = (change, apres, profil)
-        return self._apres[parser]
+            self._apres[(parser, taille)] = (change, apres, profil)
+        return self._apres[(parser, taille)]
 
     def ecrire_profil(self, profil: CorpusProfile) -> None:
         _ecrire_json(self.dossier / "corpus_profile.json", profil.model_dump(mode="json"))
@@ -463,39 +478,44 @@ class _Runner:
                             continue
                     self._cellule(writer, conf, condition, taille, parse, sous, profil_t)
             if experience.scenario is not None:
-                self._phase_apres_mise_a_jour(writer, conf, experience)
+                self._phase_apres_mise_a_jour(writer, conf, experience, tailles)
         finally:
             ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
 
     def _phase_apres_mise_a_jour(
-        self, writer: JsonlWriter, conf: ResolvedConfiguration, experience: ResolvedExperiment
+        self,
+        writer: JsonlWriter,
+        conf: ResolvedConfiguration,
+        experience: ResolvedExperiment,
+        tailles: Sequence[int | None],
     ) -> None:
         """Phase `after_update` d'une Configuration (contracts.md §2.1, étape 5) : Scénario
         appliqué, `update` vers la clé du Corpus après mise à jour, instance neuve + `load`, puis
-        les Questions liées au Scénario (`scenario_target`) reposées, par Condition. Sans Palier
-        (`tier` vaut `all` dans l'`answer_id`)."""
+        toutes les Questions posées reposées (la Fraîcheur lit celles à `scenario_target`, les
+        autres mesurent la régression), par Condition et par Palier de la phase `base`."""
         ctx = self.ctx
-        liees = tuple(q for q in self.questions if q.scenario_target)
-        if not liees:
-            log.warning("Scénario sans Question liée parmi celles posées : phase non exécutée")
-            return
         parser = conf.parser.name
-        base, _ = self.preparer(parser)
         ctx.phase = "after_update"
-        try:
-            change, apres, profil = self.apres_mise_a_jour(parser)
-        except BudgetExceeded:
-            raise
-        except Exception as erreur:
-            log.exception("Scénario en échec pour %s", conf.id)
-            self._vides(writer, conf, "none", "error", f"{type(erreur).__name__} : {erreur}", liees)
-            return
         for condition in experience.conditions:
-            ctx.condition, ctx.tier = condition, None
-            self._cellule(
-                writer, conf, condition, None, apres, apres, profil,
-                questions=liees, maj=(change, base),
-            )  # fmt: skip
+            for taille in tailles:
+                ctx.condition, ctx.tier = condition, taille
+                try:
+                    if taille is None:
+                        base = self.preparer(parser)[0]
+                    else:
+                        base = self.palier(parser, taille)[0]
+                    change, apres, profil = self.apres_mise_a_jour(parser, taille)
+                    complet = self.apres_mise_a_jour(parser)[1]
+                except BudgetExceeded:
+                    raise
+                except Exception as erreur:
+                    log.exception("Scénario en échec pour %s (palier %s)", conf.id, taille)
+                    message = f"{type(erreur).__name__} : {erreur}"
+                    self._vides(writer, conf, "none", "error", message)
+                    continue
+                self._cellule(
+                    writer, conf, condition, taille, complet, apres, profil, maj=(change, base)
+                )
 
     def _cellule(
         self,
@@ -526,7 +546,7 @@ class _Runner:
 
         cle_applicabilite = conf.id if taille is None else f"{conf.id}@{taille}"
         if maj is not None:
-            cle_applicabilite = f"{conf.id}@after_update"
+            cle_applicabilite = f"{cle_applicabilite}@after_update"
         try:
             arch = fabrique()
             verdict = Applicability(applicable=True)
@@ -658,10 +678,12 @@ def run_experiment(
     soit ; un second `wl run` échoue donc sans créer de dossier. `providers` : Faux LLM
     scénarisé des tests ; sinon les adaptateurs du Catalogue (`build_providers`, `fake` compris).
     """
-    _hors_perimetre(experience)
     verifier_paliers(experience, questions)
     corpus = declare(Path(experience.corpus))
     experience = resolve_parsers(experience, corpus)
+    scenario = Path(experience.scenario) if experience.scenario else None
+    if scenario is not None:  # Scénario invalide : refus (code 2) avant le dossier d'Exécution
+        charger(scenario, ingest(corpus, experience.configurations[0].parser.name, wl_home=wl_home))
     if run_id is None:
         run_id = new_run_id(sha16(canonical_json(experience.model_dump(mode="json"))))
     with Context.from_experiment(
@@ -676,13 +698,9 @@ def run_experiment(
             if paquet.getEffectiveLevel() > logging.INFO:  # étapes du runner dans run.log
                 paquet.setLevel(logging.INFO)
             log.info("Exécution %s : %d Questions posées", run_id, len(questions.questions))
-            scenario = Path(experience.scenario) if experience.scenario else None
             runner = _Runner(ctx, dossier, corpus, questions.questions, experience.tier, scenario)
             _, profil = runner.preparer(experience.configurations[0].parser.name)
             runner.ecrire_profil(profil)
-            if scenario is not None:  # Scénario invalide : refus (code 2) avant tout appel payant
-                for parser in dict.fromkeys(c.parser.name for c in experience.configurations):
-                    runner.apres_mise_a_jour(parser)
             statut: RunStatus = "completed"
             try:
                 with JsonlWriter(dossier, "answers.jsonl") as writer:
