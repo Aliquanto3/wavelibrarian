@@ -22,7 +22,7 @@ from wavelibrarian.report.ancrages import Resolveur, ResolveurCorpus, resolveur_
 from wavelibrarian.report.couts import ENTETE_COUTS, Couts, calculer_couts, ligne_csv
 from wavelibrarian.report.fraicheur import LigneFraicheur, calculer_fraicheur
 from wavelibrarian.report.fronts import ENTETE_PARETO, Front, construire_fronts, lignes_pareto
-from wavelibrarian.report.lecture import CleGroupe, Execution, charger
+from wavelibrarian.report.lecture import CleGroupe, Execution, charger, lire_json
 from wavelibrarian.report.scores import (
     CRITERES,
     QUALITE,
@@ -250,6 +250,63 @@ def _juges(ex: Execution) -> list[str]:
         + f"{note}.",
         "",
     ]
+
+
+def _kappa(x: float | None) -> str:
+    return "indéfini" if x is None else _nb(x)
+
+
+def _calibration(ex: Execution) -> list[str]:
+    """Section « Calibration des Juges » : lit `calibration.json` (Exécution, sinon
+    `judges.excluded_from`), sans rien recalculer."""
+    chemins = [ex.run_dir / "calibration.json"]
+    if ex.experience.judges.excluded_from:
+        chemins.append(Path(ex.experience.judges.excluded_from))
+    donnees = next((d for c in chemins if isinstance(d := lire_json(c), dict)), None)
+    titre = ["## Calibration des Juges", ""]
+    if donnees is None or not isinstance(donnees.get("judges"), dict):
+        return [*titre, "Calibration absente : aucun `calibration.json` (`wl calibrer`).", ""]
+    seuil = donnees.get("kappa_threshold")
+    intro = "Kappa juge-humain par Juge et par Critère"
+    intro += f" (seuil {_nb(seuil)})." if isinstance(seuil, int | float) else "."
+    lignes: list[list[str]] = []
+    for juge, fiche in sorted(donnees["judges"].items()):
+        exclu = "oui" if fiche.get("excluded") is True else "non"
+        if exclu == "oui" and fiche.get("reason"):
+            exclu += f" ({fiche['reason']})"
+        for critere, f in sorted((fiche.get("criteria") or {}).items()):
+            instab = f.get("instability")
+            lignes.append(
+                [
+                    f"`{juge}`",
+                    critere,
+                    _kappa(f.get("kappa")),
+                    "indéfinie" if instab is None else _nb(instab),
+                    str(f.get("n_items", 0)),
+                    exclu,
+                ]
+            )
+    sortie = [*titre, intro, ""]
+    sortie += _table(
+        ["Juge", "Critère", "Kappa juge-humain", "Instabilité", "Items", "Exclu"], lignes
+    )
+    paires = [
+        (p.get("annotators") or [], c, f)
+        for p in donnees.get("inter_annotator") or []
+        for c, f in sorted((p.get("criteria") or {}).items())
+    ]
+    if paires:
+        sortie += ["Kappa inter-annotateurs :", ""]
+        sortie += _table(
+            ["Annotateurs", "Critère", "Kappa", "Réponses"],
+            [
+                [" et ".join(a), c, _kappa(f.get("kappa")), str(f.get("n_items", 0))]
+                for a, c, f in paires
+            ],
+        )
+    else:
+        sortie += ["Kappa inter-annotateurs : absent (aucune double annotation).", ""]
+    return sortie
 
 
 def _date_calibration(chemin: Path) -> str:
@@ -499,6 +556,7 @@ def construire_markdown(
         *(section_pareto(res, couts, fronts, ex) if fronts is not None else []),
         *_corpus(ex),
         *_juges(ex),
+        *_calibration(ex),
         *_inapplicables(ex),
         *_table_scores(
             res,

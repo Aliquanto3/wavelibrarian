@@ -728,6 +728,8 @@ annotations:
 
 `wl calibrer` écrit `calibration.json` : par Juge et par Critère, kappa juge-humain, taux d'instabilité et `excluded: bool`. Il y ajoute le kappa entre annotateurs.
 
+Le Rapport (§7) affiche `calibration.json` dans une section « Calibration des Juges » : par Juge et par Critère, kappa juge-humain, instabilité, nombre d'items, exclusion ; puis le kappa inter-annotateurs (ou son absence, sans double annotation).
+
 ### 4.7 Scénario de mise à jour — `scenario.yaml`
 
 ```yaml
@@ -828,5 +830,6 @@ Les noms des sous-commandes suivent le PRD (§5). Chaque commande a son aide `--
 | `wl run <experience.yaml> [--reprendre <run_id>] [--tolerer-erreurs]` | Validation, préflight, Exécution, puis Rapport (`cli.py` enchaîne runner et `report/`, AD-1) | FR-1, FR-33 |
 | `wl rapport <run_id> [--exporter-front <front> --vers <fichier>]` | Régénère le Rapport ; exporte un front | FR-40, FR-41 |
 | `wl calibrer <experience.yaml> --annotations <dossier> --run <run_id>` | Écrit `calibration.json` | FR-38 |
+| `wl annotations exporter <run_id> --vers <dossier> [--annotateurs anael,…] [--nombre 30] [--graine <N>] [--part-double 0.2]` | Écrit `<dossier>/<annotateur>.yaml` au format §4.6, prérempli (`question`, `answer`, `cited_anchors` en plus), verdicts vides ; Réponses `ok` d'une Exécution `completed` ou `completed_with_errors` ; tirage stable à graine égale (graine dérivée `sha16("annotation", graine)`, défaut : graine de l'Expérience) ; la part double est annotée par tous les annotateurs, le reste réparti à tour de rôle ; codes 0, 1, 2 (Exécution introuvable ou non terminée, réglage invalide) | FR-38 |
 | `wl registre [--kind …]` | Liste les Composants et les Architectures, leurs Params et leur description | FR-2 |
 | `wl installer --profil cpu\|gpu` | Télécharge l'embedder et l'encodage tiktoken, vérifie `ollama list` | §5 |

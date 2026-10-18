@@ -32,6 +32,7 @@ from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.report.export import exporter_front as exporter_front_vers
 from wavelibrarian.report.generer import generer_rapport
+from wavelibrarian.report.paquet import exporter_paquet
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.calibrer import calibrer as calibration
 from wavelibrarian.runner.context import Context
@@ -681,3 +682,68 @@ def corpus_paliers(
         typer.echo(f"Palier {taille} ({len(chemins)} Documents) :")
         for chemin in chemins:
             typer.echo(f"  {chemin}")
+
+
+annotations_app = typer.Typer(
+    help="Préparer les annotations humaines d'une Exécution.", no_args_is_help=True
+)
+app.add_typer(annotations_app, name="annotations")
+
+
+@annotations_app.command("exporter")
+def annotations_exporter(
+    run_id: Annotated[str, typer.Argument(help="Identifiant de l'Exécution terminée.")],
+    vers: Annotated[
+        Path, typer.Option("--vers", help="Dossier du paquet (un YAML par annotateur).")
+    ],
+    annotateurs: Annotated[
+        str, typer.Option("--annotateurs", help="Annotateurs, séparés par des virgules.")
+    ] = "anael",
+    nombre: Annotated[int, typer.Option("--nombre", help="Nombre de Réponses à tirer.")] = 30,
+    graine: Annotated[
+        int | None,
+        typer.Option("--graine", help="Graine du tirage (défaut : celle de l'Expérience)."),
+    ] = None,
+    part_double: Annotated[
+        float,
+        typer.Option("--part-double", help="Part des Réponses annotées par tous, dans [0, 1]."),
+    ] = 0.2,
+) -> None:
+    """Écrit un paquet d'annotation prérempli (format de `contracts.md` §4.6), verdicts vides.
+
+    Chaque ligne porte la Question, la Réponse et les Ancrages cités. Seules les Réponses `ok`
+    sont tirées, y compris d'une Exécution `completed_with_errors`. Le tirage est stable à graine
+    égale. Avec un seul annotateur, aucune Réponse n'est doublement annotée. Remplir les verdicts
+    (`yes` ou `no`), puis lancer `wl calibrer`. Codes de sortie : 0 succès, 1 erreur, 2
+    Exécution introuvable ou non terminée, réglage invalide.
+    """
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    dossier = wl_home / "runs" / run_id
+    if not RUN_ID.fullmatch(run_id) or not dossier.is_dir():
+        typer.echo(f"Exécution {run_id} introuvable dans {wl_home / 'runs'}.", err=True)
+        raise typer.Exit(2)
+    try:
+        paquet = exporter_paquet(
+            dossier,
+            vers,
+            annotateurs=[a.strip() for a in annotateurs.split(",")],
+            nombre=nombre,
+            graine=graine,
+            part_double=part_double,
+        )
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except (WlError, OSError, ValueError) as erreur:
+        typer.echo(f"Paquet non écrit : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    if paquet.n_reponses < nombre:
+        typer.echo(
+            f"Avertissement : {paquet.n_eligibles} Réponse(s) `ok` seulement, "
+            f"{nombre} demandée(s).",
+            err=True,
+        )
+    typer.echo(
+        f"Paquet de {paquet.n_reponses} Réponse(s) dont {paquet.n_doubles} doublement "
+        f"annotée(s), {len(paquet.fichiers)} fichier(s) dans {vers}"
+    )
