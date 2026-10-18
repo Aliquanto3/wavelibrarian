@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 05:00 |
-| Story en cours | 4.10 (voie B) ; 7.5 (voie A) |
-| Stories livrées | 45 / 56 |
+| Mis à jour | 2026-10-18 05:21 |
+| Story en cours | 7.5 (voie A, revue) ; 4.11 (voie B) |
+| Stories livrées | 46 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -120,6 +120,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Rapport (4.11 / 4.12), LLM Wiki** : appeler `report/wiki.py::section_fidelite` pour afficher le taux de fidélité ; le juge de fidélité par défaut suit `profil.judge_pool` (le Context ne porte pas `judges.pool`) ; `fidelity_model` explicite non contrôlé par `validate` (story 7.3).
 - **4.11 (Rapport)** : calculer rappel@k / MRR / nDCG par Question depuis `answers.jsonl` et écrire `retrieval.csv` ; en Palier, juger une Citation « hors du Corpus » par rapport au sous-corpus du Palier ; afficher `unjudged` (story 4.9).
 - **Story 4.15 / vraie Exécution** : vérifier que le plafond couvre les appels des Juges (2 par Réponse ok) (story 4.9).
+- **4.11 (Rapport, statistiques)** : appeler `graine_derivee(seed_experience, config_id, condition, tier, phase, critère ou paire)` pour chaque IC et comparaison ; traiter `None` de `compare()` (pas de « Qualité égale » ni de point mort) ; signaler l'absence de correction de multiplicité à côté de `pairs.csv` ; écrire `pairs.csv` et `pareto.csv` (story 4.10).
 
 ## Journal de surveillance
 
@@ -225,3 +226,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.3 | 04:16 | 04:38 | 9ec982f85724c389eb25a8545cc3ef669c68418f | 0 $ | Livrée sous réserve de la conformité 4.14 ; affichage du taux reporté au Rapport. Revue : 1 high corrigé (juge de fidélité d'une autre Famille que le modèle de compilation, refus si même Famille), graine et juge dans l'index_key, Ancrages limités au Document source. |
 | 4.9 | 04:12 | 04:58 | 84c3c5b5a1f450f5e544a460ab2dc4da52f93e4b | 0 $ | Revue : nDCG sans double gain par Ancrage, Citations inventées → citation_correctness non, unjudged au manifeste et reprise possible d'un run completed avec Critères manquants, Critère absent sans plantage, test d'égalité de bout en bout. 885 tests verts. |
 | 7.4 | 04:39 | 05:00 | 57ac1280e6b483ca8d5d6d91682986e3f89fa0e2 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : coût des tentatives non conformes rendu par LLMResult.retry_cost_uncached et compté dans la borne, answer imposé au dernier pas, schéma compté dans la réserve, ConfigError si les résultats ne tiennent pas, agentic.json malformé → WlError. |
+| 4.10 | 05:02 | 05:21 | aae51740d069cb4b8e20e27464140c4ea875e7ab | 0 $ | Revue : IC apparié testé contre scipy.stats.bootstrap et p-valeur contre une valeur théorique, graine_derivee conforme à AD-20, compare() sans Question commune → None, NaN refusés. 922 tests verts. |
