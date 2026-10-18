@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 07:37 |
-| Story en cours | 4.14 en dev (voie B) ; 4.15 en préparation |
-| Stories livrées | 54 / 56 |
+| Mis à jour | 2026-10-18 08:34 |
+| Story en cours | 4.15 (finalisation puis test réel API) |
+| Stories livrées | 55 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -133,6 +133,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Story 4.14 (de 5.2)** : vérification réelle de wl calibrer sur Ollama (instabilité, durée, mémoire GPU) si des annotations existent, et seuil 0,6 ; sinon à faire avec Anaël.
 - **Story 4.14 (de 5.2, revue)** : vérifier sur Ollama qu'une seconde calibration envoie les passes 1 à 4 au fournisseur (wl.llm_cache_hit=false) et mesurer l'instabilité réelle.
 - **Story 4.15 (de 5.2)** : kappas et instabilités par Juge au Rapport ; Corpus de référence d'un Palier et de after_update à trancher.
+- **Après le run (de 4.14)** : relancer mini-cpu.yaml quand Ollama est libre (PageIndex et Juges réels non vérifiés) ; minicpm5:1b non conforme au schéma GenerateOutput une fois sur deux (Generator plus gros ou relances) ; wl run completed même si une Architecture est en error sur toutes ses Questions (seuil ou avertissement à décider).
 
 ## Journal de surveillance
 
@@ -248,3 +249,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.8 | 06:32 | 07:02 | 929a9b1c38e8e3dbdcac48c2ce8790fe230c7247 | 0 $ | Livrée sous réserve de la conformité 4.14 (SM-3, 15 Architectures). Revue : toutes les descriptions distinctes d'une paire et d'une entité encodées (lues dans extractions.json), cache d'extraction factorisé (components/graph/cache.py) et dédoublonné dans un lot, tests niveau haut et réembarquement exacts. 1058 tests verts. |
 | 4.13 | 06:47 | 07:27 | 30ff4bd0f9e36a7a6a736080a9e38235ee2ad6fa | 0 $ | Revue : reuse_index exporté tel quel (clé d'index, pas config_id), avertissement quand les n d'un front diffèrent, front calculé sur les valeurs écrites (x à 9 décimales), --exporter-front vide en code 2, aller-retour d'export avec params imbriqués testé. 1073 tests verts. |
 | 5.2 | 07:03 | 07:37 | 6687f5a47fa72375eb7f1062bc6cb9dba3990c3e | 0 $ | Revue : passes 1 à 4 hors Cache en calibration (use_cache dans complete_structured, Param cache_later_passes, Panel de wl run inchangé), ProviderError en code 4, calibration_passes ≥ 2, Juge sans verdict conforme en échec, préflight du réservoir du profil, --run contrôlé. 1091 tests verts. |
+| 4.14 | 07:10 | 08:34 | b2d6ce35e14ef7ce991acc8a4fb9114e8f3e391d | 0 $ | 15 Architectures conformes et SM-3 vert en Faux LLM, sans xfail ; mini-test.yaml (17 Configurations), mini-cpu.yaml, mini-real-haiku.yaml. Revue : contenu du Rapport SM-3 vérifié (scores, retrieval, synthèse), fronts du §7 et non-dominance, variation de chaque query_params par type, Citations prises dans le Contexte. 1140 tests verts. Vérification réelle mini-cpu partielle (Ollama repris par Anaël à 07:49). |
