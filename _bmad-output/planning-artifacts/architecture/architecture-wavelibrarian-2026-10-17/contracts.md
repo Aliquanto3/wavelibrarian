@@ -387,6 +387,8 @@ class LLMRequest(BaseModel):
     max_tokens: int
     temperature: float | None = 0.0  # None : non envoyée (`accepts_temperature: false`, AD-20)
     seed: int | None = None
+    think: bool | None = False             # Ollama seul : posé par la passerelle depuis `ModelEntry.think` ;
+                                           # None = champ non envoyé ; dans la clé de cache pour ollama seul
     cache_system: bool = False             # met le system en cache de prompt
     pass_id: int = 0                       # entre dans la clé du Cache de réponses (FR-34)
     timeout_s: float | None = None
@@ -516,7 +518,7 @@ Les Architectures `agentic` et `pageindex` doivent produire au moins une citatio
 
 Mode scénarisé (FR-52) : `FakeProvider.script(role: str, step_glob: str, output: str | Callable[[LLMRequest], str])`. La sortie scénarisée prime sur le comportement par défaut ; pour un modèle de provider fake, `step` entre donc dans la clé du Cache de réponses avec `inputs`. Tokens : nombre de mots. `cache_read_tokens` vaut le nombre de mots du préfixe déjà vu (system et messages marqués `cache`). La latence vaut 0 : le Faux LLM la déclare (`ProviderResponse.latency_s`) et la passerelle la reprend au lieu de la mesurer.
 
-Protocole `Provider` (story 1.11) : `complete(request, *, timeout_s, output_schema=None) -> ProviderResponse(text, usage, latency_s?, energy_kwh?)`. `output_schema` est le schéma JSON de `complete_structured` (Anthropic : outil `emit_output` imposé ; Ollama : champ `format`). Un provider peut déclarer `schema_in_prompt` et `schema_prompt_overhead` : la passerelle ajoute alors le schéma (et le surcoût fixe) à l'estimation d'entrée. `ProviderError(sent=True)` : requête partie sans réponse, la réservation est réglée à l'estimation au lieu d'être libérée, et l'essai n'est jamais relancé (il a pu être facturé). Quand `output_schema` est donné, il entre dans la clé du Cache de réponses. Ollama pose `options.num_ctx` au `context_window` du Catalogue sauf si le profil le fixe. Les loggers `httpx2` et `httpcore2` (pile HTTP du SDK anthropic 1.15) sont limités comme `httpx` et `httpcore`.
+Protocole `Provider` (story 1.11) : `complete(request, *, timeout_s, output_schema=None) -> ProviderResponse(text, usage, latency_s?, energy_kwh?)`. `output_schema` est le schéma JSON de `complete_structured` (Anthropic : outil `emit_output` imposé ; Ollama : champ `format`). Un provider peut déclarer `schema_in_prompt` et `schema_prompt_overhead` : la passerelle ajoute alors le schéma (et le surcoût fixe) à l'estimation d'entrée. `ProviderError(sent=True)` : requête partie sans réponse, la réservation est réglée à l'estimation au lieu d'être libérée, et l'essai n'est jamais relancé (il a pu être facturé). Quand `output_schema` est donné, il entre dans la clé du Cache de réponses. Ollama pose `options.num_ctx` au `context_window` du Catalogue sauf si le profil le fixe. Ollama envoie `think` tel que la passerelle l'a posé depuis `ModelEntry.think` (`false`, `true`, ou champ absent pour `None`, span `wl.think_omitted`) ; pour le provider `ollama` seul, `think` entre dans la clé du Cache de réponses (`None` distinct de `false`, story 8.4). Les loggers `httpx2` et `httpcore2` (pile HTTP du SDK anthropic 1.15) sont limités comme `httpx` et `httpcore`.
 
 ## 4. Schémas YAML
 

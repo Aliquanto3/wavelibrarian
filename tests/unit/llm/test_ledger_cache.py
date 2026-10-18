@@ -275,6 +275,19 @@ def test_inputs_dans_la_cle_seulement_pour_le_provider_fake() -> None:
     assert cache_key(a, "fake") != cache_key(b, "fake")
 
 
+def test_think_dans_la_cle_seulement_pour_ollama() -> None:
+    """Story 8.4 : clés anthropic et fake identiques à celles d'avant la story (valeurs figées,
+    calculées au commit a8236fd) ; pour ollama, False, True et None donnent trois clés."""
+    avant = "31b60f9da2059c34d8ec67387260b33e82baad1242ba6583a66761482cdb9439"
+    for think in (False, True, None):
+        assert cache_key(req(think=think), "anthropic") == avant
+    assert cache_key(req(think=True), "fake") == (
+        "e14f538718d62ef3c36dbf913df3bbcf381a4c91b425d78503aa3d3f814904a7"
+    )
+    cles = {cache_key(req(think=t), "ollama") for t in (False, True, None)}
+    assert len(cles) == 3 and avant not in cles
+
+
 def test_cle_refuse_un_system_sans_marqueur_de_role() -> None:
     with pytest.raises(ValueError, match="marqueur"):
         cache_key(req(system="sys"), "fake")

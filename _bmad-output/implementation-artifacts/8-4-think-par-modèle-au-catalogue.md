@@ -37,3 +37,14 @@ Aucun écart. `ollama stop` sur les modèles chargés, `ollama ps` vide en fin d
 
 - PageIndex q-004 (sortie arrêtée à `select_max_tokens`) : story 8.7, non corrigé ici.
 - Aucun modèle du Catalogue ne passe encore à `think: true` ou `None` : le réglage est disponible, sans changement de valeur.
+
+## Revue
+
+Revue unique (Opus, 2026-10-18), sur la liste du second avis (Haiku). Aucun constat high ni medium.
+
+- low, second avis 1 (`LLMRequest` de `contracts.md` sans `think`) : corrigé, champ ajouté au contrat, aligné sur `ports/gateway.py`.
+- low, second avis 2 (protocole Provider sans `think` ni clé Ollama) : corrigé, `contracts.md` §3 décrit l'envoi de `think`, `wl.think_omitted` et la clé propre à `ollama`.
+- low, second avis 3 (clés Ollama invalidées une fois) : accepté, sans correctif. L'invalidation ne donne que des miss (un rappel du modèle local, gratuit), jamais un faux hit : vérifié que les clés anthropic et fake sont identiques à celles du commit a8236fd et que seules les clés ollama changent. Une reprise `wl run --reprendre` d'une Exécution antérieure à la story ne rejoue rien à tort : le champ `think` ajouté à `ModelEntry` change `catalog_fingerprint` (`1186dd086b95f26b` → `ceeb20e7d474a8aa` sur `defaults/models.yaml`), et la reprise est refusée (code 2, « le Catalogue de modèles » a changé), comme pour tout changement du Catalogue. Conséquence à connaître : une Exécution interrompue avant la v0.2.0 se relance en neuf.
+- low, second avis 4 (`think: true` accepté sans avertissement sur un modèle anthropic ou fake) : rejeté. Le contrat le documente « Ollama : valeur envoyée », la valeur est ignorée sans effet sur la requête ni sur la clé (prouvé par le test de clé ci-dessous) ; un avertissement serait une règle nouvelle, hors AC.
+- low, second avis 5 (pas de test de bout en bout Catalogue → passerelle → corps HTTP) : rejeté. Les deux maillons sont testés sans réseau (`test_think_du_catalogue_dans_la_requete_la_cle_et_le_span`, `test_ollama_think_selon_la_requete`), et la chaîne entière a été vérifiée en réel (mini-cpu, real_local).
+- low, second avis 6 (pas de test direct de `cache_key`) : corrigé, `test_think_dans_la_cle_seulement_pour_ollama` (`tests/unit/llm/test_ledger_cache.py`), avec les clés anthropic et fake figées au commit a8236fd comme oracle indépendant.
