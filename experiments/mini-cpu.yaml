@@ -2,9 +2,9 @@
 # multilingual-e5-small sur CPU), sans aucun appel d'API. Le profil `cpu` met
 # `claude-haiku-5-5` en tête de `generator_models` : chaque modèle est donc nommé ici.
 # Prérequis : `uv sync --extra local` et `wl installer --profil cpu`.
-# Story 8.7 : la sélection PageIndex de minicpm5:1b tient grâce à `repeat_penalty: 1.15`, posé
-# dans `ollama.options` du profil `cpu` (l'Expérience n'a pas de champ `ollama`) ; il vaut pour
-# tous les appels Ollama de ce profil.
+# Story 8.7 (option c, décision d'Anaël) : la sélection PageIndex utilise granite4.2:3b, car
+# minicpm5:1b dégénère jusqu'à select_max_tokens et un repeat_penalty au profil dégradait le
+# Generator de PageIndex. granite4.2:3b est de la Famille d'un Juge (AD-14) : le Panel ne change pas.
 experiment_id: mini-cpu
 seed: 42
 profile: cpu
@@ -36,5 +36,5 @@ configurations:
     architecture: pageindex
     params:
       summary_model: "minicpm5:1b-q4_k_m"
-      select_model: "minicpm5:1b-q4_k_m"
+      select_model: "granite4.2:3b"
       generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}

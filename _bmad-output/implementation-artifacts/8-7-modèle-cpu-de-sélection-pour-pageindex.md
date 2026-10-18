@@ -6,6 +6,17 @@ status: review
 
 # Story 8.7 : Modèle CPU de sélection pour PageIndex
 
+> Vérification réelle en attente d'Ollama : `wl run experiments/mini-cpu.yaml`, PageIndex 2 / 2 `ok`, aucune sortie à `select_max_tokens`, verdicts complets.
+
+## Décision d'Anaël (2026-10-18) : option (c)
+
+Après la revue (la pénalité `repeat_penalty: 1.15` faisait passer q-002 de 1,00 à 0,00 sur le Generator de PageIndex), Anaël retient l'option (c) : `select_model: "granite4.2:3b"` pour la Configuration `pageindex` de `experiments/mini-cpu.yaml`, sans `repeat_penalty`. Étude : 4 / 4 `ok` sur q-002, q-004, q-011, q-013, sélection 18 à 20 s, RAM 5,1 Go.
+
+- Profil `cpu` : `repeat_penalty` retiré, profil identique à celui d'avant 8.7. Le profil n'a pas d'emplacement pour un modèle de sélection (pas de changement de schéma) : le report au profil se limite à l'absence de pénalité ; le modèle est porté par l'Expérience.
+- Conservé : les options Ollama du profil entrent dans la clé du Cache de réponses (`OllamaProvider.cache_options`) et leurs tests.
+- Tests : `test_story_8_7.py` vérifie l'absence de pénalité, le `select_model` de `mini-cpu.yaml` et que le Panel admissible de `pageindex` est celui des autres Configurations (granite4.2:3b, Famille d'un Juge, reste Juge de PageIndex : AD-14).
+- Les sections ci-dessous (Réalisé, AC, Reports, Revue) décrivent l'option (b) abandonnée ; elles sont gardées comme historique.
+
 Exigences : FR-24 ; AD-4 (rôle `select_nodes`), AD-14 ; `experiments/mini-cpu.yaml`, profil `cpu`. Limite L4 : `minicpm5:1b` atteint `select_max_tokens = 256` sur q-004.
 
 ## Réalisé
