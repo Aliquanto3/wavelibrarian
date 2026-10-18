@@ -2,8 +2,9 @@
 
 Tout se calcule de `traces.jsonl` (spans, contracts.md §6) et d'`answers.jsonl` (latence des
 Réponses). Un span `wl.resumed` (reprise, story 4.8) n'est compté ni dans les appels, ni dans la
-latence, ni dans la durée de calcul local, ni dans l'énergie ; son coût (nul : hit du cache) reste
-dans la somme de `wl.cost`. Les énergies `measured` et `estimated` ne s'additionnent jamais (AD-17).
+latence, ni dans la durée de calcul local, ni dans l'énergie ; son coût réel (nul : hit du cache)
+reste dans la somme de `wl.cost`, mais pas son `wl.cost_uncached`, déjà porté par l'appel
+d'origine. Les énergies `measured` et `estimated` ne s'additionnent jamais (AD-17).
 """
 
 import logging
@@ -91,6 +92,7 @@ class Couts:
     points_morts: list[PointMort] = field(default_factory=list)
     traces_presentes: bool = True
     spans_sans_energie: int = 0
+    valeurs_invalides: int = 0  # `wl.cost` ou `wl.cost_uncached` illisibles, comptés 0 (FR-29)
 
     def total_api(self) -> Decimal:
         """Somme des `wl.cost` de tous les spans, convertie en euros (FR-29)."""
@@ -141,11 +143,18 @@ def _est_local(span: dict[str, Any]) -> bool:
     )
 
 
-def _decimal(valeur: Any) -> Decimal:
+def _decimal(valeur: Any, couts: Couts | None = None) -> Decimal:
+    """`Decimal` fini, ou 0 pour une valeur illisible, comptée dans `couts.valeurs_invalides`."""
     try:
-        return Decimal(str(valeur))
+        d = Decimal(str(valeur))
+        if d.is_finite():
+            return d
     except ArithmeticError:
-        return _ZERO
+        pass
+    log.warning("valeur numérique illisible dans traces.jsonl, comptée 0 : %r", valeur)
+    if couts is not None:
+        couts.valeurs_invalides += 1
+    return _ZERO
 
 
 def _ordre_cle(c: CleCout) -> tuple[str, str, int, str, str]:
@@ -174,10 +183,12 @@ def _agreger(
         )
         ligne = lignes.setdefault(cle, LigneCout(cle))
         taux = taux_vers_euro(costs, str(s.get("wl.currency", "EUR")))
-        ligne.api_real += _decimal(s.get("wl.cost", 0)) * taux
-        ligne.api_uncached += _decimal(s.get("wl.cost_uncached", s.get("wl.cost", 0))) * taux
+        ligne.api_real += _decimal(s.get("wl.cost", 0), couts) * taux
         if s.get("wl.resumed") is True:
-            continue  # appel refait à la reprise : ni appel, ni latence, ni énergie
+            # Appel refait à la reprise : ni appel, ni latence, ni énergie, et son coût hors
+            # cache est déjà porté par le span de l'appel d'origine.
+            continue
+        ligne.api_uncached += _decimal(s.get("wl.cost_uncached", s.get("wl.cost", 0)), couts) * taux
         hit = s.get("wl.llm_cache_hit") is True
         if s.get("wl.kind") != "local":
             ligne.n_calls += 1

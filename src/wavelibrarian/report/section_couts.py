@@ -64,8 +64,8 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
         f"- **Somme des `wl.cost` des spans, convertie en euros : {_eur(couts.total_api())} €** "
         f"(possession en plus : {_eur(couts.total_possession())} €), dont {_eur(hors)} € hors "
         "Configuration (`judging`, `evalset`).",
-        "- **Avertissement** : les kWh `measured` (compteur matériel local) et `estimated` (modèle "
-        "d'estimation des API) restent dans deux colonnes, jamais additionnées : leurs périmètres "
+        "- **Avertissement** : les kWh `measured` (compteur matériel) et `estimated` (modèle "
+        "d'estimation) restent dans deux colonnes, jamais additionnées : leurs périmètres "
         "ne se comparent pas. Le CO2e suit la même séparation.",
     ]
     if any(x.architecture == "cag" for x in ex.experience.configurations):
@@ -76,6 +76,11 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
     if couts.spans_sans_energie:
         lignes.append(
             f"- {couts.spans_sans_energie} span(s) locaux sans énergie connue : comptés pour 0 kWh."
+        )
+    if couts.valeurs_invalides:
+        lignes.append(
+            f"- **Anomalie** : {couts.valeurs_invalides} coût(s) illisible(s) dans `traces.jsonl`, "
+            "comptés pour 0 € : la somme ci-dessus est incomplète."
         )
     return lignes
 
@@ -165,7 +170,8 @@ def section_couts(ex: Execution, couts: Couts) -> list[str]:
         "### Latence, débit et coût par requête",
         "",
         "Latence des Réponses `ok` (somme des spans `query`, hors reprise) ; débit = Réponses ÷ "
-        "durée murale de la phase query ; coût par requête = Poste `query` ÷ Réponses `ok`.",
+        "durée murale de la phase query ; coût par requête = Poste `query` (appels des Réponses "
+        "en échec compris) ÷ Réponses `ok`.",
         "",
         *_table(ENTETE_LATENCE, lat),
         *_points_morts(couts),

@@ -210,7 +210,7 @@ def test_latence_debit_et_cout_par_requete(run_dir: Path, tmp_path: Path) -> Non
             "query",
             start_time=0,
             end_time=3 * mn,
-            **{"wl.llm_cache_hit": True, "wl.cost": "0.2"},
+            **{"wl.llm_cache_hit": True, "wl.cost": "0", "wl.cost_uncached": "0.20"},
         ),
         _span("a", "query", start_time=0, end_time=10 * mn, **{"wl.resumed": True}),
     ]  # fmt: skip
@@ -219,7 +219,7 @@ def test_latence_debit_et_cout_par_requete(run_dir: Path, tmp_path: Path) -> Non
     assert lat.n == 3 and lat.p50 == 2.0 and lat.p95 == pytest.approx(2.9)
     # fenêtre de 0 à 3 min : le hit n'ouvre pas la fenêtre et le span repris est ignoré
     assert lat.debit_qpm == pytest.approx(3 / 3.0)
-    assert lat.cout_requete == (Decimal("0.40") * USD) / 3
+    assert lat.cout_requete == (Decimal("0.20") * USD) / 3  # un hit ne coûte rien
     assert lat.cout_1000 == (lat.cout_requete or 0) * 1000
 
 
@@ -306,3 +306,50 @@ def test_wl_rapport_regenere_costs_csv_identique(run_dir: Path) -> None:
     assert res.exit_code == 0, res.output
     assert (run_dir / "report" / "costs.csv").read_bytes() == avant
     assert isinstance(charger(run_dir), Execution)
+
+
+# --- Revue -------------------------------------------------------------------------------------
+
+
+def test_reprise_ne_recompte_pas_le_cout_hors_cache(run_dir: Path, tmp_path: Path) -> None:
+    # Appel d'origine payé, puis le même appel refait à la reprise : hit du cache `wl.resumed`.
+    spans = [
+        _span("a", "query", **{"wl.cost": "0.10", "wl.cost_uncached": "0.10"}),
+        _span(
+            "a",
+            "query",
+            **{
+                "wl.cost": "0",
+                "wl.cost_uncached": "0.10",
+                "wl.llm_cache_hit": True,
+                "wl.resumed": True,
+            },
+        ),
+    ]  # fmt: skip
+    (ligne,) = calculer_couts(_ex(run_dir, tmp_path, spans, {"a": 1}), _res()).lignes
+    assert ligne.api_real == ligne.api_uncached == Decimal("0.10") * USD
+    assert ligne.n_calls == 1
+
+
+def test_cout_illisible_compte_et_signale(run_dir: Path, tmp_path: Path) -> None:
+    spans = [
+        _span("a", "query", **{"wl.cost": "0.10"}),
+        _span("a", "query", **{"wl.cost": "abc", "wl.cost_uncached": "NaN"}),
+    ]
+    ex = _ex(run_dir, tmp_path, spans, {"a": 1})
+    couts = calculer_couts(ex, _res())
+    assert couts.valeurs_invalides == 2
+    assert couts.total_api() == Decimal("0.10") * USD
+    assert "2 coût(s) illisible(s)" in construire_markdown(ex, _res(), couts)
+
+
+def test_cout_par_requete_compte_les_echecs_payes(run_dir: Path, tmp_path: Path) -> None:
+    # Deux Questions tracées au Poste query, une seule Réponse `ok` : l'échec payé reste dû.
+    spans = [_span("a", "query", **{"wl.cost": "0.10"}) for _ in range(2)]
+    ex = _ex(run_dir, tmp_path, spans, {"a": 2})
+    rep = dict(ex.reponses)
+    rep["a-1"] = rep["a-1"].model_copy(update={"status": "error"})
+    ex = dataclasses.replace(ex, reponses=rep)
+    (lat,) = calculer_couts(ex, _res()).latences
+    assert lat.n == 1
+    assert lat.cout_requete == Decimal("0.20") * USD
