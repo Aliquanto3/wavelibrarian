@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from wavelibrarian.architectures._passages import ecrire_passages, lire_passages
 from wavelibrarian.components.context import build_arch_answer
+from wavelibrarian.components.retrievers.hybrid import HybridRetriever
+from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.core.types import (
     ArchAnswer,
     ParsedCorpus,
@@ -32,6 +34,25 @@ _LOT = 64  # Passages encodés par appel à l'Embedder
 
 def _spec(nom: str) -> Any:
     return Field(default_factory=lambda: ComponentSpec(name=nom))
+
+
+def _refuser_fusion_contradictoire(spec: ComponentSpec, fusion: dict[str, Any]) -> None:
+    """Une seule source de vérité : les étages de fusion se règlent sur l'Architecture.
+
+    La résolution complète `retriever.params` avec les défauts du Retriever : seule une valeur
+    différente de ce défaut et de celle de l'Architecture trahit un réglage contradictoire.
+    """
+    defauts = HybridRetriever.Params()
+    for cle, valeur in fusion.items():
+        if cle not in spec.params:
+            continue
+        donnee = spec.params[cle]
+        if donnee != getattr(defauts, cle) and donnee != valeur:
+            raise ConfigError(
+                f"retriever.params.{cle}",
+                f"vaut {donnee!r} mais l'Architecture fixe {cle} = {valeur!r} ; "
+                f"régler `{cle}` au niveau de l'Architecture `hybrid_rag`",
+            )
 
 
 @register("architecture", "hybrid_rag")
@@ -76,6 +97,7 @@ class HybridRag(ArchitectureBase):
                 "rrf_k": params.rrf_k,
                 "weight_dense": params.weight_dense,
             }
+            _refuser_fusion_contradictoire(spec, fusion)
             spec = ComponentSpec(name=spec.name, params={**spec.params, **fusion})
         self.retriever = ctx.build("retriever", spec)
         self.reranker = ctx.build("reranker", params.reranker) if params.reranker else None
@@ -154,9 +176,16 @@ class HybridRag(ArchitectureBase):
         top_n = self.params.rerank_top_n  # type: ignore[attr-defined]
         candidats = self.retriever.retrieve(texte, max(k, top_n), index)  # type: ignore[attr-defined]
         reclasses = self.reranker.rerank(texte, candidats, top_n)  # type: ignore[attr-defined]
-        # `k` > `rerank_top_n` : les candidats non reclassés suivent, dans l'ordre de la fusion
+        # `k` > `rerank_top_n` : les candidats non reclassés suivent, dans l'ordre de la fusion,
+        # score plafonné au dernier score reclassé pour que les scores décroissent avec le rang
+        # (les échelles de la fusion et du reranker ne sont pas comparables).
         vus = {s.passage.passage_id for s in reclasses}
-        suite = [s for s in candidats if s.passage.passage_id not in vus]
+        plafond = reclasses[-1].score if reclasses else None
+        suite = [
+            s if plafond is None else s.model_copy(update={"score": min(s.score, plafond)})
+            for s in candidats
+            if s.passage.passage_id not in vus
+        ]
         final = [*reclasses, *suite][:k]
         return [s.model_copy(update={"rank": r}) for r, s in enumerate(final, start=1)]
 

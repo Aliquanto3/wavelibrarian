@@ -308,6 +308,50 @@ def test_hybrid_rag_k_superieur_a_rerank_top_n(
     ids = [s.passage.passage_id for s in rep.retrieved]
     assert len(ids) == 4 == len(set(ids))
     assert [s.rank for s in rep.retrieved] == [1, 2, 3, 4]
+    scores = [s.score for s in rep.retrieved]
+    assert scores == sorted(scores, reverse=True)  # non reclassés plafonnés au dernier reclassé
+    assert all(s <= scores[1] for s in scores[2:])
+
+
+def test_hybrid_rag_reranker_ne_reclasse_que_top_n_valeurs_a_la_main(
+    ctx: RunCtx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    arch = _arch(ctx, reranker={"name": "fake"}, rerank_top_n=2, k=4)
+    fusion = [
+        ScoredPassage(passage=_passage("a", "rien"), score=0.04, rank=1),
+        ScoredPassage(passage=_passage("b", "guilde Orvane"), score=0.03, rank=2),
+        ScoredPassage(passage=_passage("c", "guilde Orvane"), score=0.02, rank=3),
+        ScoredPassage(passage=_passage("d", "x"), score=0.01, rank=4),
+    ]
+    monkeypatch.setattr(arch.retriever, "retrieve", lambda *a, **k: fusion)
+    with ctx.scope(post="query", question_id="q-001"):
+        res = arch._recuperer("guilde Orvane", None)
+    # a et b reclassés (b : 1,0 ; a : 0,0) ; c et d suivent, plafonnés à 0,0
+    assert [s.passage.passage_id for s in res] == ["b", "a", "c", "d"]
+    assert [s.score for s in res] == [1.0, 0.0, 0.0, 0.0]
+    assert [s.rank for s in res] == [1, 2, 3, 4]
+
+
+def test_hybrid_rag_fusion_reglee_sur_l_architecture_seule(ctx: RunCtx) -> None:
+    # défauts du Retriever complétés par la résolution : l'Architecture l'emporte
+    arch = _arch(
+        ctx,
+        fusion="weighted",
+        weight_dense=0.8,
+        retriever={"name": "hybrid", "params": {"fusion": "rrf", "weight_dense": 0.5}},
+    )
+    assert arch.retriever.params.fusion == "weighted"
+    assert arch.retriever.params.weight_dense == 0.8
+    # valeur non par défaut et contraire à l'Architecture : refusée
+    with pytest.raises(ConfigError, match="retriever.params.fusion"):
+        _arch(ctx, retriever={"name": "hybrid", "params": {"fusion": "weighted"}})
+    with pytest.raises(ConfigError, match="rrf_k"):
+        _arch(ctx, rrf_k=30, retriever={"name": "hybrid", "params": {"rrf_k": 10}})
+    # même valeur des deux côtés : acceptée
+    arch = _arch(
+        ctx, fusion="weighted", retriever={"name": "hybrid", "params": {"fusion": "weighted"}}
+    )
+    assert arch.retriever.params.fusion == "weighted"
 
 
 def _modifier(doc: ParsedDocument) -> ParsedDocument:
@@ -362,6 +406,11 @@ def test_hybrid_rag_update_incremental_sur_les_deux_index(
     en_lexical = {i for i, _ in index.lexical.search("guilde Orvane Complément", 100_000)}
     assert en_lexical <= set(index.passages)  # index BM25 à jour
     assert any("Complément" in index.passages[i].text for i in en_lexical)
+    textes_sortants = " ".join(
+        json.loads(x)["text"] for x in lignes if json.loads(x)["passage_id"] in sortants
+    )
+    en_lexical_sortant = {i for i, _ in index.lexical.search(textes_sortants, 100_000)}
+    assert not sortants & en_lexical_sortant  # Passages supprimés absents de l'index BM25
     rep = _repondre(neuve, ctx)
     assert len(rep.retrieved) == 5
     assert not sortants & {s.passage.passage_id for s in rep.retrieved}

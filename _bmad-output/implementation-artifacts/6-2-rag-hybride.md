@@ -1,7 +1,7 @@
 ---
 story: "6.2"
 title: RAG hybride
-status: review
+status: done
 ---
 
 # Story 6.2 : RAG hybride
@@ -17,9 +17,9 @@ status: review
 
 - Index : `passages.jsonl`, `vectors/` (`numpy_exact`) et `lexical/` (`bm25`), construits ensemble. `update` retire les Passages sortants des deux index et n'encode que les Documents ajoutés ou modifiés.
 - `query_params` = `k`, `retriever`, `fusion`, `rrf_k`, `weight_dense`, `reranker`, `rerank_top_n` : tous hors de la clé d'index. « Dense seul » et « lexical seul » = `retriever: {name: dense}` ou `lexical` sur le même index ; fusion = `hybrid` ; reranker en plus = `reranker: {name: fake}`.
-- Les Params de fusion vivent sur l'Architecture et sont injectés dans le Retriever `hybrid` à la construction (ceux de `retriever.params` sont écrasés).
+- Les Params de fusion vivent sur l'Architecture et sont injectés dans le Retriever `hybrid` à la construction (une valeur de `retriever.params` différente du défaut du Retriever et de celle de l'Architecture lève une `ConfigError`).
 - Fusion : chaque liste a `max(k, candidates)` Passages. RRF : somme de 1 ÷ (`rrf_k` + rang). Pondérée : min-max par liste (liste à scores égaux : 1,0 pour chacun), absent d'une liste = 0. Ex æquo par `passage_id`.
-- Reranker : l'Architecture récupère `max(k, rerank_top_n)` candidats, le Reranker reclasse les `rerank_top_n` premiers (notes = part des mots de la requête retrouvés, égalités par rang d'origine) et trace le span `rerank` (étape `rerank`, latence, `wl.candidates`). Les `k` premiers sont gardés, rangs renumérotés ; si `k > rerank_top_n`, les candidats non reclassés complètent dans l'ordre de la fusion.
+- Reranker : l'Architecture récupère `max(k, rerank_top_n)` candidats, le Reranker reclasse les `rerank_top_n` premiers (notes = part des mots de la requête retrouvés, égalités par rang d'origine) et trace le span `rerank` (étape `rerank`, latence, `wl.candidates`). Les `k` premiers sont gardés, rangs renumérotés ; si `k > rerank_top_n`, les candidats non reclassés complètent dans l'ordre de la fusion, score plafonné au dernier score reclassé (scores décroissants avec le rang).
 - `capabilities.requires_hybrid_store = false` : deux index distincts.
 
 ## Tâches et critères
@@ -39,3 +39,13 @@ status: review
 - Statut : review. Vérifications finales dans le rapport de l'orchestrateur.
 - Reports : Configuration `hybrid_rag` dans `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` absents du dépôt (story 4.14 non livrée) ; `update` testé en appel direct (l'enchaînement par `IndexCache.build(post="update")` relève du Runner, 4.7). Reranker cross-encoder réel (import paresseux) non écrit : seul `fake` est requis par la story.
 - Test existant ajusté : `test_discover_recursif_et_idempotent` supposait le kind `reranker` vide.
+
+## Revue
+
+- medium, second avis 1 : corrigé. Avec `k > rerank_top_n`, les non reclassés gardaient leur score de fusion (~0,016) après des scores de recouvrement (0,0) : leur score est plafonné au dernier score reclassé, ordre inchangé. Tests `test_hybrid_rag_k_superieur_a_rerank_top_n` et `test_hybrid_rag_reranker_ne_reclasse_que_top_n_valeurs_a_la_main` (valeurs écrites à la main).
+- medium, second avis 2 : corrigé en partie. Une valeur de `retriever.params` (`fusion`, `rrf_k`, `weight_dense`) qui diffère du défaut du Retriever et de l'Architecture lève une `ConfigError`. La comparaison se fait au défaut, parce que la résolution complète déjà `retriever.params`. Test `test_hybrid_rag_fusion_reglee_sur_l_architecture_seule`. Écarté : refuser ces paramètres quand le retriever n'est pas `hybrid`. Après résolution, ils sont toujours présents, et ils sont inoffensifs puisque ce sont des `query_params` sans effet sur l'index.
+- low, second avis 3 : écarté. Une liste à scores égaux est normalisée à 1,0 ; le cas typique est une liste à un seul Passage, qui est bien le meilleur de sa liste. La constante est la même pour tous les Passages de la liste et ne change pas leur ordre relatif.
+- low, second avis 4 : corrigé. Le test d'`update` interroge le BM25 avec le texte des Passages supprimés et vérifie qu'ils sont absents. Une mutation (suppression lexicale retirée) fait échouer le test.
+- low, second avis 5 : corrigé. Un test à valeurs écrites à la main s'ajoute à l'oracle d'intégration. Le test unitaire du reranker utilisait déjà des valeurs à la main.
+- low, second avis 6 : écarté. `count("decouvert") == 1` vérifie l'idempotence. `sorted(names) == [...]` casserait au prochain reranker enregistré.
+- low, second avis 7 : reporté (déjà noté). La Configuration `mini-test`, la conformité et SM-3 attendent la story 4.14. À vérifier : `hybrid_rag` (rrf, puis `reranker: fake`) dans `experiments/mini-test.yaml`, puis passage de `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` sans réseau.
