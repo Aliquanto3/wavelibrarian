@@ -13,6 +13,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, Sp
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 
 from wavelibrarian.core.errors import WlError
+from wavelibrarian.core.jsonl import terminer_ligne
 from wavelibrarian.core.types import Condition, CostPost, Phase, Usage
 from wavelibrarian.measure.energy import EnergyMethod, spread_energy
 
@@ -64,6 +65,7 @@ class JsonlSpanExporter(SpanExporter):
         self.ecrits = 0  # spans effectivement écrits
         self.erreur: OSError | None = None  # dernière écriture ratée (le processeur l'avale)
         path.parent.mkdir(parents=True, exist_ok=True)
+        terminer_ligne(path)  # reprise après un arrêt brutal : ne pas coller à une ligne tronquée
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         lignes = []

@@ -15,6 +15,7 @@ from wavelibrarian.config.experiment import ResolvedExperiment
 from wavelibrarian.config.resolve import fingerprint
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.core.ids import canonical_json, sha16
+from wavelibrarian.core.jsonl import lire_jsonl
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest
 from wavelibrarian.corpus.scenario import corpus_apres
@@ -126,14 +127,8 @@ def deja_terminee(wl_home: Path, run_id: str) -> bool:
 
 def cles_tracees(dossier: Path) -> set[Cle]:
     """Clés des Questions qui ont déjà au moins un span du Poste `query` dans `traces.jsonl`."""
-    chemin = dossier / "traces.jsonl"
-    if not chemin.is_file():
-        return set()
     cles: set[Cle] = set()
-    for ligne in chemin.read_text(encoding="utf-8").splitlines():
-        if not ligne.strip():
-            continue
-        span = json.loads(ligne)
+    for span in lire_jsonl(dossier / "traces.jsonl"):
         if span.get("wl.post") != "query" or not span.get("wl.question_id"):
             continue
         tier = span.get("wl.tier")

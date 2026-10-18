@@ -414,6 +414,7 @@ def test_cli_experience_valide(
     monkeypatch.setattr(cli, "load_questions", lambda _r: None)
     monkeypatch.setattr(cli, "verifier_paliers", lambda *_a: None)
     monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
+    monkeypatch.setattr(cli, "generer_rapport", lambda run_dir, **_k: run_dir / "report")
     res = CliRunner().invoke(app, ["run", str(ecrire(BASE))])
     assert res.exit_code == 0
     assert "Validation réussie" in res.output

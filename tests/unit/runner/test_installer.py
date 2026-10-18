@@ -135,6 +135,7 @@ def _sans_execution(monkeypatch: pytest.MonkeyPatch) -> None:
         run_id="r", status="completed", n_answers=0, run_dir=Path("r"), all_failed=False, unjudged=0
     )
     monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
+    monkeypatch.setattr(cli, "generer_rapport", lambda run_dir, **_k: run_dir / "report")
 
 
 def test_wl_run_preflight_en_echec_code_4(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

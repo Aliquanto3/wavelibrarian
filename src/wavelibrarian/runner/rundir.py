@@ -17,6 +17,7 @@ from wavelibrarian.config.experiment import Budget, ResolvedExperiment
 from wavelibrarian.config.resolve import write_resolved
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import canonical_json
+from wavelibrarian.core.jsonl import lire_jsonl, terminer_ligne
 from wavelibrarian.core.types import Answer, Verdict
 from wavelibrarian.corpus.declare import DeclaredCorpus
 from wavelibrarian.corpus.ingest import nom_parser_resolu, parsers_par_format
@@ -152,41 +153,29 @@ def read_answers(dossier: Path) -> dict[str, Answer]:
     """Réponses effectives de `answers.jsonl`, par `answer_id` : la dernière ligne d'une clé fait
     foi. Le fichier est en ajout seulement : une Question restée `budget_exceeded` est reposée à
     la reprise, et sa nouvelle ligne remplace la précédente."""
-    chemin = dossier / "answers.jsonl"
-    if not chemin.is_file():
-        return {}
     effectives: dict[str, Answer] = {}
-    for ligne in chemin.read_text(encoding="utf-8").splitlines():
-        if ligne.strip():
-            reponse = Answer.model_validate(json.loads(ligne))
-            effectives[reponse.answer_id] = reponse
+    for objet in lire_jsonl(dossier / "answers.jsonl"):
+        reponse = Answer.model_validate(objet)
+        effectives[reponse.answer_id] = reponse
     return effectives
 
 
 def read_verdicts(dossier: Path) -> dict[CleVerdict, Verdict]:
     """Verdicts de `verdicts.jsonl` par (answer_id, judge_model, criterion, pass_id) ; la dernière
     ligne d'une clé fait foi (reprise : seules les clés absentes sont redemandées, AD-11)."""
-    chemin = dossier / "verdicts.jsonl"
-    if not chemin.is_file():
-        return {}
     effectifs: dict[CleVerdict, Verdict] = {}
-    for ligne in chemin.read_text(encoding="utf-8").splitlines():
-        if ligne.strip():
-            v = Verdict.model_validate(json.loads(ligne))
-            effectifs[cle(v)] = v
+    for objet in lire_jsonl(dossier / "verdicts.jsonl"):
+        v = Verdict.model_validate(objet)
+        effectifs[cle(v)] = v
     return effectifs
 
 
 def read_panel(dossier: Path) -> dict[tuple[str, str], PanelVerdict]:
     """Lignes de `panel.jsonl` par (answer_id, criterion) ; la dernière ligne d'une clé fait foi."""
-    chemin = dossier / "panel.jsonl"
-    if not chemin.is_file():
-        return {}
     effectifs: dict[tuple[str, str], PanelVerdict] = {}
-    for ligne in chemin.read_text(encoding="utf-8").splitlines():
-        if ligne.strip():
-            v = PanelVerdict.model_validate(json.loads(ligne))
-            effectifs[(v.answer_id, v.criterion)] = v
+    for objet in lire_jsonl(dossier / "panel.jsonl"):
+        v = PanelVerdict.model_validate(objet)
+        effectifs[(v.answer_id, v.criterion)] = v
     return effectifs
 
 
@@ -213,6 +202,7 @@ class JsonlWriter:
         if name not in get_args(JsonlName):
             raise ValueError(f"{name} n'est pas un fichier écrit par le runner")
         self.path = dossier / name
+        terminer_ligne(self.path)  # dernière ligne tronquée d'un arrêt brutal : ne pas s'y coller
         self._f = open(self.path, "a", encoding="utf-8", newline="\n")  # noqa: SIM115
 
     def append(self, obj: Any) -> None:

@@ -29,10 +29,12 @@ from wavelibrarian.corpus.tiers import tirer_chemins
 from wavelibrarian.evalset import check, closed_book, freeze, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
+from wavelibrarian.report.generer import generer_rapport
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.execute import load_questions, run_experiment, verifier_paliers
 from wavelibrarian.runner.resume import deja_terminee, verifier_reprise
+from wavelibrarian.runner.rundir import RUN_ID
 
 app = typer.Typer(
     name="wl",
@@ -142,6 +144,9 @@ def run(
         f"Exécution {issue.run_id} : {issue.status}, {issue.n_answers} Réponse(s) "
         f"dans {issue.run_dir}"
     )
+    # Le Rapport se génère aussi sur les résultats partiels d'un arrêt au plafond (AD-1 : c'est
+    # la CLI qui enchaîne le runner puis `report/`, le runner n'importe jamais `report`).
+    rapport_ok = _ecrire_rapport(issue.run_dir, wl_home)
     if issue.status == "budget_exceeded":
         typer.echo("Plafond de dépense atteint : Exécution arrêtée.", err=True)
         raise typer.Exit(3)
@@ -154,6 +159,43 @@ def run(
     if issue.all_failed:
         typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
         raise typer.Exit(1)
+    if not rapport_ok:
+        raise typer.Exit(1)
+
+
+def _ecrire_rapport(run_dir: Path, wl_home: Path) -> bool:
+    """Génère `report/` ; un échec du Rapport est annoncé sans masquer l'issue de l'Exécution."""
+    try:
+        sortie = generer_rapport(run_dir, wl_home=wl_home)
+    except (WlError, OSError, ValueError) as erreur:
+        typer.echo(f"Rapport non généré : {erreur}", err=True)
+        return False
+    typer.echo(f"Rapport écrit dans {sortie}")
+    return True
+
+
+@app.command("rapport")
+def rapport(
+    run_id: Annotated[str, typer.Argument(help="Identifiant de l'Exécution (dossier de runs/).")],
+) -> None:
+    """Régénère le Rapport (`report/`) d'une Exécution, depuis ses seuls fichiers.
+
+    Codes de sortie : 0 succès, 1 erreur, 2 Exécution introuvable ou Expérience illisible.
+    """
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    dossier = wl_home / "runs" / run_id
+    if not RUN_ID.fullmatch(run_id) or not dossier.is_dir():
+        typer.echo(f"Exécution {run_id} introuvable dans {wl_home / 'runs'}.", err=True)
+        raise typer.Exit(2)
+    try:
+        sortie = generer_rapport(dossier, wl_home=wl_home)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except (WlError, OSError, ValueError) as erreur:
+        typer.echo(f"Rapport non généré : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    typer.echo(f"Rapport écrit dans {sortie}")
 
 
 @app.command("installer")
