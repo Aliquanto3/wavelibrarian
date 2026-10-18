@@ -11,6 +11,7 @@ models:
     tokenizer: reference
     token_factor: "1.5"                # le tokenizer de Haiku 5.5 compte environ 30 % de tokens de plus que Haiku 4.5
     prompt_cache: true
+    accepts_temperature: false         # HTTP 400 « deprecated for this model », vérifié en réel (4.15)
     min_cacheable_tokens: 512          # un préfixe plus court n'est pas mis en cache, sans erreur
     pricing:
       date: 2026-10-17                 # platform.claude.com/docs/en/about-claude/pricing

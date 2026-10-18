@@ -41,7 +41,7 @@ class LLMRequest(BaseModel):
     system: str
     messages: tuple[Message, ...]
     max_tokens: int
-    temperature: float = 0.0
+    temperature: float | None = 0.0  # None : non envoyée (modèle qui la refuse, AD-20)
     seed: int | None = None
     cache_system: bool = False  # met le system en cache de prompt
     pass_id: int = 0  # entre dans la clé du Cache de réponses (FR-34)

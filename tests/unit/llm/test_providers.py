@@ -144,7 +144,7 @@ def test_anthropic_cache_control_temperature_et_modele() -> None:
     )
     rep = _anthropic(t).complete(_req(cache_system=True, messages=msgs), timeout_s=30)
     corps = t.body()
-    assert corps["model"] == HAIKU and "temperature" not in corps and corps["max_tokens"] == 100
+    assert corps["model"] == HAIKU and corps["temperature"] == 0 and corps["max_tokens"] == 100
     assert corps["system"] == [
         {"type": "text", "text": "Réponds en français.", "cache_control": {"type": "ephemeral"}}
     ]
@@ -158,6 +158,13 @@ def test_anthropic_cache_control_temperature_et_modele() -> None:
     assert (u.input_tokens, u.output_tokens) == (12, 5)
     assert (u.cache_read_tokens, u.cache_write_tokens) == (100, 40)
     assert t.requests[0].url.path == "/v1/messages"
+
+
+def test_anthropic_sans_temperature_si_none() -> None:
+    """`temperature=None` (modèle `accepts_temperature: false`) : le champ ne part pas (4.15)."""
+    t = Transport(_ok())
+    _anthropic(t).complete(_req(temperature=None), timeout_s=30)
+    assert "temperature" not in t.body()
 
 
 def test_anthropic_sans_cache_ni_schema_n_envoie_ni_cache_ni_outil() -> None:

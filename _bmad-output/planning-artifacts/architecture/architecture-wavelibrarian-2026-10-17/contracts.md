@@ -385,7 +385,7 @@ class LLMRequest(BaseModel):
     system: str
     messages: tuple[Message, ...]
     max_tokens: int
-    temperature: float = 0.0
+    temperature: float | None = 0.0  # None : non envoyée (`accepts_temperature: false`, AD-20)
     seed: int | None = None
     cache_system: bool = False             # met le system en cache de prompt
     pass_id: int = 0                       # entre dans la clé du Cache de réponses (FR-34)
@@ -443,7 +443,7 @@ class ModelEntry(BaseModel):               # une entrée de models.yaml (§4.2)
     family: str; kind: Literal["api", "local"]; modality: Literal["llm", "embedding", "reranker"]
     context_window: int | None = None; max_output_tokens: int | None = None
     tokenizer: Literal["reference", "approx"] = "reference"; token_factor: Decimal = Decimal("1.2")
-    prompt_cache: bool = False; min_cacheable_tokens: int | None = None
+    prompt_cache: bool = False; accepts_temperature: bool = True; min_cacheable_tokens: int | None = None
     pricing: Pricing | None = None; dim: int | None = None; hf_repo: str | None = None
     query_prefix: str = ""; passage_prefix: str = ""
 

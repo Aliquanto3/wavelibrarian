@@ -15,6 +15,14 @@ def test_experience_sm4_est_mini_real_haiku_plafonnee() -> None:
     assert exp.judges.pool == ("fake-llm-b", "fake-llm-c")
 
 
+def test_majorant_de_schema_unique() -> None:
+    """Les Composants ne voient pas les providers : `SURCOUT_SCHEMA` recopie le majorant."""
+    from wavelibrarian.components.graph._texte import SURCOUT_SCHEMA
+    from wavelibrarian.llm.providers.anthropic import AnthropicProvider
+
+    assert SURCOUT_SCHEMA == AnthropicProvider.schema_prompt_overhead
+
+
 def test_experience_juges_reels_valide_et_plafonnee() -> None:
     exp = validate_file(RACINE / "tests" / "real" / "experiment_sm4_juges.yaml").resolved
     assert exp.max_questions == 2

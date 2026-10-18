@@ -47,9 +47,10 @@ class OllamaProvider:
     ) -> dict[str, Any]:
         options: dict[str, Any] = {
             **self._settings.options,
-            "temperature": request.temperature,
             "num_predict": request.max_tokens,
         }
+        if request.temperature is not None:
+            options["temperature"] = request.temperature
         if request.seed is not None:
             options["seed"] = request.seed
         if "num_ctx" not in options and request.model_id in self._fenetres:

@@ -44,6 +44,9 @@ class ModelEntry(_Schema):
     tokenizer: Literal["reference", "approx"] = "reference"
     token_factor: Decimal = Decimal("1.2")
     prompt_cache: bool = False
+    # `false` : le modèle refuse `temperature` (AD-20 « si le fournisseur l'accepte ») ; la
+    # passerelle la retire de la requête et de la clé de cache, et le span le signale.
+    accepts_temperature: bool = True
     min_cacheable_tokens: int | None = None
     # `validate_default` : l'absence de `pricing` d'un modèle d'API est signalée à `...pricing`.
     pricing: Pricing | None = Field(default=None, validate_default=True)

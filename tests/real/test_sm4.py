@@ -14,6 +14,7 @@ import json
 import os
 import sqlite3
 from decimal import Decimal
+from math import ceil
 from pathlib import Path
 from typing import Any
 
@@ -129,8 +130,10 @@ def test_sm4_plafond_couvre_les_juges(wl_home: Path) -> None:
 
 
 def test_sm4_temperature_et_outil_impose_acceptes() -> None:
-    """L'outil `emit_output` imposé est accepté ; `temperature` est refusée par l'API pour Haiku 5.5
-    (le fournisseur ne l'envoie plus). Le SDK la refuserait aussi via `extra_body` (1.11)."""
+    """L'outil `emit_output` imposé est accepté, et `accepts_temperature` du Catalogue dit vrai :
+    `false` (Haiku 5.5) si l'API refuse `temperature` (HTTP 400, envoyée par `extra_body`, SDK
+    1.15), `true` si elle l'accepte. La requête effective suit la capacité, comme la passerelle."""
+    from wavelibrarian.core.errors import ProviderError
     from wavelibrarian.llm.providers.anthropic import AnthropicProvider
     from wavelibrarian.llm.roles import GradeRelevanceOutput
     from wavelibrarian.ports.gateway import LLMRequest, Message
@@ -144,15 +147,22 @@ def test_sm4_temperature_et_outil_impose_acceptes() -> None:
         max_tokens=200,
         temperature=0.0,
     )
-    rep = AnthropicProvider().complete(
-        requete, timeout_s=60, output_schema=GradeRelevanceOutput.model_json_schema()
-    )
+    schema = GradeRelevanceOutput.model_json_schema()
+    fournisseur = AnthropicProvider()
+    if load_catalog().get(requete.model_id).accepts_temperature:
+        rep = fournisseur.complete(requete, timeout_s=60, output_schema=schema)
+    else:
+        with pytest.raises(ProviderError, match="HTTP 400"):
+            fournisseur.complete(requete, timeout_s=60, output_schema=schema)
+        effective = requete.model_copy(update={"temperature": None})
+        rep = fournisseur.complete(effective, timeout_s=60, output_schema=schema)
     GradeRelevanceOutput.model_validate_json(rep.text)  # entrée de l'outil `emit_output`
     assert rep.usage.output_tokens > 0
 
 
 def test_sm4_majorant_schema_couvre_count_tokens() -> None:
-    """Le majorant (tokens du schéma x facteur + 400) couvre le surcoût réel de `count_tokens`."""
+    """Le majorant de la passerelle (tokens du schéma x facteur, arrondi au-dessus, + 600) couvre
+    le surcoût réel de `count_tokens`."""
     import anthropic
     from anthropic.types import MessageParam
 
@@ -177,7 +187,8 @@ def test_sm4_majorant_schema_couvre_count_tokens() -> None:
     texte = json.dumps(schema, ensure_ascii=False, sort_keys=True)
     facteur = load_catalog().get(modele).token_factor
     majorant = (
-        int(ReferenceTokenizer().count(texte) * facteur) + AnthropicProvider.schema_prompt_overhead
+        ceil(Decimal(ReferenceTokenizer().count(texte)) * facteur)
+        + AnthropicProvider.schema_prompt_overhead
     )
     print(f"SM-4 count_tokens : surcoût réel {avec - sans}, majorant {majorant}")
     assert avec - sans <= majorant

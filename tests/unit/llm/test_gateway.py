@@ -427,6 +427,21 @@ def test_schema_dans_l_estimation_selon_le_mode_d_envoi(make_env: Callable[..., 
     assert outil_surcout - outil == D(100) * D("0.10") / D(1_000_000)  # consigne d'outil fixe
 
 
+def test_temperature_retiree_si_le_modele_la_refuse(make_env: Callable[..., Env]) -> None:
+    """AD-20 (4.15) : Haiku 5.5 (`accepts_temperature: false`) reçoit `temperature=None`, la clé
+    de cache reflète la requête effective et le span signale l'omission ; fake-llm-a la garde."""
+    env = make_env("ok")
+    env.gw.complete(_req("claude-haiku-5-5"))
+    env.gw.complete(_req("claude-haiku-5-5", temperature=0.7))  # même requête effective : hit
+    env.gw.complete(_req())
+    assert [r.temperature for r in env.provider.requests] == [None, 0.0]
+    haiku, hit, fake = env.spans()
+    assert haiku["wl.temperature_omitted"] is True and hit["wl.llm_cache_hit"] is True
+    assert "wl.temperature_omitted" not in fake
+    assert not env.catalog.get("claude-haiku-5-5").accepts_temperature
+    assert env.catalog.get("fake-llm-a").accepts_temperature
+
+
 def test_schema_json_transmis_au_provider(make_env: Callable[..., Env]) -> None:
     env = make_env('{"reponse": "x"}')
     env.gw.complete_structured(_req(), Schema)

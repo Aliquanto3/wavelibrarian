@@ -178,6 +178,8 @@ class MeteredGateway:
     ) -> None:
         usage = usage or Usage()
         extra: dict[str, str | int | float | bool] = {}
+        if request.temperature is None:
+            extra["wl.temperature_omitted"] = True
         if energie:
             kwh = None
             if self._catalog.get(request.model_id).kind == "api":
@@ -214,6 +216,10 @@ class MeteredGateway:
             raise WlError(f"aucun provider `{nom}` branché pour le modèle {request.model_id!r}")
         devise = entry.pricing.currency if entry.pricing else _DEVISE_LOCALE
         marquee = self._marquer(request)
+        if not entry.accepts_temperature and marquee.temperature is not None:
+            # AD-20 : `temperature` ne part que si le modèle l'accepte ; la clé de cache reflète
+            # la requête effective, et le span porte `wl.temperature_omitted`.
+            marquee = marquee.model_copy(update={"temperature": None})
         schema_json = schema.model_json_schema() if schema is not None else None
         # Après le marquage : le rôle entre dans la clé ; le schéma aussi (il change la requête).
         cle = cache_key(marquee, nom, schema_json)

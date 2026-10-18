@@ -115,6 +115,10 @@ class AnthropicProvider:
                 }
             ]
             corps["tool_choice"] = {"type": "tool", "name": OUTIL_SORTIE}
+        # `temperature` n'est plus un paramètre typé du SDK 1.15 : corps additionnel. `None` : le
+        # modèle la refuse (`accepts_temperature: false`, HTTP 400 pour Haiku 5.5, story 4.15).
+        if request.temperature is not None:
+            corps["extra_body"] = {"temperature": request.temperature}
         return corps
 
     def complete(
@@ -126,8 +130,6 @@ class AnthropicProvider:
     ) -> ProviderResponse:
         corps = self.native_request(request, output_schema)
         try:
-            # Pas de `temperature` : l'API la refuse pour Haiku 5.5 (HTTP 400 « deprecated for this
-            # model », vérifié en réel, story 4.15). La reproductibilité vient du Cache de réponses.
             reponse = self._sdk().messages.create(timeout=timeout_s, **corps)
         except anthropic.AnthropicError as exc:
             raise _traduire(exc) from None
