@@ -1,4 +1,4 @@
-﻿"""Retriever `dense` : les k Passages les plus proches de la requête dans le store vectoriel."""
+"""Retriever `dense` : les k Passages les plus proches de la requête dans le store vectoriel."""
 
 from typing import Any
 
@@ -47,4 +47,3 @@ class DenseRetriever:
             ScoredPassage(passage=index.passages[i], score=s, rank=r)
             for r, (i, s) in enumerate(trouves, start=1)
         ]
-
