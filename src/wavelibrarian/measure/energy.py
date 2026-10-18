@@ -50,6 +50,7 @@ class FakeMeter:
     """Mesureur factice (profil `test`) : énergie fixe, jamais `measured`."""
 
     method: EnergyMethod = "estimated"
+    source = "fake"
 
     def __init__(self, kwh: float = 0.001) -> None:
         self._kwh = kwh
@@ -70,12 +71,29 @@ class FakeEstimator:
         return (usage.input_tokens + usage.output_tokens) * 1e-7
 
 
-def is_hardware_counter(tracker: Any) -> bool:
-    """Vrai si l'un des matériels suivis par codecarbon a été lu sur un compteur matériel."""
+def energy_source(tracker: Any) -> str:
+    """Mode du compteur lu par codecarbon (`wl.energy_source`, contracts.md §6) : `nvml` pour un
+    GPU suivi, sinon le mode matériel s'il y en a un, sinon le premier mode connu, sinon
+    `unknown`. Toujours une chaîne, même sans compteur."""
+    modes: list[str] = []
     for hw in getattr(tracker, "_hardware", None) or []:
         mode = str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
         # codecarbon 3.3.x instancie un `GPU` même avec `gpu_ids=[]` : il ne compte que s'il suit
         # au moins un GPU.
+        if type(hw).__name__ == "GPU":
+            mode = "nvml" if getattr(hw, "gpu_ids", None) else ""
+        if mode:
+            modes.append(mode)
+    for mode in modes:
+        if mode in _MODES_MATERIELS:
+            return mode
+    return modes[0] if modes else "unknown"
+
+
+def is_hardware_counter(tracker: Any) -> bool:
+    """Vrai si l'un des matériels suivis par codecarbon a été lu sur un compteur matériel."""
+    for hw in getattr(tracker, "_hardware", None) or []:
+        mode = str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
         if mode in _MODES_MATERIELS or (
             type(hw).__name__ == "GPU" and getattr(hw, "gpu_ids", None)
         ):
@@ -91,6 +109,7 @@ class CodecarbonMeter:
         self._country = country_iso_code
         self._tracker: Any = None
         self.method: EnergyMethod = "estimated"
+        self.source = "unknown"  # mode du compteur lu à la dernière phase (`wl.energy_source`)
 
     def start(self, phase: str) -> None:
         self._tracker = self._cc.OfflineEmissionsTracker(
@@ -108,6 +127,7 @@ class CodecarbonMeter:
             return None
         tracker.stop()
         self.method = "measured" if is_hardware_counter(tracker) else "estimated"
+        self.source = energy_source(tracker)
         data = getattr(tracker, "final_emissions_data", None)
         energy = getattr(data, "energy_consumed", None)
         return None if energy is None else float(energy)

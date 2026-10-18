@@ -541,7 +541,11 @@ class _Runner:
             raise
         finally:
             try:
-                tracer.end_phase(kwh, getattr(self.meter, "method", "estimated"))
+                tracer.end_phase(
+                    kwh,
+                    getattr(self.meter, "method", "estimated"),
+                    getattr(self.meter, "source", "unknown"),
+                )
                 if apres is not None:
                     apres()
             except Exception as exc:

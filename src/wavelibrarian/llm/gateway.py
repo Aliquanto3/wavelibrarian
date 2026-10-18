@@ -193,6 +193,7 @@ class MeteredGateway:
                     kwh = self._estimator.estimate(request.model_id, usage, latency_s)
             # Local : énergie mesurée par phase et répartie par le runner (AD-17), inconnue ici.
             extra["wl.energy_method"] = "estimated" if kwh is not None else "unknown"
+            extra["wl.energy_source"] = "ecologits" if kwh is not None else "unknown"
             if kwh is not None:
                 extra["wl.energy_kwh"] = kwh
         self._tracer.record(

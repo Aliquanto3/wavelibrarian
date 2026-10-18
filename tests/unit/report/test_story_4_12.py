@@ -166,8 +166,10 @@ def test_possession_du_calcul_local_hors_hits_et_reprises(run_dir: Path, tmp_pat
 
 def test_energie_mesuree_et_estimee_jamais_additionnees(run_dir: Path, tmp_path: Path) -> None:
     spans = [
-        _span("a", "query", **{"wl.energy_kwh": 0.5, "wl.energy_method": "estimated"}),
-        _span("a", "query", **{"wl.energy_kwh": 0.25, "wl.energy_method": "estimated"}),
+        _span("a", "query", **{"wl.energy_kwh": 0.5, "wl.energy_method": "estimated",
+                               "wl.energy_source": "windows_emi"}),
+        _span("a", "query", **{"wl.energy_kwh": 0.25, "wl.energy_method": "estimated",
+                               "wl.energy_source": "windows_emi"}),
         _span("a", "query", **{"wl.energy_kwh": 2.0, "wl.energy_method": "measured"}),
         _span("a", "query", **{"wl.energy_method": "unknown"}),
         _span(
@@ -186,6 +188,8 @@ def test_energie_mesuree_et_estimee_jamais_additionnees(run_dir: Path, tmp_path:
     assert ligne.n_calls == 4  # le span `resumed` n'est pas recompté
     md = construire_markdown(ex, _res(), couts)
     assert "jamais additionnées" in md and "ne se comparent pas" in md
+    assert couts.sources_energie == {"windows_emi": 2, "absent": 1}
+    assert "`wl.energy_source`" in md and "`windows_emi` (2)" in md
     assert "kWh mesurés" in md and "kWh estimés" in md
     assert f"{float(Decimal(2) * gco2):.3f}".replace(".", ",") in md  # 39,200 g mesurés
 

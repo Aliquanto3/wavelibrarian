@@ -46,10 +46,10 @@ class _Ctx:
     question_id: str | None = "q-1"
 
 
-def _record(tracer: Tracer, step: str = "generate", **kw: Any) -> None:
+def _record(tracer: Tracer, step: str = "generate", kind: Any = "llm", **kw: Any) -> None:
     tracer.record(
         step,
-        "llm",
+        kind,
         model_id="fake-llm-a",
         provider="fake",
         usage=Usage(input_tokens=100, output_tokens=20, cache_read_tokens=5, cache_write_tokens=7),
@@ -398,3 +398,63 @@ def test_hachage_attendu_identique_a_tiktoken() -> None:
 
     source = Path(publics.__file__).read_text(encoding="utf-8")
     assert f'expected_hash="{tokenizers._SHA256_ENCODAGE}"' in source
+
+
+@pytest.mark.parametrize(
+    ("mode", "methode", "source"),
+    [
+        ("intel_rapl", "measured", "intel_rapl"),
+        ("intel_power_gadget", "measured", "intel_power_gadget"),
+        ("apple_powermetrics", "measured", "apple_powermetrics"),
+        ("nvml", "measured", "nvml"),
+        ("windows_emi", "estimated", "windows_emi"),  # mis à jour selon la mesure (story 8.6)
+        ("cpu_load", "estimated", "cpu_load"),
+        ("tdp_constant", "estimated", "tdp_constant"),
+        ("mode_inconnu", "estimated", "mode_inconnu"),
+    ],
+)
+def test_mode_injecte_donne_methode_et_source(
+    monkeypatch: pytest.MonkeyPatch, mode: str, methode: str, source: str
+) -> None:
+    class FauxTracker:
+        def __init__(self, **kw: Any) -> None:
+            self._hardware = [SimpleNamespace(_mode=mode)]
+            self.final_emissions_data = SimpleNamespace(energy_consumed=0.001)
+
+        def start(self) -> None: ...
+
+        def stop(self) -> float:
+            return 0.0
+
+    monkeypatch.setitem(
+        sys.modules, "codecarbon", SimpleNamespace(OfflineEmissionsTracker=FauxTracker)
+    )
+    meter = CodecarbonMeter("FRA")
+    meter.start("index")
+    assert meter.stop() == 0.001
+    assert (meter.method, meter.source) == (methode, source)
+
+
+def test_source_sans_materiel_ni_mode() -> None:
+    assert energy.energy_source(SimpleNamespace()) == "unknown"
+    gpu = type("GPU", (), {"gpu_ids": []})()
+    assert energy.energy_source(SimpleNamespace(_hardware=[gpu])) == "unknown"
+    gpu_suivi = type("GPU", (), {"gpu_ids": [0]})()
+    cpu = SimpleNamespace(_mode="cpu_load")
+    assert energy.energy_source(SimpleNamespace(_hardware=[cpu, gpu_suivi])) == "nvml"
+
+
+def test_source_ecrite_dans_les_spans(tmp_path: Path) -> None:
+    chemin = tmp_path / "traces.jsonl"
+    tracer = Tracer(_Ctx(), chemin)
+    assert FakeMeter.source == "fake"
+    for source in ("windows_emi", "cpu_load"):
+        tracer.begin_phase()
+        _record(tracer, "embed", kind="local")
+        tracer.end_phase(0.002, "estimated", source)
+    tracer.begin_phase()
+    _record(tracer, "embed", kind="local")
+    tracer.end_phase(None)  # énergie inconnue : la source l'est aussi, mais elle est écrite
+    attrs = _lignes(chemin)
+    assert [a["wl.energy_source"] for a in attrs] == ["windows_emi", "cpu_load", "unknown"]
+    assert [a["wl.energy_method"] for a in attrs] == ["estimated", "estimated", "unknown"]

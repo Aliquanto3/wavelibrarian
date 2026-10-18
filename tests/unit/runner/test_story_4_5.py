@@ -409,7 +409,9 @@ class _TraceurEnPanne:
     def begin_phase(self) -> None:
         self.ouvertes += 1
 
-    def end_phase(self, kwh: float | None, method: Any = "estimated") -> None:
+    def end_phase(
+        self, kwh: float | None, method: Any = "estimated", source: str = "unknown"
+    ) -> None:
         self.ouvertes -= 1
         raise WlError("trace non écrite")
 

@@ -129,7 +129,9 @@ class Tracer:
             raise WlError("phase d'énergie déjà ouverte")
         self._phase = []
 
-    def end_phase(self, kwh: float | None, method: EnergyMethod = "estimated") -> None:
+    def end_phase(
+        self, kwh: float | None, method: EnergyMethod = "estimated", source: str = "unknown"
+    ) -> None:
         """Répartit `kwh` sur les spans locaux retenus (prorata du temps réellement passé, un
         hit du cache ne compte pas), puis les écrit."""
         tampon, self._phase = self._phase, None
@@ -140,8 +142,10 @@ class Tracer:
             if energie is not None:
                 attrs["wl.energy_kwh"] = energie
                 attrs["wl.energy_method"] = methode
+                attrs["wl.energy_source"] = source
             else:
                 attrs.setdefault("wl.energy_method", "unknown")
+                attrs.setdefault("wl.energy_source", "unknown")
             self._emettre(step, debut, fin, attrs)
 
     def _emettre(

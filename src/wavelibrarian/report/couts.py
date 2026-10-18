@@ -104,6 +104,8 @@ class Couts:
     traces_presentes: bool = True
     spans_sans_energie: int = 0
     valeurs_invalides: int = 0  # `wl.cost` ou `wl.cost_uncached` illisibles, comptés 0 (FR-29)
+    # `wl.energy_source` des spans avec énergie → nombre de spans (`absent` : span sans l'attribut)
+    sources_energie: dict[str, int] = field(default_factory=dict)
     spans_reels: int = 0  # spans d'un fournisseur réel (`anthropic`, `ollama`…), Cache compris
 
     def total_api(self) -> Decimal:
@@ -244,6 +246,9 @@ def _agreger(
         methode = s.get("wl.energy_method")
         fictive = factice or (compteur_factice and methode != "measured")
         if isinstance(energie, int | float) and methode in ("measured", "estimated"):
+            src = s.get("wl.energy_source")
+            src = src if isinstance(src, str) and src else "absent"
+            couts.sources_energie[src] = couts.sources_energie.get(src, 0) + 1
             kwh = _decimal(energie)
             if methode == "measured":
                 ligne.kwh_measured += kwh

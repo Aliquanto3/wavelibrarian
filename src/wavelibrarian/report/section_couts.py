@@ -83,6 +83,9 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
             "- Le préchargement du contexte de `cag` est facturé à chaque Exécution au Poste "
             "`indexing` (hit d'index et reprise compris) : il ne s'amortit pas comme un index."
         )
+    if couts.sources_energie:
+        detail = ", ".join(f"`{k}` ({n})" for k, n in sorted(couts.sources_energie.items()))
+        lignes.append(f"- Source de l'énergie (`wl.energy_source`, spans avec énergie) : {detail}.")
     if couts.spans_sans_energie:
         lignes.append(
             f"- {couts.spans_sans_energie} span(s) locaux sans énergie connue : comptés pour 0 kWh."
