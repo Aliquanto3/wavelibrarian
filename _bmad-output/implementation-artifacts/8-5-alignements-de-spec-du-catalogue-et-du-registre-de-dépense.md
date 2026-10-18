@@ -10,7 +10,7 @@ Exigences : FR-30, FR-33 ; AD-9 ; stories 1.4 et 1.8 (arbitrages P1 et P2). Test
 
 ## Réalisé
 
-- `tests/unit/llm/test_ledger_cache.py` : `test_plafond_de_periode_deux_executions_de_0_90` (plafond de période 2,00 USD, horloge injectée). Deux Exécutions réglées à 0,90 ; réservation de 0,10 acceptée (1,90 <= 2,00) ; 0,30 refusée au titre de la période (2,20 > 2,00) ; acceptée au 1er novembre 2026 UTC. Le test existant à 3,00 USD (2 x 1,50) est conservé : il couvre le même mécanisme avec un autre plafond.
+- `tests/unit/llm/test_ledger_cache.py` : `test_plafond_de_periode_deux_executions_de_0_90` (plafond de période 2,00 USD, horloge injectée). Deux Exécutions réglées à 0,90 ; réservation de 0,10 acceptée (1,90 <= 2,00) ; 0,30 refusée au titre de la période (2,20 > 2,00) ; acceptée au 1er novembre 2026 UTC. Le test à 3,00 USD (2 x 1,50) est supprimé (revue) : l'AC 1 le désigne, et le nouveau test porte la même couverture (refus au titre de la période, bascule au mois civil UTC suivant, solde de période).
 - `tests/unit/config/test_catalog.py` : `test_cout_un_million_catalogue_livre` vérifie `Decimal("3.00")` (1 M + 1 M) et `Decimal("0.03")` (50 000 + 50 000) pour `claude-haiku-5-5`, et retire le commentaire « à arbitrer par Anaël », obsolète.
 
 ## Recalcul des exemples contre la règle
@@ -39,3 +39,12 @@ URL : https://platform.claude.com/docs/en/about-claude/pricing (sections « Mode
 ## Reports
 
 Aucun.
+
+## Revue
+
+- low, second avis : ancien test à plafond 3,00 USD conservé alors que l'AC 1 le vise. Corrigé : supprimé, sa couverture (refus « période », bascule de mois, solde) est portée par le nouveau test.
+- low, second avis : acceptations sans assertion de solde. Corrigé : `period_remaining` vérifié après 0,10 (0,10), après le refus (inchangé), après 0,30 le 1er novembre (1,70).
+- low, second avis : relevé de prix sans citation. Rejeté : la spec recopie déjà l'URL, les sections et la citation de la page (journal ci-dessus).
+- low, second avis : couverture 1.4 ailleurs. Rejeté : l'AC 2 exige ce test précis, présent.
+- low, second avis : `isinstance` redondants. Rejeté : `Decimal("3.00") == 3.0` est vrai, le contrôle de type garde un sens.
+- Report : aucun.
