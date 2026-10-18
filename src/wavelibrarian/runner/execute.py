@@ -33,6 +33,7 @@ from wavelibrarian.core.types import (
 from wavelibrarian.corpus.declare import DeclaredCorpus, TiersSpec, declare
 from wavelibrarian.corpus.ingest import ingest
 from wavelibrarian.corpus.profile import profile as profil_corpus
+from wavelibrarian.corpus.scenario import appliquer_fichier
 from wavelibrarian.corpus.tiers import tirer, tirer_chemins
 from wavelibrarian.evalset import io
 from wavelibrarian.evalset.freeze import select_questions, verify_frozen
@@ -40,10 +41,10 @@ from wavelibrarian.evalset.io import QuestionsFile
 from wavelibrarian.llm.gateway import Providers
 from wavelibrarian.measure.energy import make_meter
 from wavelibrarian.measure.tracing import temps_propre
-from wavelibrarian.ports.architecture import Applicability, ArchitectureBase
+from wavelibrarian.ports.architecture import Applicability, ArchitectureBase, CorpusChange
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.runner.context import Context
-from wavelibrarian.runner.index_cache import IndexCache
+from wavelibrarian.runner.index_cache import IndexCache, index_key
 from wavelibrarian.runner.rundir import (
     JsonlWriter,
     attach_run_log,
@@ -94,9 +95,13 @@ def load_questions(experience: ResolvedExperiment) -> FrozenQuestions:
 
 
 def _hors_perimetre(experience: ResolvedExperiment) -> None:
-    """Refus explicite de ce que le runner ne sait pas encore exécuter (Scénario : story 4.7)."""
-    if experience.scenario is not None:
-        raise ConfigError("scenario", "la phase après mise à jour n'est pas exécutée (story 4.7)")
+    """Refus explicite (code 2) de ce que le runner ne sait pas exécuter : un Scénario combiné à
+    des Paliers. Le Scénario s'applique au Corpus entier ; un Palier est un sous-corpus tiré avant
+    la mise à jour, donc la phase `after_update` n'aurait pas de Palier correspondant."""
+    if experience.scenario is not None and experience.tier is not None:
+        raise ConfigError(
+            "scenario", "un Scénario de mise à jour ne se combine pas avec des Paliers (`tier`)"
+        )
 
 
 def verifier_paliers(
@@ -188,8 +193,11 @@ class _Runner:
         corpus: DeclaredCorpus,
         questions: tuple[Question, ...],
         tier: int | Literal["all"] | None = None,
+        scenario: Path | None = None,
     ) -> None:
         self.ctx = ctx
+        self.scenario = scenario
+        self._apres: dict[str, tuple[CorpusChange, ParsedCorpus, CorpusProfile]] = {}
         self.tier: int | Literal["all"] | None = tier
         self.dossier = dossier
         self.corpus = corpus
@@ -250,6 +258,28 @@ class _Runner:
                 volatility=self.corpus.spec.volatility,
             )
         return sous, self._profils_paliers[(parser, taille)]
+
+    def apres_mise_a_jour(self, parser: str) -> tuple[CorpusChange, ParsedCorpus, CorpusProfile]:
+        """Scénario appliqué au Corpus de base (story 2.6) : changement net, Corpus après mise à
+        jour et son Profil, une fois par parser. `lang` et `parser` sont ceux du `corpus.yaml` et
+        de la Configuration, comme à l'ingestion directe. `ConfigError` (code 2) si le Scénario ne
+        s'applique pas."""
+        if parser not in self._apres:
+            if self.scenario is None:
+                raise ConfigError("scenario", "aucun Scénario déclaré")
+            parse, _ = self.preparer(parser)
+            log.info("étape scénario : %s (parser %s)", self.scenario.name, parser)
+            change, apres = appliquer_fichier(
+                parse, self.scenario, lang=self.corpus.spec.lang, parser=parser
+            )
+            profil = profil_corpus(
+                apres,
+                parser=parser,
+                tokenizer=self.ctx.tokenizer,
+                volatility=self.corpus.spec.volatility,
+            )
+            self._apres[parser] = (change, apres, profil)
+        return self._apres[parser]
 
     def ecrire_profil(self, profil: CorpusProfile) -> None:
         _ecrire_json(self.dossier / "corpus_profile.json", profil.model_dump(mode="json"))
@@ -394,9 +424,10 @@ class _Runner:
         methode: Any,
         status: Literal["error", "inapplicable"],
         message: str,
+        questions: Sequence[Question] | None = None,
     ) -> None:
         vide = ArchAnswer(text="", abstained=False, retrieval_method=methode)
-        for q in self.questions:
+        for q in self.questions if questions is None else questions:
             self._ecrire(writer, self._answer(conf, q, vide, status, message))
 
     def configuration(
@@ -431,8 +462,40 @@ class _Runner:
                             self._vides(writer, conf, "none", "error", message)
                             continue
                     self._cellule(writer, conf, condition, taille, parse, sous, profil_t)
+            if experience.scenario is not None:
+                self._phase_apres_mise_a_jour(writer, conf, experience)
         finally:
-            ctx.condition, ctx.tier = "standard", None
+            ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
+
+    def _phase_apres_mise_a_jour(
+        self, writer: JsonlWriter, conf: ResolvedConfiguration, experience: ResolvedExperiment
+    ) -> None:
+        """Phase `after_update` d'une Configuration (contracts.md §2.1, étape 5) : Scénario
+        appliqué, `update` vers la clé du Corpus après mise à jour, instance neuve + `load`, puis
+        les Questions liées au Scénario (`scenario_target`) reposées, par Condition. Sans Palier
+        (`tier` vaut `all` dans l'`answer_id`)."""
+        ctx = self.ctx
+        liees = tuple(q for q in self.questions if q.scenario_target)
+        if not liees:
+            log.warning("Scénario sans Question liée parmi celles posées : phase non exécutée")
+            return
+        parser = conf.parser.name
+        base, _ = self.preparer(parser)
+        ctx.phase = "after_update"
+        try:
+            change, apres, profil = self.apres_mise_a_jour(parser)
+        except BudgetExceeded:
+            raise
+        except Exception as erreur:
+            log.exception("Scénario en échec pour %s", conf.id)
+            self._vides(writer, conf, "none", "error", f"{type(erreur).__name__} : {erreur}", liees)
+            return
+        for condition in experience.conditions:
+            ctx.condition, ctx.tier = condition, None
+            self._cellule(
+                writer, conf, condition, None, apres, apres, profil,
+                questions=liees, maj=(change, base),
+            )  # fmt: skip
 
     def _cellule(
         self,
@@ -443,11 +506,18 @@ class _Runner:
         parse: ParsedCorpus,
         sous: ParsedCorpus,
         profil: CorpusProfile,
+        *,
+        questions: Sequence[Question] | None = None,
+        maj: tuple[CorpusChange, ParsedCorpus] | None = None,
     ) -> None:
-        """Une (Configuration, Condition, Palier). En contexte parfait, l'Architecture ne reçoit
+        """Une (Configuration, Condition, Palier). `maj = (changement, corpus de base)` : phase
+        `after_update`, l'index est produit par `update` depuis celui de la base, au Poste `update`
+        (`questions` : celles reposées, `parse` et `sous` : le Corpus après mise à jour).
+        En contexte parfait, l'Architecture ne reçoit
         que les Passages de référence : ni `check()` (le Corpus n'entre pas dans le prompt), ni
         index."""
         ctx = self.ctx
+        questions = self.questions if questions is None else questions
         parfait = condition == "perfect_context"
         spec = ComponentSpec(name=conf.architecture, params=conf.params)
 
@@ -455,6 +525,8 @@ class _Runner:
             return ctx.build("architecture", spec)
 
         cle_applicabilite = conf.id if taille is None else f"{conf.id}@{taille}"
+        if maj is not None:
+            cle_applicabilite = f"{conf.id}@after_update"
         try:
             arch = fabrique()
             verdict = Applicability(applicable=True)
@@ -465,7 +537,9 @@ class _Runner:
             raise
         except Exception as erreur:  # Configuration en échec : ses Questions en `error`
             log.exception("Configuration %s : construction ou check en échec", conf.id)
-            self._vides(writer, conf, "none", "error", f"{type(erreur).__name__} : {erreur}")
+            self._vides(
+                writer, conf, "none", "error", f"{type(erreur).__name__} : {erreur}", questions
+            )
             return
         methode = "provided" if parfait else arch.capabilities.retrieval_method
         if not verdict.applicable:
@@ -476,20 +550,30 @@ class _Runner:
                 "applicable": False,
                 "reason": raison,
                 **({} if taille is None else {"tier": taille}),
+                **({} if maj is None else {"phase": "after_update"}),
             }
-            self._vides(writer, conf, methode, "inapplicable", raison)
+            self._vides(writer, conf, methode, "inapplicable", raison, questions)
             return
         cle = "-"
         if not parfait:
             try:
-                log.info("étape index : %s", cle_applicabilite)
-                with self.energie_de_phase(conf, "index"):
-                    arch, cle = self.index_cache.build(ctx, fabrique, sous)
+                if maj is None:
+                    log.info("étape index : %s", cle_applicabilite)
+                    with self.energie_de_phase(conf, "index"):
+                        arch, cle = self.index_cache.build(ctx, fabrique, sous)
+                else:
+                    log.info("étape update : %s", cle_applicabilite)
+                    ancien = self._index_de_base(conf, fabrique, maj[1])
+                    with self.energie_de_phase(conf, "update"):
+                        arch, cle = self.index_cache.build(
+                            ctx, fabrique, sous, post="update", change=maj[0], old_dir=ancien
+                        )
             except BudgetExceeded:
                 raise
             except Exception as erreur:
                 log.exception("Configuration %s : index en échec", conf.id)
-                self._vides(writer, conf, methode, "error", f"{type(erreur).__name__} : {erreur}")
+                message = f"{type(erreur).__name__} : {erreur}"
+                self._vides(writer, conf, methode, "error", message, questions)
                 return
         log.info(
             "étape answer : %s (%s, palier %s, index %s, %d Questions)",
@@ -497,7 +581,7 @@ class _Runner:
             condition,
             "all" if taille is None else taille,
             cle,
-            len(self.questions),
+            len(questions),
         )
         # Réponses écrites après leurs spans retenus : un arrêt dur pendant la phase perd les
         # deux à la fois, et la reprise (AD-11) repose ces Questions depuis les caches.
@@ -508,7 +592,7 @@ class _Runner:
                 self._ecrire(writer, answer)
 
         with self.energie_de_phase(conf, "query", apres=ecrire_reponses):
-            for q in self.questions:
+            for q in questions:
                 if not parfait:
                     reponses.append(self.poser(conf, q, arch, methode))
                     continue
@@ -519,17 +603,42 @@ class _Runner:
                     continue
                 reponses.append(self.poser(conf, q, arch, methode, passages))
 
+    def _index_de_base(
+        self,
+        conf: ResolvedConfiguration,
+        fabrique: Callable[[], ArchitectureBase],
+        base: ParsedCorpus,
+    ) -> Path:
+        """Dossier de l'index de la base, point de départ de `update` (jamais modifié). Absent
+        (Condition `standard` non exécutée en base, base en échec), il est construit d'abord, en
+        phase `base` et au Poste `indexing`."""
+        cle = index_key(base.fingerprint, fabrique())
+        if not self.index_cache.has(cle):
+            ctx = self.ctx
+            ctx.phase = "base"
+            try:
+                with self.energie_de_phase(conf, "index"):
+                    self.index_cache.build(ctx, fabrique, base)
+            finally:
+                ctx.phase = "after_update"
+        return self.index_cache.path(cle)
+
     def _sans_contexte_parfait(
         self, conf: ResolvedConfiguration, q: Question, erreur: ConfigError
     ) -> Answer:
         """Ancrage de référence absent du Corpus de la phase. Pour une Question de Scénario dont
         l'Ancrage n'existe qu'après la mise à jour (`scenario_target.state: after`), c'est une
         non-applicabilité structurelle (`inapplicable`), non une panne ; elle est posée en
-        `after_update` (story 4.7). Toute autre Question : `error`."""
+        `after_update`. Symétriquement, en `after_update`, l'Ancrage d'un Document supprimé
+        (`state: before`) n'existe plus. Toute autre Question : `error`."""
         vide = ArchAnswer(text="", abstained=False, retrieval_method="provided")
         cible = q.scenario_target or {}
-        if self.ctx.phase == "base" and cible.get("state") == "after":
+        phase, etat = self.ctx.phase, cible.get("state")
+        if phase == "base" and etat == "after":
             raison = "Ancrage créé par le Scénario, absent du Corpus de base (phase after_update)"
+            return self._answer(conf, q, vide, "inapplicable", raison)
+        if phase == "after_update" and etat == "before":
+            raison = "Ancrage supprimé par le Scénario, absent du Corpus après mise à jour"
             return self._answer(conf, q, vide, "inapplicable", raison)
         log.warning("Question %s (%s) sans contexte parfait : %s", q.id, conf.id, erreur)
         return self._answer(conf, q, vide, "error", f"{type(erreur).__name__} : {erreur}")
@@ -567,9 +676,13 @@ def run_experiment(
             if paquet.getEffectiveLevel() > logging.INFO:  # étapes du runner dans run.log
                 paquet.setLevel(logging.INFO)
             log.info("Exécution %s : %d Questions posées", run_id, len(questions.questions))
-            runner = _Runner(ctx, dossier, corpus, questions.questions, experience.tier)
+            scenario = Path(experience.scenario) if experience.scenario else None
+            runner = _Runner(ctx, dossier, corpus, questions.questions, experience.tier, scenario)
             _, profil = runner.preparer(experience.configurations[0].parser.name)
             runner.ecrire_profil(profil)
+            if scenario is not None:  # Scénario invalide : refus (code 2) avant tout appel payant
+                for parser in dict.fromkeys(c.parser.name for c in experience.configurations):
+                    runner.apres_mise_a_jour(parser)
             statut: RunStatus = "completed"
             try:
                 with JsonlWriter(dossier, "answers.jsonl") as writer:

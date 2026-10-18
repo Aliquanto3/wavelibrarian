@@ -19,7 +19,7 @@ from wavelibrarian.core.ids import canonical_json, sha16
 from wavelibrarian.core.types import CostPost, ParsedCorpus, Usage
 from wavelibrarian.corpus.ingest import versions_parsers
 from wavelibrarian.measure.tracing import temps_propre
-from wavelibrarian.ports.architecture import ArchitectureBase
+from wavelibrarian.ports.architecture import ArchitectureBase, CorpusChange
 
 if TYPE_CHECKING:
     from wavelibrarian.runner.context import Context
@@ -80,12 +80,19 @@ class IndexCache:
         corpus: ParsedCorpus,
         *,
         post: CostPost = "indexing",
+        change: CorpusChange | None = None,
+        old_dir: Path | None = None,
     ) -> tuple[ArchitectureBase, str]:
         """Rend `(instance chargée, index_key)` ; construit l'index s'il manque.
 
         `factory` crée une instance neuve de l'Architecture (via `ctx.build`). Les appels faits
         pendant `index` sont comptés au Poste `post`. Une exception dans `index` laisse le dossier
         final absent et supprime le dossier temporaire.
+
+        Mise à jour (story 4.7) : avec `change` et `old_dir` (dossier de l'index de la base, lu
+        sans être modifié), un index absent est produit par `update(change, corpus, old_dir,
+        tmp_dir)` au lieu de `index` ; un index déjà présent est servi par le cache. Le dossier
+        final porte la clé du corpus après mise à jour.
         """
         import time
 
@@ -96,7 +103,7 @@ class IndexCache:
         ecoule = ctx.traceur.elapsed_total
         hit = self.has(key)
         if not hit:
-            self._construire(ctx, arch, corpus, key, post)
+            self._construire(ctx, arch, corpus, key, post, change, old_dir)
         neuve = factory()
         with ctx.scope(post=post):  # `load` aussi est imputé à l'indexation (AD-8)
             neuve.load(final)
@@ -107,7 +114,14 @@ class IndexCache:
         return neuve, key
 
     def _construire(
-        self, ctx: "Context", arch: ArchitectureBase, corpus: ParsedCorpus, key: str, post: CostPost
+        self,
+        ctx: "Context",
+        arch: ArchitectureBase,
+        corpus: ParsedCorpus,
+        key: str,
+        post: CostPost,
+        change: CorpusChange | None = None,
+        old_dir: Path | None = None,
     ) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         tmp = self.root / f".tmp-{key}"
@@ -116,7 +130,10 @@ class IndexCache:
         tmp.mkdir()
         try:
             with ctx.scope(post=post):
-                arch.index(corpus, tmp)
+                if change is not None and old_dir is not None:
+                    arch.update(change, corpus, old_dir, tmp)
+                else:
+                    arch.index(corpus, tmp)
             manifest: dict[str, Any] = {
                 "index_key": key,
                 "architecture": arch.name,
