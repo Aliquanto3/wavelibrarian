@@ -96,8 +96,9 @@ def test_dossier_introuvable_et_doublon(tmp_path: Path):
     assert e.value.path == "path"
     fichier = _corpus(tmp_path)
     (tmp_path / "docs" / "copie.md").write_bytes(b"# A\n")
-    with pytest.raises(ConfigError, match="contenu identique"):
+    with pytest.raises(ConfigError, match="contenu identique") as e:
         declare(fichier)
+    assert "copie.md" in e.value.message and "a.md" in e.value.message
 
 
 def _depot(racine: Path) -> None:
@@ -163,17 +164,47 @@ def test_non_publiable_ignore_mais_suivi_refuse(tmp_path: Path):
         declare(fichier)
 
 
-@pytest.mark.parametrize("licence", ["proprietary", "Tous droits réservés", "LicenceRef-client"])
+@pytest.mark.parametrize(
+    "licence",
+    [
+        "proprietary",
+        "Tous droits réservés",
+        "LicenceRef-client",
+        "maison",
+        "CC-BY-NC-4.0",
+        "CC-BY-ND-4.0",
+        "CC-BY-NC-SA-4.0",
+        "cc-by",
+        "MIT-0",
+    ],
+)
 def test_licence_restrictive_dans_depot_refusee(tmp_path: Path, licence: str):
     _depot(tmp_path)
     with pytest.raises(ConfigError, match="sous licence") as e:
         declare(_corpus(tmp_path, license=licence))
     assert e.value.path == "path"
+    assert repr(licence) in e.value.message
     (tmp_path / ".gitignore").write_text("docs/\n", encoding="utf-8")
     assert len(declare(_corpus(tmp_path, license=licence)).documents) == 4
 
 
-@pytest.mark.parametrize("licence", ["CC-BY-4.0", "cc0-1.0", "MIT", "Etalab-2.0", "CC-BY-SA-4.0"])
+@pytest.mark.parametrize(
+    "licence",
+    [
+        "CC-BY-4.0",
+        "cc-by-4.0",
+        " MIT ",
+        "cc0-1.0",
+        "Etalab-2.0",
+        "CC-BY-SA-4.0",
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ODbL-1.0",
+        "PDDL-1.0",
+        "LO-2.0",
+    ],
+)
 def test_licence_ouverte(licence: str):
     from wavelibrarian.corpus.declare import licence_restrictive
 

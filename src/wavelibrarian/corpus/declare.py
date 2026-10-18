@@ -114,14 +114,30 @@ def _git(racine: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
         return None
 
 
-# Licences ouvertes (préfixes SPDX ou équivalents) : toute autre licence est restrictive et
-# soumise à la même garde que `publishable: false` (contracts.md §4.1).
-LICENCES_OUVERTES = ("cc0", "cc-by", "mit", "apache-", "bsd-", "odbl", "pddl", "etalab-", "lo-")
+# Licences ouvertes : identifiants SPDX exacts (contracts.md §4.1, arbitrage P5). Toute autre
+# licence (`-NC`, `-ND`, inconnue) est restrictive et soumise à la même garde que
+# `publishable: false`. Comparaison sans casse ni espaces de bord, jamais par préfixe.
+LICENCES_OUVERTES = frozenset(
+    s.lower()
+    for s in (
+        "CC0-1.0",
+        "CC-BY-4.0",
+        "CC-BY-SA-4.0",
+        "MIT",
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ODbL-1.0",
+        "PDDL-1.0",
+        "etalab-2.0",
+        "LO-2.0",
+    )
+)
 
 
 def licence_restrictive(licence: str) -> bool:
-    """Vrai si la licence n'est pas une licence ouverte connue (par préfixe, sans casse)."""
-    return not licence.strip().lower().startswith(LICENCES_OUVERTES)
+    """Vrai si la licence ne figure pas, à l'identique, dans la liste blanche SPDX."""
+    return licence.strip().lower() not in LICENCES_OUVERTES
 
 
 def _depot_englobant(racine: Path) -> Path | None:
@@ -152,7 +168,11 @@ def _verifier_droits(spec: CorpusSpec, racine: Path) -> None:
         "placez le corpus hors du dépôt ou dans un dossier ignoré (.gitignore), "
         "sinon il risque d'être publié."
     )
-    motif = "publishable: false" if not spec.publishable else f"sous licence {spec.license!r}"
+    motif = (
+        "publishable: false"
+        if not spec.publishable
+        else (f"sous licence {spec.license!r}, restrictive ou inconnue (hors liste blanche SPDX)")
+    )
     ignore = _git(racine, "check-ignore", "-q", "--", str(racine))
     if ignore is None or ignore.returncode not in (0, 1):
         detail = "git introuvable" if ignore is None else ignore.stderr.strip()
