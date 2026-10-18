@@ -5,10 +5,11 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.types import Citation, ModelRefMeta, QuestionInput
 from wavelibrarian.llm.roles import GenerateOutput
 from wavelibrarian.ports.components import Context, GenerationResult
-from wavelibrarian.ports.gateway import LLMRequest, Message
+from wavelibrarian.ports.gateway import LLMRequest, LLMResult, Message
 from wavelibrarian.registry import register
 
 _SYSTEM = (
@@ -43,12 +44,41 @@ class LLMGenerator:
         self._cache_system = params.cache_system
         self.model_id: str = params.model or ctx.profile.defaults.generator_models[0]
 
+    @staticmethod
+    def _contexte_texte(context: Context) -> str:
+        return context.text if context.blocks else "(aucun passage)"
+
+    @staticmethod
+    def _system_avec_contexte(contexte: str) -> str:
+        return f"{_SYSTEM}\n\nContexte :\n{contexte}"
+
+    def preload(self, context: Context) -> LLMResult:
+        """Appel de préchargement du cache de prompt (CAG) : même system que `generate`.
+
+        Texte libre (`complete`), sans schéma : la sortie est ignorée et ne peut pas être
+        « non conforme ». Exige `cache_system: true`.
+        """
+        if not self._cache_system:
+            raise WlError("`preload` exige `cache_system: true`")
+        requete = LLMRequest(
+            model_id=self.model_id,
+            role="generate",
+            step="cag.preload",
+            system=self._system_avec_contexte(self._contexte_texte(context)),
+            cache_system=True,
+            messages=(Message(role="user", content="Préchargement du cache : réponds « ok »."),),
+            max_tokens=16,
+            seed=self._ctx.seed,
+            inputs={"question": "", "blocks": {}},
+        )
+        return self._ctx.gateway.complete(requete)
+
     def generate(self, question: QuestionInput, context: Context) -> GenerationResult:
         blocs = {
             etiquette: _PREFIXE.sub("", bloc, count=1)
             for etiquette, bloc in zip(context.labels, context.blocks, strict=True)
         }
-        contexte = context.text if context.blocks else "(aucun passage)"
+        contexte = self._contexte_texte(context)
         messages = [Message(role=t.role, content=t.text) for t in question.history]
         if self._cache_system:
             systeme = f"{_SYSTEM}\n\nContexte :\n{contexte}"
