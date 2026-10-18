@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 01:56 |
-| Story en cours | 5.1 (voie A, second avis) ; 4.4 (voie B) |
-| Stories livrées | 29 / 56 |
+| Mis à jour | 2026-10-18 02:02 |
+| Story en cours | 4.4 (voie B) ; voie A : epic 6 |
+| Stories livrées | 30 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -104,6 +104,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **Epic 6** : chaque Architecture à embeddings redéfinit `ArchitectureBase.embedder_dim()` (story 4.3).
 - **4.8 (reprise)** : relire `experiment.resolved.yaml` comme `ResolvedExperiment` (ou accepter un parser composite `markdown+pdf_text` dans `resolve_experiment`) (story 4.3).
 - **4.7** : `IndexCache.build(post="update")` pour la phase après mise à jour (story 4.3).
+- **5.2 (`wl calibrer`)** : code 2 pour toute `ConfigError` du chargeur et quand `rapprocher` ne garde aucune annotation ; jointure inter-annotateurs sur les Réponses doublement annotées ; résoudre `answers.jsonl` de l'Exécution (story 5.1).
 
 ## Journal de surveillance
 
@@ -141,6 +142,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 01:37 | 7 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 7 tronq., 71 s/tronq. (pas de réf.) ; pire +0 % | 16 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (4.3) |
 | 01:49 | 7 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 7 tronq., 71 s/tronq. vs 72 (+0 %) ; pire +0 % | 17 % | 11.6 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue |
 | 01:56 | 9 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 9 tronq., 71 s/tronq. vs 72 (+0 %) ; pire +0 % | 8 % | 11.7 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (4.4) |
+| 02:02 | 6 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 6 tronq., 71 s/tronq. vs 72 (+0 %) ; pire +0 % | 15 % | 11.6 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue |
 
 ## Journal des stories
 
@@ -175,3 +177,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 4.2 | 01:20 | 01:37 | f21a1ea9a06584740dc6424011d9b84e080b6e85 | 0 $ | Revue : 1 high corrigé (long_context forçait mal cache_system avec un Generator explicite ; validateur qui force true et refuse false), fenêtre = entrée + max_tokens, BM25 sans mot → [], œ/æ décomposés, k après filtre. 607 tests verts. |
 | 3.7 | 01:30 | 01:49 | 16461c0819e5e1fd0294838dff69be8ca81d333a | 0 $ | 47 Questions écrites à la main et gelées (graine 42, ratio 0,4). Revue : q-008, q-018, q-039 fausses après Scénario corrigées, q-021 rendue vraiment multi-hop, tests réponse⊂Ancrage et Documents modifiés. Fin de l'epic 3. |
 | 4.3 | 01:38 | 01:56 | 0db8c4feb4295fdfcb8b3e6caf19a8c6f038152d | 0 $ | Revue : 1 high corrigé (parser composite markdown+pdf_text décomposé par format, test de bout en bout), contrat AD-3 restauré (limiter_journaux réexporté par la passerelle), version du Parser dans la clé d'index, freeze_sha256 obligatoire, test de filtrage de run.log. 625 tests verts. |
+| 5.1 | 01:53 | 02:02 | 661f70741198ef4ff1e2efbaa2f60394c74dd0a6 | 0 $ | Revue : fichiers non UTF-8 → ConfigError, dossier sans annotation refusé, verdict yes/no strict (SafeLoader sans booléens implicites), .yml accepté, clés dupliquées refusées. 670 tests verts. |
