@@ -28,9 +28,17 @@ def mcnemar_exact(b: int, c: int) -> float:
     return float(binomtest(min(b, c), n, 0.5).pvalue)
 
 
-def compare(a: Mapping[str, bool], b: Mapping[str, bool]) -> ResultatMcNemar:
-    """McNemar exact sur les seules Questions communes ; `n_common` renvoyé."""
+def compare(a: Mapping[str, bool], b: Mapping[str, bool]) -> ResultatMcNemar | None:
+    """McNemar exact sur les seules Questions communes ; `n_common` renvoyé.
+
+    `None` quand aucune Question n'est commune : une p-valeur de 1 sans
+    donnée ferait conclure à tort à une « Qualité égale ». Les valeurs sont
+    des verdicts booléens ; l'appelant décide en amont du sort d'une Réponse
+    absente (exclue, ou comptée fausse explicitement).
+    """
     communes = questions_communes(a, b)
+    if not communes:
+        return None
     disc_b = sum(1 for q in communes if a[q] and not b[q])
     disc_c = sum(1 for q in communes if not a[q] and b[q])
     return ResultatMcNemar(disc_b, disc_c, mcnemar_exact(disc_b, disc_c), len(communes))

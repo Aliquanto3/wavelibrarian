@@ -1,7 +1,7 @@
 ---
 story: "4.10"
 title: Statistiques : bootstrap, McNemar et fronts de Pareto
-status: review
+status: done
 ---
 
 # Story 4.10 : Statistiques : bootstrap, McNemar et fronts de Pareto
@@ -34,3 +34,15 @@ status: review
 
 - Statut : review. Comptes de tests, pyright et contrôle rapide dans le rapport de l'agent.
 - Reports : agrégation par groupe, `pairs.csv`, `pareto.csv`, critère « Qualité égale » : stories de Rapport (4.11 et suivantes). Aucune correction de multiplicité.
+
+## Revue
+
+Revue Opus en une passe, après rebasage sur `main` (8b30f60), avec la liste du second avis (Haiku).
+
+- medium, second avis 1, corrigé : le test apparié n'avait qu'une différence constante. Ajout de `test_bootstrap_apparie_ic_scipy_et_p_analytique` : IC apparié contre `scipy.stats.bootstrap` sur des différences non constantes (1e-9), et p-valeur contre la valeur théorique 14/27 du cas d = [1, 1, -1].
+- medium, second avis 2, corrigé : AD-20 demande `default_rng(int(sha16(seed, *clés), 16))`. Les fonctions gardent une graine entière (le critère 1 exige `default_rng(42)`), et `graine_derivee(seed, *clés)` est ajoutée dans `stats/bootstrap.py`. Le Rapport (4.11) doit l'appeler avec des clés propres à chaque grandeur (config_id, condition, tier, phase, critère ou paire).
+- medium, revue (prolonge le second avis 5), corrigé : `compare()` sans Question commune renvoyait p = 1, ce qui ferait conclure à une « Qualité égale » (p ≥ 0,05) sans donnée et ouvrirait le calcul du point mort. Elle renvoie désormais `None`, comme `compare_continu()`.
+- low, second avis 4, corrigé : un NaN échappait à la dominance et entrait dans le front. `front_pareto` refuse les points non finis, et le bootstrap refuse les valeurs non finies.
+- low, second avis 3, rejeté : `Point.cout` reste le nom de l'axe minimisé. La docstring précise qu'il porte le coût total, l'énergie ou la latence p95, et le Rapport l'écrit en `x` dans `pareto.csv`.
+- low, second avis 6, rejeté : le type `Mapping[str, bool]` exclut `None`. La docstring de `compare` laisse à l'appelant le choix d'exclure une Réponse absente ou de la compter fausse.
+- low, second avis 7, reporté (4.11) : pas de correction de multiplicité, absente de `contracts.md` §7. À signaler dans le Rapport, à côté de `pairs.csv`.

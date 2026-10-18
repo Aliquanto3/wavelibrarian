@@ -1,6 +1,10 @@
 """Bootstrap percentile et bootstrap apparié (fonctions pures, AD-20, AD-22).
 
 L'aléa vient d'un `numpy.random.Generator` créé ici à partir de la graine.
+Pour respecter AD-20, l'appelant (le Rapport) passe une graine dérivée par
+`graine_derivee(seed_experience, *clés)`, avec des clés qui identifient la
+grandeur (par exemple config_id, condition, tier, phase, critère) : chaque
+IC a ainsi son propre flux, reproductible.
 Les rééchantillons sont tirés d'un seul bloc `rng.integers(0, n, (B, n))`,
 comme le fait `scipy.stats.bootstrap`, donc l'IC percentile coïncide avec
 celui de scipy pour le même générateur.
@@ -11,6 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from wavelibrarian.core.ids import sha16
 from wavelibrarian.stats.appariement import questions_communes
 
 N_RESAMPLES = 2000
@@ -36,6 +41,18 @@ class DifferenceAppariee:
     n_common: int
 
 
+def graine_derivee(seed: int, *cles: str) -> int:
+    """Graine AD-20 : `int(sha16(seed, *clés), 16)`."""
+    return int(sha16(str(seed), *cles), 16)
+
+
+def _vecteur(values: Sequence[float | bool]) -> np.ndarray:
+    x = np.asarray(values, dtype=float)
+    if not np.all(np.isfinite(x)):
+        raise ValueError("valeurs non finies (NaN ou infini) refusées")
+    return x
+
+
 def _valider(n_resamples: int, confidence: float) -> None:
     if n_resamples < 1:
         raise ValueError("n_resamples doit être au moins 1")
@@ -58,7 +75,7 @@ def bootstrap_ci(
 ) -> Intervalle | None:
     """IC percentile de la moyenne ; `None` si `values` est vide."""
     _valider(n_resamples, confidence)
-    x = np.asarray(values, dtype=float)
+    x = _vecteur(values)
     if x.size == 0:
         return None
     rng = np.random.default_rng(seed)
@@ -85,7 +102,7 @@ def paired_bootstrap(
     _valider(n_resamples, confidence)
     if len(a) != len(b):
         raise ValueError(f"longueurs différentes : {len(a)} et {len(b)}")
-    d = np.asarray(a, dtype=float) - np.asarray(b, dtype=float)
+    d = _vecteur(a) - _vecteur(b)
     if d.size == 0:
         return None
     rng = np.random.default_rng(seed)

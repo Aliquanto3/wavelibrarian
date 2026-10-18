@@ -4,9 +4,11 @@ import numpy as np
 import pytest
 from scipy import stats
 
+from wavelibrarian.core.ids import sha16
 from wavelibrarian.stats.bootstrap import (
     bootstrap_ci,
     compare_continu,
+    graine_derivee,
     paired_bootstrap,
 )
 from wavelibrarian.stats.mcnemar import compare, mcnemar_exact
@@ -74,6 +76,7 @@ def test_compare_questions_communes():
     a = {"q1": True, "q2": True, "q3": False, "q4": True}
     b = {"q2": False, "q3": True, "q4": True, "q5": False}
     r = compare(a, b)
+    assert r is not None
     assert r.n_common == 3
     assert (r.b, r.c) == (1, 1)
     assert r.p_value == 1.0
@@ -82,7 +85,7 @@ def test_compare_questions_communes():
     assert d.n_common == 1
     assert d.diff == pytest.approx(0.25)
     assert compare_continu({"q1": 1.0}, {"q2": 1.0}, seed=1) is None
-    assert compare({"q1": True}, {"q2": True}).n_common == 0
+    assert compare({"q1": True}, {"q2": True}) is None
 
 
 def test_pareto_domine_et_egalite():
@@ -96,3 +99,38 @@ def test_pareto_domine_et_egalite():
     assert [p.config_id for p in front_pareto(pts)] == ["c", "a", "b", "e"]
     assert [p.config_id for p in front_pareto(reversed(pts))] == ["c", "a", "b", "e"]
     assert front_pareto([]) == []
+
+
+def test_bootstrap_apparie_ic_scipy_et_p_analytique():
+    # IC apparié = IC percentile de scipy sur les différences (vecteur non constant).
+    rng = np.random.default_rng(3)
+    a = rng.normal(0.6, 0.2, 60).tolist()
+    b = rng.normal(0.5, 0.2, 60).tolist()
+    r = paired_bootstrap(a, b, seed=11, n_resamples=2000)
+    ref = stats.bootstrap(
+        (np.array(a) - np.array(b),),
+        np.mean,
+        n_resamples=2000,
+        method="percentile",
+        rng=np.random.default_rng(11),
+        vectorized=True,
+    )
+    assert r is not None
+    assert r.low == pytest.approx(ref.confidence_interval.low, abs=1e-9)
+    assert r.high == pytest.approx(ref.confidence_interval.high, abs=1e-9)
+    # d = [1, 1, -1] : moyenne rééchantillonnée <= 0 ssi au moins deux -1,
+    # probabilité 7/27, donc p bilatérale théorique 14/27.
+    m = paired_bootstrap([1.0, 1.0, 0.0], [0.0, 0.0, 1.0], seed=5, n_resamples=40000)
+    assert m is not None
+    assert m.p_value == pytest.approx(14 / 27, abs=0.015)
+
+
+def test_graine_derivee_et_valeurs_non_finies():
+    assert graine_derivee(42, "cfg", "dev") == int(sha16("42", "cfg", "dev"), 16)
+    assert graine_derivee(42, "cfg", "dev") != graine_derivee(42, "cfg", "test")
+    with pytest.raises(ValueError):
+        bootstrap_ci([0.5, float("nan")], seed=1)
+    with pytest.raises(ValueError):
+        paired_bootstrap([0.5, 1.0], [float("inf"), 0.0], seed=1)
+    with pytest.raises(ValueError):
+        front_pareto([Point("a", float("nan"), 1.0)])
