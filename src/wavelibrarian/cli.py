@@ -29,6 +29,7 @@ from wavelibrarian.corpus.tiers import tirer_chemins
 from wavelibrarian.evalset import check, closed_book, freeze, generate, io
 from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
+from wavelibrarian.report.export import exporter_front as exporter_front_vers
 from wavelibrarian.report.generer import generer_rapport
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.context import Context
@@ -177,11 +178,28 @@ def _ecrire_rapport(run_dir: Path, wl_home: Path) -> bool:
 @app.command("rapport")
 def rapport(
     run_id: Annotated[str, typer.Argument(help="Identifiant de l'Exécution (dossier de runs/).")],
+    exporter_front: Annotated[
+        str | None,
+        typer.Option(
+            "--exporter-front",
+            help="Front de `pareto.csv` à exporter (`qualite-cout` : le front du Rapport).",
+        ),
+    ] = None,
+    vers: Annotated[
+        Path | None, typer.Option("--vers", help="Fichier écrit par --exporter-front.")
+    ] = None,
 ) -> None:
     """Régénère le Rapport (`report/`) d'une Exécution, depuis ses seuls fichiers.
 
-    Codes de sortie : 0 succès, 1 erreur, 2 Exécution introuvable ou Expérience illisible.
+    Avec `--exporter-front <front> --vers <fichier>`, écrit aussi la liste `configurations:` des
+    Configurations non dominées de ce front, réutilisable dans une nouvelle Expérience (FR-41).
+
+    Codes de sortie : 0 succès, 1 erreur, 2 Exécution introuvable, Expérience illisible, front
+    inconnu ou options `--exporter-front` et `--vers` non données ensemble.
     """
+    if (exporter_front is None) != (vers is None):
+        typer.echo("--exporter-front et --vers vont ensemble.", err=True)
+        raise typer.Exit(2)
     wl_home = Path(os.environ.get("WL_HOME") or ".wl")
     dossier = wl_home / "runs" / run_id
     if not RUN_ID.fullmatch(run_id) or not dossier.is_dir():
@@ -189,13 +207,16 @@ def rapport(
         raise typer.Exit(2)
     try:
         sortie = generer_rapport(dossier, wl_home=wl_home)
+        typer.echo(f"Rapport écrit dans {sortie}")
+        if exporter_front is not None and vers is not None:
+            ids = exporter_front_vers(dossier, exporter_front, vers)
+            typer.echo(f"Front {exporter_front} ({len(ids)} Configuration(s)) écrit dans {vers}")
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
     except (WlError, OSError, ValueError) as erreur:
         typer.echo(f"Rapport non généré : {erreur}", err=True)
         raise typer.Exit(1) from erreur
-    typer.echo(f"Rapport écrit dans {sortie}")
 
 
 @app.command("installer")

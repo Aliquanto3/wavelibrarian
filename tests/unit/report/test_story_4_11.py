@@ -94,6 +94,7 @@ def test_wl_run_ecrit_le_rapport_complet_avec_l_entete(run_complet: Path) -> Non
         "retrieval.csv",
         "pairs.csv",
         "costs.csv",
+        "pareto.csv",
     }
     md = (sortie / "report.md").read_text(encoding="utf-8")
     empreinte = (run_complet / "experiment.sha256").read_text(encoding="utf-8").strip()
