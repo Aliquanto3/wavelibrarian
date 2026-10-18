@@ -480,3 +480,44 @@ def test_cas_mixtes_cpu_ram_gpu() -> None:
             mesure,
             source,
         )
+
+
+def test_gpu_present_mais_non_suivi_ne_donne_ni_source_ni_methode() -> None:
+    """Cas du run 8.8 : GPU NVIDIA listé par codecarbon (`gpu_ids=[0]` remis par le 2e tracker)
+    alors que la demande était `gpu_ids=[]` ; le CPU `windows_emi` est la source."""
+    gpu = type("GPU", (), {"gpu_ids": [0]})()
+    cpu = SimpleNamespace(_mode="windows_emi")
+    tracker = SimpleNamespace(_hardware=[SimpleNamespace(), gpu, cpu], _gpu_ids=[])
+    assert energy.energy_source(tracker) == "windows_emi"
+    assert energy.is_hardware_counter(tracker)
+    seul = SimpleNamespace(_hardware=[gpu], _gpu_ids=[])
+    assert energy.energy_source(seul) == "unknown"
+    assert not energy.is_hardware_counter(seul)
+    suivi = SimpleNamespace(_hardware=[gpu, cpu], _gpu_ids=[0])
+    assert energy.energy_source(suivi) == "nvml"
+
+
+def test_le_meter_retire_le_gpu_de_codecarbon(monkeypatch: pytest.MonkeyPatch) -> None:
+    class GPU:
+        gpu_ids = [0]
+
+    class FauxTracker:
+        def __init__(self, **kw: Any) -> None:
+            self._gpu_ids = kw["gpu_ids"]
+            self._hardware = [GPU(), SimpleNamespace(_mode="windows_emi")]
+            self.final_emissions_data = SimpleNamespace(energy_consumed=0.001)
+
+        def start(self) -> None: ...
+
+        def stop(self) -> float:
+            return 0.0
+
+    monkeypatch.setitem(
+        sys.modules, "codecarbon", SimpleNamespace(OfflineEmissionsTracker=FauxTracker)
+    )
+    meter = CodecarbonMeter("FRA")
+    meter.start("index")
+    assert meter._tracker is not None
+    assert [type(h).__name__ for h in meter._tracker._hardware] == ["SimpleNamespace"]
+    meter.stop()
+    assert (meter.method, meter.source) == ("measured", "windows_emi")

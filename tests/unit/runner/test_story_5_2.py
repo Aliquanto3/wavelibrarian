@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -357,6 +358,7 @@ def test_le_panel_de_wl_run_garde_le_cache_des_passes_suivantes() -> None:
     class _Ctx:
         seed = 1
         gateway = _Passerelle()
+        catalog = SimpleNamespace(get=lambda _m: SimpleNamespace(max_output_tokens=None))
 
     item = JudgeInput(
         question="q", reference_answer="r", reference_texts=(), answer_text="a", context_texts=()

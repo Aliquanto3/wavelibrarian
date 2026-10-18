@@ -115,3 +115,16 @@ def test_faithfulness_reprend_les_textes_du_generator(env: Env) -> None:
     assert corps["context_texts"] == list(ITEM.context_texts)
     assert "context_texts" not in sans.inputs
     assert "Texte A" not in sans.messages[0].content
+
+
+def test_budget_de_sortie_couvre_les_sorties_observees(env: Env) -> None:
+    from wavelibrarian.components.judges.llm import budget_sortie
+
+    # Run 8.8 : sorties conformes jusqu'à 414 tokens (3 Critères), coupées à 300 et 420 avant.
+    assert budget_sortie(2) == 500 and budget_sortie(3) == 700 and budget_sortie(0) == 300
+    assert budget_sortie(3) > 414 * 1.5
+    assert budget_sortie(3, max_output_tokens=512) == 512  # borné par le Catalogue
+    assert budget_sortie(1, max_output_tokens=2048) == 300
+    with env.ctx.scope(post="judging", question_id="q-001"):
+        env.juge().judge(ITEM, CRITERES, pass_id=0)
+    assert env.requetes[0].max_tokens == 700

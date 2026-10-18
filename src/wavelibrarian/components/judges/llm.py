@@ -19,7 +19,18 @@ _SYSTEM = (
     "affirme se trouve dans le contexte fourni au générateur. Réponds en JSON : "
     '{"verdicts": {"<critère>": {"verdict": "yes"|"no", "justification": "..."}}}.'
 )
-_MAX_TOKENS_PAR_CRITERE = 120
+# Budget de sortie : 200 tokens par Critère + 100 de structure JSON. Run 8.8 : 48 sorties coupées à
+# 120 × n + 60 (300 ou 420 tokens), alors que les sorties conformes montent à 414 tokens (p95 357)
+# pour 3 Critères ; 200 × 3 + 100 = 700 laisse ~70 % de marge sur le maximum observé.
+_MAX_TOKENS_PAR_CRITERE = 200
+_MAX_TOKENS_FIXE = 100
+
+
+def budget_sortie(n_criteres: int, max_output_tokens: int | None = None) -> int:
+    """`max_tokens` d'un appel de Juge, borné par `max_output_tokens` du Catalogue s'il existe.
+    Il entre dans la clé du Cache (cache.py) et dans l'estimation de la passerelle (sortie)."""
+    budget = _MAX_TOKENS_PAR_CRITERE * max(n_criteres, 1) + _MAX_TOKENS_FIXE
+    return min(budget, max_output_tokens) if max_output_tokens else budget
 
 
 def _schema(criteres: Sequence[str]) -> type[BaseModel]:
@@ -67,7 +78,9 @@ class LLMJudge:
             step="judge",
             system=_SYSTEM,
             messages=(Message(role="user", content=json.dumps(corps, ensure_ascii=False)),),
-            max_tokens=_MAX_TOKENS_PAR_CRITERE * max(len(criteres), 1) + 60,
+            max_tokens=budget_sortie(
+                len(criteres), self._ctx.catalog.get(self.model_id).max_output_tokens
+            ),
             seed=self._ctx.seed,
             pass_id=pass_id,
             inputs=inputs,

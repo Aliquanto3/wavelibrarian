@@ -74,20 +74,35 @@ class FakeEstimator:
         return (usage.input_tokens + usage.output_tokens) * 1e-7
 
 
+def _materiels_suivis(tracker: Any) -> list[Any]:
+    """Matériels de codecarbon dont l'énergie compte vraiment. Un `GPU` n'en fait partie que si
+    la demande (`tracker._gpu_ids`, sinon `gpu_ids` du matériel) désigne au moins un GPU :
+    codecarbon 3.3.x instancie un `GPU` même avec `gpu_ids=[]` et, dès le 2e tracker du processus,
+    y remet tous les GPU détectés (`[0]`), d'où `nvml` à tort sur un poste NVIDIA sans GPU actif."""
+    voulus = getattr(tracker, "_gpu_ids", None)
+    suivis = []
+    for hw in getattr(tracker, "_hardware", None) or []:
+        if type(hw).__name__ == "GPU":
+            ids = voulus if voulus is not None else getattr(hw, "gpu_ids", None)
+            if not ids:
+                continue
+        suivis.append(hw)
+    return suivis
+
+
+def _mode(hw: Any) -> str:
+    if type(hw).__name__ == "GPU":
+        return "nvml"
+    return str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
+
+
 def energy_source(tracker: Any) -> str:
     """Mode du compteur lu par codecarbon (`wl.energy_source`, contracts.md §6) : `nvml` pour un
     GPU suivi, sinon le mode matériel s'il y en a un, sinon le premier mode connu, sinon
-    `unknown`. Toujours une chaîne, même sans compteur. La RAM de codecarbon n'a pas de mode :
-    sa part est estimée par formule, quel que soit le compteur CPU ou GPU."""
-    modes: list[str] = []
-    for hw in getattr(tracker, "_hardware", None) or []:
-        mode = str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
-        # codecarbon 3.3.x instancie un `GPU` même avec `gpu_ids=[]` : il ne compte que s'il suit
-        # au moins un GPU.
-        if type(hw).__name__ == "GPU":
-            mode = "nvml" if getattr(hw, "gpu_ids", None) else ""
-        if mode:
-            modes.append(mode)
+    `unknown`. Un GPU non suivi (hors `gpu_ids`, ou GPU désactivé) ne donne rien. Toujours une
+    chaîne, même sans compteur. La RAM de codecarbon n'a pas de mode : sa part est estimée par
+    formule, quel que soit le compteur CPU ou GPU."""
+    modes = [m for m in (_mode(hw) for hw in _materiels_suivis(tracker)) if m]
     if "nvml" in modes:  # le GPU domine l'énergie d'une phase qui en suit un
         return "nvml"
     for mode in modes:
@@ -98,13 +113,7 @@ def energy_source(tracker: Any) -> str:
 
 def is_hardware_counter(tracker: Any) -> bool:
     """Vrai si l'un des matériels suivis par codecarbon a été lu sur un compteur matériel."""
-    for hw in getattr(tracker, "_hardware", None) or []:
-        mode = str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
-        if mode in _MODES_MATERIELS or (
-            type(hw).__name__ == "GPU" and getattr(hw, "gpu_ids", None)
-        ):
-            return True
-    return False
+    return any(_mode(hw) in _MODES_MATERIELS for hw in _materiels_suivis(tracker))
 
 
 class CodecarbonMeter:
@@ -125,6 +134,10 @@ class CodecarbonMeter:
             log_level="error",
             gpu_ids=[],  # jamais d'interrogation du GPU
         )
+        # `gpu_ids=[]` ne suffit pas : retirer le GPU garde son énergie (au repos) hors de la phase.
+        self._tracker._hardware = [
+            hw for hw in self._tracker._hardware if type(hw).__name__ != "GPU"
+        ]
         self._tracker.start()
 
     def stop(self) -> float | None:
