@@ -190,6 +190,7 @@ def test_energie_mesuree_et_estimee_jamais_additionnees(run_dir: Path, tmp_path:
     assert "jamais additionnées" in md and "ne se comparent pas" in md
     assert couts.sources_energie == {"windows_emi": 2, "absent": 1}
     assert "`wl.energy_source`" in md and "`windows_emi` (2)" in md
+    assert "part RAM, estimée par formule" in md
     assert "kWh mesurés" in md and "kWh estimés" in md
     assert f"{float(Decimal(2) * gco2):.3f}".replace(".", ",") in md  # 39,200 g mesurés
 
