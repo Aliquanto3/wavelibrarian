@@ -63,18 +63,30 @@ def _executions(home: Path) -> list[Path]:
 
 
 @pytest.fixture(scope="module")
-def home(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def sm3(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    """`WL_HOME` et dossier de l'Exécution SM-3, relevé juste après `wl run` : d'autres tests
+    lancent ensuite d'autres Exécutions dans ce même `WL_HOME`."""
     dossier = tmp_path_factory.mktemp("sm3") / "wl_home"
     dossier.mkdir()
     res = _wl(dossier, "run", str(MINI_TEST))
     assert res.exit_code == 0, res.output
-    return dossier
+    (execution,) = _executions(dossier)
+    return dossier, execution
 
 
 @pytest.fixture(scope="module")
-def run_dir(home: Path) -> Path:
-    (dossier,) = _executions(home)
-    return dossier
+def home(sm3: tuple[Path, Path]) -> Path:
+    return sm3[0]
+
+
+@pytest.fixture(scope="module")
+def run_dir(sm3: tuple[Path, Path]) -> Path:
+    return sm3[1]
+
+
+def _configs() -> dict[str, str]:
+    """config_id → Architecture, d'après `mini-test.yaml`."""
+    return {c.id: c.architecture for c in load_experiment(MINI_TEST).configurations}
 
 
 def _experience_absolue(**champs: Any) -> dict[str, Any]:
@@ -130,11 +142,75 @@ def test_aucune_reponse_en_erreur(run_dir: Path) -> None:
                 assert (c, condition, phase) in vues, (c, condition, phase)
 
 
-def test_pareto_csv_porte_le_front_qualite_cout(run_dir: Path) -> None:
-    lignes = _csv(run_dir / "report" / "pareto.csv")
-    front = [x for x in lignes if x["front"] == "qualite-cout"]
+def test_scores_et_retrieval_couvrent_chaque_configuration(run_dir: Path) -> None:
+    """`scores.csv` : la Qualité de chaque Configuration × Condition × phase ; `retrieval.csv` :
+    recall, MRR et nDCG pour chaque Configuration qui récupère (toutes sauf `no_context`)."""
+    configs = _configs()
+    scores = _csv(run_dir / "report" / "scores.csv")
+    qualite = {
+        (x["config_id"], x["condition"], x["phase"]) for x in scores if x["criterion"] == "quality"
+    }
+    attendu = {
+        (c, condition, phase)
+        for c in configs
+        for condition in ("standard", "perfect_context")
+        for phase in ("base", "after_update")
+    }
+    assert qualite == attendu
+    assert all(0 <= Decimal(x["value"]) <= 1 for x in scores)
+    recherche = _csv(run_dir / "report" / "retrieval.csv")
+    metriques: dict[str, set[str]] = {}
+    for x in recherche:
+        metriques.setdefault(x["config_id"], set()).add(x["metric"])
+    qui_recuperent = {c for c, a in configs.items() if a != "no_context"}
+    assert set(metriques) == qui_recuperent
+    for c in qui_recuperent:
+        assert {"recall", "mrr", "ndcg"} <= metriques[c], c
+
+
+def test_synthese_du_rapport_liste_le_front_qualite_cout(run_dir: Path) -> None:
+    texte = (run_dir / "report" / "report.md").read_text(encoding="utf-8")
+    synthese = texte.split(SECTIONS[1], 1)[1].split("\n## ", 1)[0]
+    front = {
+        x["config_id"]
+        for x in _csv(run_dir / "report" / "pareto.csv")
+        if x["front"] == "qualite-cout"
+    }
     assert front
-    assert all(Decimal(x["x"]) >= 0 for x in front)
+    assert "Front `qualite-cout`" in synthese
+    for c in front:
+        assert f"| `{c}` |" in synthese, c
+
+
+def _domine(a: dict[str, str], b: dict[str, str]) -> bool:
+    """`a` domine `b` : coût (x) au plus égal, Qualité (y) au moins égale, l'un strictement."""
+    ax, ay, bx, by = (Decimal(v) for v in (a["x"], a["y"], b["x"], b["y"]))
+    return ax <= bx and ay >= by and (ax < bx or ay > by)
+
+
+def test_pareto_csv_porte_les_fronts_du_contrat_non_domines(run_dir: Path) -> None:
+    """contracts.md §7 : fronts Qualité × coût total, × énergie, × latence p95, et un front
+    (taux du Critère, coût total) par Critère ; aucun point d'un front n'en domine un autre."""
+    lignes = _csv(run_dir / "report" / "pareto.csv")
+    fronts: dict[str, list[dict[str, str]]] = {}
+    for x in lignes:
+        fronts.setdefault(x["front"], []).append(x)
+    criteres = {
+        x["criterion"]
+        for x in _csv(run_dir / "report" / "scores.csv")
+        if x["criterion"] != "quality"
+    }
+    attendus = {"qualite-cout", "qualite-latence-p95"} | {f"critere-{c}-cout" for c in criteres}
+    for nom in attendus:
+        assert nom in fronts and f"{nom}@perfect_context" in fronts, nom
+    assert {"qualite-energie-mesuree", "qualite-energie-estimee"} & set(fronts)
+    configs = _configs()
+    for nom, points in fronts.items():
+        assert {p["config_id"] for p in points} <= set(configs), nom
+        assert all(Decimal(p["x"]) >= 0 for p in points), nom
+        for a in points:
+            for b in points:
+                assert not _domine(a, b), (nom, a["config_id"], b["config_id"])
 
 
 def test_cout_du_rapport_egal_au_cout_trace(home: Path, run_dir: Path) -> None:

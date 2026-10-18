@@ -8,13 +8,16 @@ sans Configuration dans ce fichier échoue ici.
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args, get_origin
 
 import pytest
 import yaml
 from conftest import CONFORMANCE_QUESTION_ID  # type: ignore[import-not-found]
+from pydantic import ValidationError
 
 from wavelibrarian import registry
+from wavelibrarian.config.experiment import Amount
+from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.core.types import ArchAnswer, ParsedCorpus, Question, QuestionInput
 from wavelibrarian.corpus.ingest import nom_parser_resolu, parsers_par_format
 from wavelibrarian.corpus.scenario import appliquer_fichier
@@ -87,8 +90,12 @@ def _repondre(ctx: Context, arch: ArchitectureBase, q: Question) -> ArchAnswer:
 
 
 def _citations_valides(reponse: ArchAnswer, ancrages: set[str]) -> None:
+    """Toute Citation désigne un Ancrage du Corpus, pris dans le Contexte de la Réponse."""
     hors = [c.anchor_id for c in reponse.citations if c.anchor_id not in ancrages]
     assert not hors, f"Citations hors du Corpus : {hors}"
+    contexte = set(reponse.context_anchor_ids)
+    hors_contexte = [c.anchor_id for c in reponse.citations if c.anchor_id not in contexte]
+    assert not hors_contexte, f"Citations hors du Contexte : {hors_contexte}"
 
 
 class _Banc:
@@ -120,18 +127,18 @@ def test_conformite(
     # Indexation : dossier final avec manifeste, instance neuve chargée par le cache d'index.
     arch, cle = banc.indexer(minicorpus)
     assert banc.cache.has(cle)
-    sans_cache = _repondre(ctx, arch, q)
+    reponse = _repondre(ctx, arch, q)
 
     # Réponse citée sur la Question de conformité (sauf `retrieval_method: none`).
-    _citations_valides(sans_cache, ancrages)
+    _citations_valides(reponse, ancrages)
     if arch.capabilities.retrieval_method != "none":
-        assert not sans_cache.abstained, f"{nom} s'abstient sur {q.id}"
-        assert sans_cache.citations, f"{nom} : aucune Citation sur {q.id}"
+        assert not reponse.abstained, f"{nom} s'abstient sur {q.id}"
+        assert reponse.citations, f"{nom} : aucune Citation sur {q.id}"
 
     # Réponses identiques avec le cache d'index (index servi sans reconstruction).
     avec_cache, cle_bis = banc.indexer(minicorpus)
     assert cle_bis == cle
-    assert _repondre(ctx, avec_cache, q).model_dump() == sans_cache.model_dump()
+    assert _repondre(ctx, avec_cache, q).model_dump() == reponse.model_dump()
 
     # Abstention sur un contexte vide.
     with ctx.scope(post="query", question_id=q.id):
@@ -147,7 +154,7 @@ def test_conformite(
     assert parfait.citations
     assert {c.anchor_id for c in parfait.citations} <= attendus
 
-    # `index_key` : change avec un Param hors `query_params`, pas avec un `query_params` entier.
+    # `index_key` : change avec un Param hors `query_params`, pas avec un `query_params`.
     gen = arch.params.generator  # type: ignore[attr-defined]
     autre_generateur = {"name": gen.name, "params": {**gen.params, "max_tokens": 777}}
     assert "generator" not in arch.query_params
@@ -155,9 +162,44 @@ def test_conformite(
     assert index_key(minicorpus.fingerprint, modifie) != cle
     for champ in sorted(arch.query_params):
         valeur = getattr(arch.params, champ)
-        if isinstance(valeur, int) and not isinstance(valeur, bool):
-            requete = banc.fabrique({**banc.params, champ: valeur + 1})
-            assert index_key(minicorpus.fingerprint, requete) == cle, champ
+        variante = _variante(type(arch.params).model_fields[champ].annotation, valeur)
+        if variante is _COMPOSANT_ABSENT:
+            continue
+        try:
+            requete = banc.fabrique({**banc.params, champ: variante})
+        except (ValidationError, ConfigError):
+            # Seul un composant peut refuser la variante générique (`max_tokens`) ; un Param
+            # scalaire doit toujours être varié.
+            assert isinstance(valeur, ComponentSpec), champ
+            continue
+        assert getattr(requete.params, champ) != valeur, champ
+        assert index_key(minicorpus.fingerprint, requete) == cle, champ
+
+
+_COMPOSANT_ABSENT = object()
+
+
+def _variante(annotation: Any, valeur: Any) -> Any:
+    """Une autre valeur valide d'un `query_params` : bool inversé, entier + 1, flottant divisé
+    par deux, autre choix d'un Literal (`search: global` de `graphrag`), autre modèle, autre
+    montant, composant avec un autre `max_tokens`."""
+    if isinstance(valeur, bool):
+        return not valeur
+    if isinstance(valeur, int):
+        return valeur + 1
+    if isinstance(valeur, float):
+        return valeur / 2 if valeur > 0 else 0.25
+    if get_origin(annotation) is Literal:
+        return next(c for c in get_args(annotation) if c != valeur)
+    if isinstance(valeur, Amount):
+        return {"amount": str(valeur.amount * 2), "currency": valeur.currency}
+    if isinstance(valeur, ComponentSpec):
+        return {"name": valeur.name, "params": {**valeur.params, "max_tokens": 99}}
+    if valeur is None and ComponentSpec in get_args(annotation):
+        return _COMPOSANT_ABSENT  # composant optionnel absent (`reranker`) : rien à varier
+    if valeur is None or isinstance(valeur, str):  # référence de modèle
+        return "fake-llm-c" if valeur == "fake-llm-b" else "fake-llm-b"
+    raise AssertionError(f"type de `query_params` non couvert : {annotation}")
 
 
 @pytest.mark.parametrize(("nom", "params"), CAS)
