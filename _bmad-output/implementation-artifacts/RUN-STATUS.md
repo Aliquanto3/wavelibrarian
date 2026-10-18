@@ -148,7 +148,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 02:02 | 6 tronq. (qwen3.5:4b) : think_on reasoning/bbeh-mini 6 tronq., 71 s/tronq. vs 72 (+0 %) ; pire +0 % | 15 % | 11.6 Go | 1 s, 86 Mo, 78 thr (13 proc) | Sous les seuils : on continue |
 | 02:19 | 2 tronq. (qwen3.5:4b) : think_on reasoning/var-math-fr 2 tronq., 70 s/tronq. (pas de réf.) ; pire +0 % | 17 % | 10.8 Go | 7 s, 563 Mo, 122 thr (21 proc) | Sous les seuils : on continue (4.5) |
 | 02:21 | 3 tronq. (qwen3.5:4b) : think_on reasoning/var-math-fr 2 tronq., 70 s/tronq. (pas de réf.) ; think_on abstention/oneruler-fr-none 1 tronq., 43 s/tronq. (pas de réf.) ; pire +0 % | 11 % | 18.1 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (6.2) |
-| 02:38 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 3 tronq., 53 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on reasoning/bbeh-mini 1 tronq., 74 s/tronq. (pas de réf.) ; pire -14 % | 17 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (6.3) |
+| 02:38 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 3 tronq., 53 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on reasoning/bbeh-mini 1 tronq., 74 s/tronq. (pas de réf.) ; pire -14 % | 17 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | -14 % sur 2 réponses seulement (rag/oneruler-fr-cwe), juste sous le seuil de 15 % : vigilance, mesure suivante surveillée ; on continue (6.3) |
 
 ## Journal des stories
 
