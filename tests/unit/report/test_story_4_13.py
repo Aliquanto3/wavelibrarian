@@ -134,7 +134,7 @@ def test_fronts_non_dominees_cout_energie_latence_et_critere(run_dir: Path) -> N
     # un front par Critère : faithfulness, sans-contexte (0,9 pour 4 €) et bm25 (0,4 pour 2 €)
     assert {p.config_id for p in fronts["critere-faithfulness-cout"].points} == ids
     lignes = lignes_pareto(list(fronts.values()))
-    assert ["qualite-cout", "bm25", "2.000000", "0.800000"] in lignes
+    assert ["qualite-cout", "bm25", "2.000000000", "0.800000"] in lignes
 
 
 def test_sans_traces_ni_front_de_cout_ni_d_energie(run_dir: Path) -> None:
@@ -168,6 +168,33 @@ def test_points_identiques_restent_et_plus_grand_palier_sans_suffixe(run_dir: Pa
         "sans-contexte",
     }
     assert [p.config_id for p in fronts["qualite-cout"].points] == ["bm25"]  # Palier 20
+
+
+def test_front_calcule_sur_les_valeurs_ecrites_dans_pareto_csv(run_dir: Path) -> None:
+    """Deux Qualités égales à 6 décimales : le front du Rapport garde les deux, comme le ferait
+    un front recalculé depuis `pareto.csv` (revue 4.13)."""
+    ex = _ex(run_dir)
+    res = Resultats(scores=[_score("bm25", 0.8000001), _score("sans-contexte", 0.8)])
+    couts = Couts(lignes=[_cout("bm25", "query", "1"), _cout("sans-contexte", "query", "1")])
+    (front,) = [f for f in construire_fronts(ex, res, couts) if f.nom == "qualite-cout"]
+    lignes = [x for x in lignes_pareto([front])]
+    relus = [(c, float(y), float(x)) for _, c, x, y in lignes]
+    assert {p.config_id for p in front.points} == {"bm25", "sans-contexte"}
+    assert _non_domines(relus) == {c for c, _, _ in relus}
+
+
+def test_synthese_signale_des_n_differents(run_dir: Path) -> None:
+    ex = _ex(run_dir)
+    partielle = dataclasses.replace(_score("sans-contexte", 0.9), n=4)
+    res = Resultats(scores=[_score("bm25", 0.8), partielle])
+    couts = Couts(lignes=[_cout("bm25", "query", "1"), _cout("sans-contexte", "query", "2")])
+    fronts = construire_fronts(ex, res, couts)
+    md = construire_markdown(ex, res, couts, fronts, [])
+    assert "`bm25` 10, `sans-contexte` 4" in md
+    egaux = Resultats(scores=[_score("bm25", 0.8), _score("sans-contexte", 0.9)])
+    assert "**Attention**" not in construire_markdown(
+        ex, egaux, couts, construire_fronts(ex, egaux, couts), []
+    )
 
 
 # --- pareto.csv et synthèse d'une vraie Exécution -----------------------------------------------
@@ -376,31 +403,44 @@ def test_export_front_refus(run_dir: Path, tmp_path: Path, monkeypatch: pytest.M
     inconnu = _wl(run_dir, "--exporter-front", "n-importe-quoi", "--vers", str(vers))
     assert inconnu.exit_code == 2 and "qualite-cout" in inconnu.output and not vers.exists()
     assert _wl(run_dir, "--exporter-front", "qualite-cout").exit_code == 2
+    assert _wl(run_dir, "--exporter-front", "", "--vers", str(vers)).exit_code == 2
+    assert not vers.exists()
     assert _wl(run_dir, "--vers", str(vers)).exit_code == 2
     assert _wl(run_dir).exit_code == 0
 
 
-def test_export_garde_reuse_index_seulement_si_la_cible_est_exportee(
-    run_dir: Path, tmp_path: Path
-) -> None:
+def test_export_recopie_reuse_index_et_params_rechargeables(run_dir: Path, tmp_path: Path) -> None:
+    """`reuse_index` est une clé d'index (`<WL_HOME>/index/<cle>`), pas un `config_id` : recopié
+    tel quel. Les params résolus (Composants imbriqués) se rechargent par `config/load.py`."""
     copie = tmp_path / "copie"
     (copie / "report").mkdir(parents=True)
     (copie / "report" / "pareto.csv").write_text(
         "front,config_id,x,y\nqualite-cout,a,1,0.5\nqualite-cout,b,2,0.9\n", encoding="utf-8"
     )
     resolue = yaml.safe_load((run_dir / "experiment.resolved.yaml").read_text(encoding="utf-8"))
-    modele = resolue["configurations"][0]
+    (modele,) = [c for c in resolue["configurations"] if c["architecture"] == "bm25_only"]
+    assert modele["params"]["chunker"]["params"]  # Composant imbriqué, params non triviaux
+    modele["params"]["k"] = 3
     resolue["configurations"] = [
-        {**modele, "id": "a", "reuse_index": "b"},
-        {**modele, "id": "b", "reuse_index": "ailleurs"},
+        {**modele, "id": "a", "reuse_index": "cle-index-0123"},
+        {**modele, "id": "b", "reuse_index": None},
     ]
     (copie / "experiment.resolved.yaml").write_text(yaml.safe_dump(resolue), encoding="utf-8")
     vers = tmp_path / "x.yaml"
     assert exporter_front(copie, "qualite-cout", vers) == ["a", "b"]
     contenu = yaml.safe_load(vers.read_text(encoding="utf-8"))["configurations"]
     exportees = {c["id"]: c for c in contenu}
-    assert exportees["a"]["reuse_index"] == "b"
+    assert exportees["a"]["reuse_index"] == "cle-index-0123"
     assert "reuse_index" not in exportees["b"]
+    chemin = tmp_path / "reprise.yaml"
+    chemin.write_text(
+        yaml.safe_dump({**DONNEES, "experiment_id": "exp-reprise", "configurations": contenu}),
+        encoding="utf-8",
+    )
+    rechargees = {c.id: c for c in load_experiment(chemin).configurations}
+    assert rechargees["a"].reuse_index == "cle-index-0123"
+    assert rechargees["a"].params == modele["params"]
+    assert rechargees["a"].parser.name == "auto"
 
 
 def test_wl_rapport_regenere_pareto_csv_identique(

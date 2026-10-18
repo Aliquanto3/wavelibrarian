@@ -66,6 +66,18 @@ def section_pareto(
             ]
         )
     n = len(ex.experience.configurations)
+    effectifs = {c: s.n for c, s in sorted(qualite.items())}
+    avertissement: list[str] = []
+    if len(set(effectifs.values())) > 1:
+        detail = ", ".join(f"`{c}` {k}" for c, k in effectifs.items())
+        avertissement = [
+            "**Attention** : les Qualités comparées dans ce front ne portent pas sur le même "
+            f"nombre de Questions notées (n : {detail}). Une Exécution partielle (plafond), des "
+            "Réponses en `error` ou non jugées en sont la cause ; le front reste celui de "
+            "`pareto.csv`, à lire avec les comparaisons appariées (`pairs.csv`, Questions "
+            "communes).",
+            "",
+        ]
     return [
         *titre,
         f"Front `{front.nom}` ({libelle_groupe(front)}) : {len(front.points)} Configuration(s) "
@@ -79,9 +91,10 @@ def section_pareto(
         "× énergie (kWh mesurés et estimés à part), Qualité × latence p95 et (taux d'un Critère, "
         "coût total) par Critère, ainsi que ceux des autres Conditions et Paliers "
         f"(`{FRONT_REFERENCE}@perfect_context`, `…@palier-N`), sont dans `pareto.csv` (`front, "
-        "config_id, x, y`). Les Qualités ne portent pas toutes sur les mêmes Questions si une "
-        "Exécution est partielle.",
+        "config_id, x, y`). Le coût cumule toutes les phases (dont `after_update`), la Qualité "
+        "est celle de la phase `base`.",
         "",
+        *avertissement,
     ]
 
 
@@ -117,8 +130,8 @@ def section_paliers(res: Resultats, couts: Couts | None) -> list[str]:
         "total de la Configuration (€, phases cumulées) et la latence p95 (s). Un Palier ne se "
         "compare qu'à lui-même : les Paliers ne sont jamais mêlés dans un score. Une Citation est "
         "toujours tirée du contexte de l'index du Palier (le Generator retire toute étiquette "
-        "absente du contexte et la compte dans `invalid_citations`), donc `citation_correctness` "
-        "se lit déjà sur le sous-corpus du Palier.",
+        "absente du contexte et la compte dans `invalid_citations`, ce qui rend le Critère faux), "
+        "donc `citation_correctness` se lit déjà sur le sous-corpus du Palier.",
         "",
         *_table(
             [

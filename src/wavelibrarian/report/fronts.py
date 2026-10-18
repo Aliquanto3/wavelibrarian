@@ -18,6 +18,11 @@ FRONT_REFERENCE = "qualite-cout"  # celui du tableau de synthèse et de `--expor
 _LATENCE = "qualite-latence-p95"
 _ENERGIE_MESUREE = "qualite-energie-mesuree"
 _ENERGIE_ESTIMEE = "qualite-energie-estimee"
+# Décimales de `pareto.csv` ; le front est calculé sur ces valeurs arrondies, pour que le front
+# relu dans le fichier (export) soit celui du Rapport. x à 9 décimales : un kWh de requête locale
+# tient souvent sous 1e-6.
+_DECIMALES_X = 9
+_DECIMALES_Y = 6
 
 Groupe = tuple[str, int | None]  # (condition, tier)
 
@@ -85,7 +90,11 @@ def construire_fronts(ex: Execution, res: Resultats, couts: Couts | None) -> lis
     def ajouter(nom: str, g: Groupe, points: list[Point]) -> None:
         if points:
             nom_complet = nom + _suffixe(g, palier_max)
-            fronts.append(Front(nom_complet, g[0], g[1], tuple(front_pareto(points))))
+            arrondis = [
+                Point(p.config_id, round(p.qualite, _DECIMALES_Y), round(p.cout, _DECIMALES_X))
+                for p in points
+            ]
+            fronts.append(Front(nom_complet, g[0], g[1], tuple(front_pareto(arrondis))))
 
     for g in sorted(groupes, key=_ordre):
         condition, tier = g
@@ -135,7 +144,9 @@ def construire_fronts(ex: Execution, res: Resultats, couts: Couts | None) -> lis
 def lignes_pareto(fronts: list[Front]) -> list[list[str]]:
     """Lignes de `pareto.csv` : `front, config_id, x, y` (x : coût, kWh ou secondes ; y : taux)."""
     return [
-        [f.nom, p.config_id, f"{p.cout:.6f}", f"{p.qualite:.6f}"] for f in fronts for p in f.points
+        [f.nom, p.config_id, f"{p.cout:.{_DECIMALES_X}f}", f"{p.qualite:.{_DECIMALES_Y}f}"]
+        for f in fronts
+        for p in f.points
     ]
 
 

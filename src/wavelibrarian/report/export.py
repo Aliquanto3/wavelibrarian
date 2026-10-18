@@ -13,7 +13,6 @@ from typing import Any
 import yaml
 
 from wavelibrarian.core.errors import ConfigError
-from wavelibrarian.report.fronts import FRONT_REFERENCE
 from wavelibrarian.report.lecture import lire_resolue
 
 _CHAMPS = {"id", "architecture", "parser", "reuse_index", "params"}
@@ -39,13 +38,13 @@ def configurations_du_front(pareto: Path, front: str) -> list[str]:
 def exporter_front(run_dir: Path, front: str, vers: Path) -> list[str]:
     """Écrit `vers` (liste `configurations:`) pour `front` ; rend les `config_id` exportés.
 
-    `front` : `qualite-cout` (alias du front de référence) ou tout nom de `pareto.csv`.
-    `reuse_index` n'est gardé que si sa cible est elle-même exportée : sinon la liste serait
-    refusée dans une nouvelle Expérience (la Configuration reconstruit alors son index)."""
+    `front` : `qualite-cout` (le front de référence) ou tout nom de `pareto.csv` ; un nom vide est
+    refusé comme un nom inconnu. `reuse_index` est une clé d'index de `<WL_HOME>/index/` (FR-3),
+    pas un `config_id` : il est recopié tel quel, et `wl run` vérifie son manifeste."""
     pareto = run_dir / "report" / "pareto.csv"
     if not pareto.is_file():
         raise ConfigError(str(pareto), "pareto.csv absent : générer le Rapport d'abord")
-    ids = configurations_du_front(pareto, front or FRONT_REFERENCE)
+    ids = configurations_du_front(pareto, front)
     par_id = {c.id: c for c in lire_resolue(run_dir).configurations}
     exportees: list[dict[str, Any]] = []
     for i in ids:
@@ -53,7 +52,7 @@ def exporter_front(run_dir: Path, front: str, vers: Path) -> list[str]:
         if conf is None:
             raise ConfigError(i, "Configuration du front absente de l'Expérience résolue")
         donnees = conf.model_dump(mode="json", include=_CHAMPS)
-        if donnees.get("reuse_index") not in ids:
+        if donnees.get("reuse_index") is None:
             donnees.pop("reuse_index", None)
         if "+" in donnees["parser"]["name"]:
             # Parser résolu par format (`markdown+pdf_text`) : pas un nom de Parser.
