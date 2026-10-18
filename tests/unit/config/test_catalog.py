@@ -204,10 +204,14 @@ def test_coherence_profils_catalogue(catalog: ModelCatalog, nom: str) -> None:
 
 
 def test_cout_un_million_catalogue_livre(catalog: ModelCatalog) -> None:
-    # Règle de palier du contrat §4.2 : 1 M d'entrée dépasse 100 000, donc x5 sur
-    # 0.10 + 0.50. L'exemple 0.60 de l'AC est à arbitrer par Anaël.
+    # AC réécrit de la story 1.4 (arbitrage P1) : 1 M d'entrée dépasse 100 000, donc
+    # x5 sur 0.10 + 0.50 ; sous le seuil, prix de base (0.10 x 0.05 + 0.50 x 0.05).
     cout = catalog.cost(HAIKU, Usage(input_tokens=MILLION, output_tokens=MILLION))
     assert cout == Decimal("3.00")
+    assert isinstance(cout, Decimal)
+    petit = catalog.cost(HAIKU, Usage(input_tokens=50_000, output_tokens=50_000))
+    assert petit == Decimal("0.03")
+    assert isinstance(petit, Decimal)
 
 
 def _catalogue(tmp_path: Path, modele: dict[str, object]) -> Path:

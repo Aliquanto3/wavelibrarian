@@ -81,6 +81,21 @@ def test_plafond_de_periode_et_mois_suivant(wl_home: Path) -> None:
         assert lg.balance("anthropic").period_remaining == D("2.90")
 
 
+def test_plafond_de_periode_deux_executions_de_0_90(wl_home: Path) -> None:
+    # AC réécrit de la story 1.8 (arbitrage P2) : plafond de période de 2,00 USD.
+    etat = {"now": datetime(2026, 10, 31, 23, 59, tzinfo=UTC)}
+    b = budget(run="1.00", period="2.00")
+    for run in ("a", "b"):
+        with Ledger(b, run, wl_home, clock=horloge(etat)) as lg:
+            lg.settle(lg.reserve("anthropic", D("0.90"), "USD"), D("0.90"))
+    with Ledger(b, "c", wl_home, clock=horloge(etat)) as lg:
+        lg.reserve("anthropic", D("0.10"), "USD")  # 1,90 <= 2,00
+        with pytest.raises(BudgetExceeded, match="période"):
+            lg.reserve("anthropic", D("0.30"), "USD")  # 2,20 > 2,00
+        etat["now"] = datetime(2026, 11, 1, 0, 0, tzinfo=UTC)
+        lg.reserve("anthropic", D("0.30"), "USD")  # nouveau mois civil UTC
+
+
 def test_reservation_orpheline_reglee_a_l_estimation(wl_home: Path) -> None:
     lg = Ledger(budget(), "r1", wl_home)
     r = lg.reserve("anthropic", D("0.30"), "USD")
