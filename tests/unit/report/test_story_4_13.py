@@ -243,8 +243,9 @@ def test_front_qualite_cout_recalcule_depuis_les_csv(run_paliers: Path) -> None:
         and x["phase"] == "base"
     }
     total = {
+        # Faux LLM pur (story 8.2) : `cost_eur_real` vaut 0, le front lit `cost_eur_fake`.
         c: sum(
-            Decimal(x["cost_eur_real"])
+            Decimal(x["cost_eur_real"]) + Decimal(x["cost_eur_fake"])
             for x in couts
             if x["config_id"] == c
             and x["condition"] == "standard"

@@ -241,8 +241,12 @@ def test_cout_du_rapport_egal_au_cout_trace(home: Path, run_dir: Path) -> None:
         Decimal(0),
     )
     assert abs(api - reel * taux) < Decimal("0.01")  # story 8.2 : le fake est hors du coût réel
+    # Faux LLM pur (AC 2) : `cost_eur_real` vaut 0 exactement, possession comprise ; le fictif
+    # porte au moins les `wl.cost` fake (plus la possession d'une énergie factice).
+    assert reel == 0
+    assert all(Decimal(x["cost_eur_real"]) == 0 == Decimal(x["possession_eur"]) for x in couts)
     factice = sum((Decimal(x["cost_eur_fake"]) for x in couts), Decimal(0))
-    assert abs(factice - (trace - reel) * taux) < Decimal("0.01")
+    assert factice >= trace * taux - Decimal("0.0001") * len(couts)
 
 
 def test_front_exporte_relance_par_wl_run(home: Path, run_dir: Path, tmp_path: Path) -> None:

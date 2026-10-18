@@ -47,7 +47,8 @@ class LigneCout:
     api_real: Decimal = _ZERO  # `wl.cost` hors `fake`, converti, sans possession
     api_fake: Decimal = _ZERO  # `wl.cost` des spans `fake` (fictif, jamais dépensé), converti
     api_uncached: Decimal = _ZERO
-    possession: Decimal = _ZERO
+    possession: Decimal = _ZERO  # possession réelle, comprise dans `real`
+    possession_fake: Decimal = _ZERO  # possession fictive (span `fake` ou compteur `fake`)
     kwh_measured: Decimal = _ZERO
     kwh_estimated: Decimal = _ZERO
     co2e_measured_g: Decimal = _ZERO
@@ -55,6 +56,8 @@ class LigneCout:
     n_calls: int = 0
     kwh_local: Decimal = _ZERO
     secondes_locales: Decimal = _ZERO
+    kwh_local_fake: Decimal = _ZERO
+    secondes_locales_fake: Decimal = _ZERO
 
     @property
     def real(self) -> Decimal:
@@ -62,8 +65,9 @@ class LigneCout:
 
     @property
     def fake(self) -> Decimal:
-        """Coût fictif (spans `fake`) ; hors `real`, hors `uncached` (FR-29)."""
-        return self.api_fake
+        """Coût fictif (spans `fake`, possession d'une énergie factice) ; hors `real`, hors
+        `uncached` (FR-29, story 8.2)."""
+        return self.api_fake + self.possession_fake
 
     @property
     def uncached(self) -> Decimal:
@@ -100,19 +104,25 @@ class Couts:
     traces_presentes: bool = True
     spans_sans_energie: int = 0
     valeurs_invalides: int = 0  # `wl.cost` ou `wl.cost_uncached` illisibles, comptés 0 (FR-29)
+    spans_reels: int = 0  # spans d'un fournisseur réel (`anthropic`, `ollama`…), Cache compris
 
     def total_api(self) -> Decimal:
         """Somme des `wl.cost` des spans d'un fournisseur réel (hors `fake`), en euros (FR-29)."""
         return sum((ligne.api_real for ligne in self.lignes), _ZERO)
 
     def total_fake(self) -> Decimal:
-        """Somme des `wl.cost` des spans `fake`, en euros : fictive, jamais dépensée."""
-        return sum((ligne.api_fake for ligne in self.lignes), _ZERO)
+        """Coûts fictifs (`cost_eur_fake`), en euros : jamais dépensés."""
+        return sum((ligne.fake for ligne in self.lignes), _ZERO)
+
+    def total_reel(self) -> Decimal:
+        """Somme de `cost_eur_real` (possession réelle comprise)."""
+        return sum((ligne.real for ligne in self.lignes), _ZERO)
 
     @property
     def faux_llm_pur(self) -> bool:
-        """Exécution sans aucun coût réel mais avec des coûts factices (profil `test`)."""
-        return self.total_api() == _ZERO and self.total_fake() > _ZERO
+        """Aucun span d'un fournisseur réel (même servi par le Cache), `cost_eur_real` nul et des
+        coûts fictifs (profil `test`) : les fronts et les coûts par requête lisent `fake`."""
+        return self.spans_reels == 0 and self.total_reel() == _ZERO and self.total_fake() > _ZERO
 
     def total_possession(self) -> Decimal:
         return sum((ligne.possession for ligne in self.lignes), _ZERO)
@@ -125,7 +135,7 @@ class Couts:
         `fictif` : les coûts `fake` à la place des coûts réels (Faux LLM pur, story 8.2)."""
         return sum(
             (
-                (ligne.fake + ligne.possession if fictif else ligne.real)
+                (ligne.real + ligne.fake if fictif else ligne.real)
                 for ligne in self.lignes
                 if ligne.cle[:3] == (config, condition, tier)
                 and ligne.cle[4] in POSTES_CONFIGURATION
@@ -181,9 +191,17 @@ def _ordre_cle(c: CleCout) -> tuple[str, str, int, str, str]:
 
 
 def _agreger(
-    spans: Iterable[dict[str, Any]], costs: CostSettings, couts: Couts
+    spans: Iterable[dict[str, Any]],
+    costs: CostSettings,
+    couts: Couts,
+    *,
+    compteur_factice: bool = False,
 ) -> dict[CleBornes, tuple[int, int]]:
-    """Remplit `couts.lignes` ; rend les bornes (ns) de la phase query par groupe."""
+    """Remplit `couts.lignes` ; rend les bornes (ns) de la phase query par groupe.
+
+    La possession d'un span `fake`, ou d'un span local dont l'énergie vient du compteur factice
+    (`energy.local: fake`, profil `test`), est fictive : elle va dans `cost_eur_fake`
+    (story 8.2)."""
     lignes: dict[CleCout, LigneCout] = {}
     bornes: dict[CleBornes, tuple[int, int]] = {}
     gco2 = costs.carbon.gco2e_per_kwh
@@ -202,7 +220,10 @@ def _agreger(
         )
         ligne = lignes.setdefault(cle, LigneCout(cle))
         taux = taux_vers_euro(costs, str(s.get("wl.currency", "EUR")))
-        factice = s.get("gen_ai.provider.name") == "fake"
+        fournisseur = s.get("gen_ai.provider.name")
+        factice = fournisseur == "fake"
+        if fournisseur is not None and not factice:
+            couts.spans_reels += 1
         cout = _decimal(s.get("wl.cost", 0), couts) * taux
         if factice:
             ligne.api_fake += cout
@@ -221,6 +242,7 @@ def _agreger(
             ligne.n_calls += 1
         energie = s.get("wl.energy_kwh")
         methode = s.get("wl.energy_method")
+        fictive = factice or (compteur_factice and methode != "measured")
         if isinstance(energie, int | float) and methode in ("measured", "estimated"):
             kwh = _decimal(energie)
             if methode == "measured":
@@ -230,11 +252,18 @@ def _agreger(
                 ligne.kwh_estimated += kwh
                 ligne.co2e_estimated_g += kwh * gco2
             if _est_local(s):
-                ligne.kwh_local += kwh
+                if fictive:
+                    ligne.kwh_local_fake += kwh
+                else:
+                    ligne.kwh_local += kwh
         elif _est_local(s):
             couts.spans_sans_energie += 1
         if _est_local(s) and not hit:  # un hit porte la latence d'origine : rien n'a tourné
-            ligne.secondes_locales += _decimal(s.get("wl.latency_s", 0))
+            secondes = _decimal(s.get("wl.latency_s", 0))
+            if fictive:
+                ligne.secondes_locales_fake += secondes
+            else:
+                ligne.secondes_locales += secondes
         if post == "query":
             fin = s.get("end_time")
             debut = fin if hit else s.get("start_time")
@@ -247,6 +276,13 @@ def _agreger(
         ligne.possession = possession_cost(
             costs, kwh=ligne.kwh_local, compute_seconds=ligne.secondes_locales, index_gb=0
         )
+        if ligne.kwh_local_fake or ligne.secondes_locales_fake:
+            ligne.possession_fake = possession_cost(
+                costs,
+                kwh=ligne.kwh_local_fake,
+                compute_seconds=ligne.secondes_locales_fake,
+                index_gb=0,
+            )
     couts.lignes = [lignes[c] for c in sorted(lignes, key=_ordre_cle)]
     return bornes
 
@@ -258,7 +294,12 @@ def _latences(
     for a in ex.reponses.values():
         if a.status == "ok":
             par_groupe[(a.config_id, a.condition, a.tier, a.phase)].append(a.latency_s)
-    cout_query = {c.cle[:4]: c.real for c in couts.lignes if c.cle[4] == "query"}
+    fictif = couts.faux_llm_pur  # Faux LLM pur : coût par requête sur `cost_eur_fake`
+    cout_query = {
+        c.cle[:4]: c.real + c.fake if fictif else c.real
+        for c in couts.lignes
+        if c.cle[4] == "query"
+    }
     lignes: list[LigneLatence] = []
     for g in sorted(par_groupe, key=lambda g: (g[0], g[1], -1 if g[2] is None else g[2], g[3])):
         valeurs = par_groupe[g]
@@ -284,10 +325,11 @@ def _points_morts(ex: Execution, res: Resultats, couts: Couts) -> list[PointMort
     """Point mort N* de chaque couple (A, B) où A coûte plus à l'indexation, en Condition standard
     et phase `base`, palier par palier (contracts.md §7)."""
     index: dict[tuple[str, int | None], Decimal] = defaultdict(Decimal)
+    fictif = couts.faux_llm_pur
     for ligne in couts.lignes:
         config, condition, tier, phase, post = ligne.cle
         if condition == "standard" and phase == "base" and post == "indexing":
-            index[(config, tier)] += ligne.real
+            index[(config, tier)] += ligne.real + ligne.fake if fictif else ligne.real
     requete = {
         (lat.groupe[0], lat.groupe[2]): lat.cout_requete
         for lat in couts.latences
@@ -331,7 +373,12 @@ def calculer_couts(ex: Execution, res: Resultats) -> Couts:
     couts = Couts()
     chemin = ex.run_dir / "traces.jsonl"
     couts.traces_presentes = chemin.is_file()
-    bornes = _agreger(lire_jsonl(chemin), ex.experience.costs, couts)
+    bornes = _agreger(
+        lire_jsonl(chemin),
+        ex.experience.costs,
+        couts,
+        compteur_factice=ex.experience.profile_settings.energy.local == "fake",
+    )
     couts.latences = _latences(ex, couts, bornes)
     couts.points_morts = _points_morts(ex, res, couts)
     return couts

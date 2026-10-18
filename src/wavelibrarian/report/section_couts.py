@@ -65,11 +65,12 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
         f"{_eur(couts.total_api())} €** "
         f"(possession en plus : {_eur(couts.total_possession())} €), dont {_eur(hors)} € hors "
         "Configuration (`judging`, `evalset`).",
-        f"- Coûts **fictifs** (spans `fake`, jamais dépensés, colonne `cost_eur_fake`) : "
-        f"{_eur(couts.total_fake())} €, hors `cost_eur_real`."
+        f"- Coûts **fictifs** (spans `fake` et possession d'une énergie du compteur factice, "
+        f"jamais dépensés, colonne `cost_eur_fake`) : {_eur(couts.total_fake())} €, hors "
+        "`cost_eur_real`."
         + (
-            " Faux LLM pur : `cost_eur_real` vaut 0, les fronts de Pareto se calculent sur "
-            "`cost_eur_fake`."
+            " Faux LLM pur : `cost_eur_real` vaut 0 ; les fronts de Pareto, le coût par requête "
+            "et le point mort se calculent sur `cost_eur_fake`."
             if couts.faux_llm_pur
             else ""
         ),

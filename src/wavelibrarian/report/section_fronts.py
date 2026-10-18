@@ -86,6 +86,13 @@ def section_pareto(
             "",
         ]
         if couts.faux_llm_pur
+        else [
+            f"Coûts fictifs exclus : {_nb(float(couts.total_fake()), 4)} € de `cost_eur_fake` "
+            "(Composants ou Juges `fake`) ne comptent pas dans ce front, calculé sur "
+            "`cost_eur_real`.",
+            "",
+        ]
+        if couts.total_fake() > 0
         else []
     )
     return [
@@ -147,7 +154,12 @@ def section_paliers(res: Resultats, couts: Couts | None) -> list[str]:
         "compare qu'à lui-même : les Paliers ne sont jamais mêlés dans un score. Une Citation est "
         "toujours tirée du contexte de l'index du Palier (le Generator retire toute étiquette "
         "absente du contexte et la compte dans `invalid_citations`, ce qui rend le Critère faux), "
-        "donc `citation_correctness` se lit déjà sur le sous-corpus du Palier.",
+        "donc `citation_correctness` se lit déjà sur le sous-corpus du Palier."
+        + (
+            " Exécution en Faux LLM pur : le coût total est fictif (`cost_eur_fake`)."
+            if couts is not None and couts.faux_llm_pur
+            else ""
+        ),
         "",
         *_table(
             [

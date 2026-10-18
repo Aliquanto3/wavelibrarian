@@ -381,10 +381,41 @@ def test_costs_csv_colonne_fake_separee_et_faux_llm_pur(run_dir: Path) -> None:
     with (run_dir / "report" / "costs.csv").open(encoding="utf-8", newline="") as f:
         lignes = list(csv.DictReader(f))
     assert "cost_eur_fake" in lignes[0]
-    assert all(Decimal(x["cost_eur_real"]) == Decimal(x["possession_eur"]) for x in lignes)
+    # AC 2 : 0 exactement, possession comprise (énergie du compteur factice : possession fictive)
+    assert all(Decimal(x["cost_eur_real"]) == 0 == Decimal(x["possession_eur"]) for x in lignes)
     assert sum((Decimal(x["cost_eur_fake"]) for x in lignes), Decimal(0)) > 0
     md = (run_dir / "report" / "report.md").read_text(encoding="utf-8")
     assert "Faux LLM pur" in md and "cost_eur_fake" in md
     with (run_dir / "report" / "pareto.csv").open(encoding="utf-8", newline="") as f:
         x_cout = [float(r["x"]) for r in csv.DictReader(f) if r["front"].startswith("qualite-cout")]
     assert x_cout and max(x_cout) > 0  # le front se calcule sur le coût fictif, non nul
+
+
+def test_cache_reel_a_cout_nul_n_est_pas_du_faux_llm_pur(run_dir: Path, tmp_path: Path) -> None:
+    spans = [
+        _span("a", "query", **{"wl.cost": "0", "gen_ai.provider.name": "anthropic",
+                               "wl.llm_cache_hit": True}),
+        _span("a", "judging", **{"wl.cost": "5.00", "gen_ai.provider.name": "fake"}),
+    ]  # fmt: skip
+    couts = calculer_couts(_ex(run_dir, tmp_path, spans, {"a": 1}), _res())
+    assert couts.spans_reels == 1 and not couts.faux_llm_pur
+
+
+def test_possession_d_une_energie_factice_hors_du_cout_reel(run_dir: Path, tmp_path: Path) -> None:
+    local = {"wl.kind": "local", "wl.energy_kwh": 0.004, "wl.latency_s": 3.0}
+    spans = [
+        _span("a", "indexing", **local, **{"wl.energy_method": "estimated"}),
+        _span("a", "query", **{"wl.cost": "0.50", "gen_ai.provider.name": "fake"}),
+    ]
+    ex = _ex(run_dir, tmp_path, spans, {"a": 1})  # profil `test` : compteur local factice
+    couts = calculer_couts(ex, _res())
+    possession = possession_cost(ex.experience.costs, kwh=0.004, compute_seconds=3.0, index_gb=0)
+    assert couts.total_reel() == 0 and couts.total_possession() == 0
+    assert couts.total_fake() == Decimal("0.50") * USD + possession
+    assert couts.faux_llm_pur
+    (lat,) = couts.latences  # coût par requête sur le fictif en Faux LLM pur
+    assert lat.cout_requete == Decimal("0.50") * USD
+    # une énergie `measured` (compteur matériel) reste réelle, même en profil `test`
+    spans[0]["wl.energy_method"] = "measured"
+    couts = calculer_couts(_ex(run_dir, tmp_path, spans, {"a": 1}), _res())
+    assert couts.total_possession() == possession and not couts.faux_llm_pur
