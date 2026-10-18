@@ -407,7 +407,7 @@ def test_hachage_attendu_identique_a_tiktoken() -> None:
         ("intel_power_gadget", "measured", "intel_power_gadget"),
         ("apple_powermetrics", "measured", "apple_powermetrics"),
         ("nvml", "measured", "nvml"),
-        ("windows_emi", "estimated", "windows_emi"),  # mis à jour selon la mesure (story 8.6)
+        ("windows_emi", "measured", "windows_emi"),  # suit la charge (mesure de la story 8.6)
         ("cpu_load", "estimated", "cpu_load"),
         ("tdp_constant", "estimated", "tdp_constant"),
         ("mode_inconnu", "estimated", "mode_inconnu"),

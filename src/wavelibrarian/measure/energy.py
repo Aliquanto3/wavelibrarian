@@ -19,8 +19,11 @@ _log = logging.getLogger(__name__)
 EnergyMethod = Literal["measured", "estimated", "unknown"]
 
 _MSG_EXTRA = "installer l'extra energy (`uv sync --extra energy`) : module {} introuvable"
-# Modes de codecarbon qui lisent un compteur matériel (RAPL, Power Gadget, powermetrics, NVML).
-_MODES_MATERIELS = frozenset({"intel_rapl", "intel_power_gadget", "apple_powermetrics", "nvml"})
+# Modes de codecarbon qui lisent un compteur matériel (RAPL, Power Gadget, powermetrics, NVML,
+# Energy Meter Interface de Windows : il suit la charge, mesure de la story 8.6).
+_MODES_MATERIELS = frozenset(
+    {"intel_rapl", "intel_power_gadget", "apple_powermetrics", "nvml", "windows_emi"}
+)
 
 
 def _importer(nom: str) -> Any:
