@@ -502,12 +502,24 @@ def test_le_meter_retire_le_gpu_de_codecarbon(monkeypatch: pytest.MonkeyPatch) -
         gpu_ids = [0]
 
     class FauxTracker:
+        """Comme codecarbon 3.3.1 : `_hardware` vide à la construction, rempli par
+        `_ensure_hardware_ready` (appelé au `start()`, idempotent)."""
+
         def __init__(self, **kw: Any) -> None:
             self._gpu_ids = kw["gpu_ids"]
-            self._hardware = [GPU(), SimpleNamespace(_mode="windows_emi")]
+            self._hardware: list[Any] = []
+            self._pret = False
+            self.hw_au_start: list[str] = []
             self.final_emissions_data = SimpleNamespace(energy_consumed=0.001)
 
-        def start(self) -> None: ...
+        def _ensure_hardware_ready(self) -> None:
+            if not self._pret:
+                self._hardware = [GPU(), SimpleNamespace(_mode="windows_emi")]
+                self._pret = True
+
+        def start(self) -> None:
+            self._ensure_hardware_ready()
+            self.hw_au_start = [type(h).__name__ for h in self._hardware]
 
         def stop(self) -> float:
             return 0.0
@@ -518,6 +530,28 @@ def test_le_meter_retire_le_gpu_de_codecarbon(monkeypatch: pytest.MonkeyPatch) -
     meter = CodecarbonMeter("FRA")
     meter.start("index")
     assert meter._tracker is not None
-    assert [type(h).__name__ for h in meter._tracker._hardware] == ["SimpleNamespace"]
+    assert meter._tracker.hw_au_start == ["SimpleNamespace"]
     meter.stop()
     assert (meter.method, meter.source) == ("measured", "windows_emi")
+
+
+def test_le_meter_tolere_un_tracker_sans_materiel(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    class FauxTracker:  # API privée de codecarbon changée : ni `_hardware` ni préparation
+        def __init__(self, **kw: Any) -> None:
+            self.final_emissions_data = SimpleNamespace(energy_consumed=0.002)
+
+        def start(self) -> None: ...
+
+        def stop(self) -> None: ...
+
+    monkeypatch.setitem(
+        sys.modules, "codecarbon", SimpleNamespace(OfflineEmissionsTracker=FauxTracker)
+    )
+    meter = CodecarbonMeter("FRA")
+    with caplog.at_level("WARNING"):
+        meter.start("index")
+    assert "GPU non retiré" in caplog.text
+    assert meter.stop() == 0.002
+    assert (meter.method, meter.source) == ("estimated", "unknown")

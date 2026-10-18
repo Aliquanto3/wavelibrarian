@@ -116,6 +116,23 @@ def is_hardware_counter(tracker: Any) -> bool:
     return any(_mode(hw) in _MODES_MATERIELS for hw in _materiels_suivis(tracker))
 
 
+def _retirer_gpu(tracker: Any) -> None:
+    """`gpu_ids=[]` ne suffit pas : retirer le GPU garde son énergie (au repos) hors de la phase.
+    codecarbon 3.3.x ne remplit `_hardware` qu'au `start()` (`_ensure_hardware_ready`, idempotent) :
+    on l'initialise d'abord, sinon le filtre porterait sur une liste vide. API privée : si elle
+    change, avertissement et mesure inchangée, sans exception."""
+    try:
+        preparer = getattr(tracker, "_ensure_hardware_ready", None)
+        if callable(preparer):
+            preparer()
+        materiels = getattr(tracker, "_hardware", None)
+        if not isinstance(materiels, list):
+            raise AttributeError("`_hardware` absent")
+        tracker._hardware = [hw for hw in materiels if type(hw).__name__ != "GPU"]
+    except Exception as exc:
+        _log.warning("codecarbon : GPU non retiré de la mesure (%s)", exc)
+
+
 class CodecarbonMeter:
     """Énergie locale par phase via `codecarbon.OfflineEmissionsTracker` (CPU seul, sans NVML)."""
 
@@ -134,10 +151,7 @@ class CodecarbonMeter:
             log_level="error",
             gpu_ids=[],  # jamais d'interrogation du GPU
         )
-        # `gpu_ids=[]` ne suffit pas : retirer le GPU garde son énergie (au repos) hors de la phase.
-        self._tracker._hardware = [
-            hw for hw in self._tracker._hardware if type(hw).__name__ != "GPU"
-        ]
+        _retirer_gpu(self._tracker)
         self._tracker.start()
 
     def stop(self) -> float | None:

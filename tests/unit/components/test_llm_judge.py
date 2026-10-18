@@ -125,6 +125,7 @@ def test_budget_de_sortie_couvre_les_sorties_observees(env: Env) -> None:
     assert budget_sortie(3) > 414 * 1.5
     assert budget_sortie(3, max_output_tokens=512) == 512  # borné par le Catalogue
     assert budget_sortie(1, max_output_tokens=2048) == 300
+    assert budget_sortie(20, max_output_tokens=2048) == 2048 and budget_sortie(20) == 4100
     with env.ctx.scope(post="judging", question_id="q-001"):
         env.juge().judge(ITEM, CRITERES, pass_id=0)
     assert env.requetes[0].max_tokens == 700
