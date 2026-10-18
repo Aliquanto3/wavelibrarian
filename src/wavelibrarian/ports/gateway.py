@@ -57,6 +57,9 @@ class LLMResult(BaseModel):
     currency: str
     latency_s: float
     from_cache: bool
+    # coût hors cache de la tentative non conforme réessayée par `complete_structured`
+    # (tracée à part ; 0 sans nouvel essai), à ajouter à `cost_uncached` pour une borne
+    retry_cost_uncached: Decimal = Decimal(0)
 
 
 class ModelGateway(Protocol):

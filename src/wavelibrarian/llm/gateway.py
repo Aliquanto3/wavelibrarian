@@ -100,8 +100,9 @@ class MeteredGateway:
         """Un nouvel essai (sans lecture du cache) si la sortie ne valide pas `schema`."""
         try:
             valeur, resultat = self._run(request, schema, use_cache=True)
-        except NonConformantOutput:
+        except NonConformantOutput as fautive:
             valeur, resultat = self._run(request, schema, use_cache=False)
+            resultat = resultat.model_copy(update={"retry_cost_uncached": fautive.cost_uncached})
         assert valeur is not None
         return valeur, resultat
 
@@ -337,7 +338,8 @@ class MeteredGateway:
         if statut == "non_conformant":
             raise NonConformantOutput(
                 f"sortie de {request.model_id!r} non conforme au schéma "
-                f"{schema.__name__ if schema else '?'}"
+                f"{schema.__name__ if schema else '?'}",
+                cost_uncached=cost_uncached,
             )
         resultat = LLMResult(
             text=texte, usage=usage, cost=cost, cost_uncached=cost_uncached, currency=devise,

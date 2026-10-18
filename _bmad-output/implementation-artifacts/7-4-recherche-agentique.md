@@ -1,7 +1,7 @@
 ---
 story: "7.4"
 title: Recherche agentique
-status: review
+status: done
 ---
 
 # Story 7.4 : Recherche agentique
@@ -22,7 +22,7 @@ status: review
 - Réponse : `retrieved` = extraits lus par `read`, dans l'ordre de lecture, dédoublonnés (`provided`) ; Citation = `anchor_id` lu ; ids cités mais non lus retirés et comptés dans `invalid_citations`. Abstention (borne ou `abstain`) : texte vide pour une borne, extraits lus conservés.
 - Fenêtre (leçon 7.1 à 7.3) : avant chaque appel, si le message dépasse la fenêtre du modèle de l'agent (system et `agent_max_tokens` compris), les textes des résultats sont réduits de moitié jusqu'à tenir, puis l'historique le plus ancien est écarté, avec un avertissement ; `ConfigError` si la question seule n'y tient pas. L'extrait lu est alors enregistré tel que l'agent l'a vu.
 - Aucune trace dans l'Architecture : les spans viennent de la passerelle (Poste `query` fixé par le runner).
-- Report : le coût de la première tentative non conforme d'un appel n'est pas rendu par `complete_structured` ; il n'entre pas dans la somme de la borne (la tentative est tracée).
+- Coût de la tentative non conforme : `complete_structured` le rend dans `LLMResult.retry_cost_uncached` (défaut 0, rétrocompatible) ; l'agent l'ajoute à la somme de la borne (revue).
 - Report : `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` n'existent pas dans ce commit de base (story 4.14 en attente) ; la Configuration `agentic` et le passage de conformité restent à ajouter avec 4.14.
 
 ## Tâches et critères
@@ -39,3 +39,16 @@ status: review
 ## Auto Run Result
 
 Voir le rapport de l'agent : tests ciblés, suite complète, pyright et contrôle rapide.
+
+## Revue
+
+Revue Opus du 2026-10-18 sur f0cb884, rebasé sur `main` (cbf8454, aucun conflit).
+
+- medium, second avis 1 : corrigé. La tentative non conforme réessayée n'entrait pas dans `max_cost_per_question`. `NonConformantOutput` porte désormais son `cost_uncached`, `complete_structured` le rend dans `LLMResult.retry_cost_uncached` (défaut 0, rétrocompatible), et l'agent l'additionne. Test : `test_borne_de_cout_compte_la_tentative_non_conforme`, qui échoue sans le correctif.
+- medium, second avis 2 : rejeté. Le contrat ne fait passer en abstention ni `abstain: false` sans Citation valide, ni `abstain: true` avec Citations. Le Generator `llm` transmet `abstain` et les Citations tels quels, et le Scoring juge ces cas (`citation_correctness`, `abstention_correctness`).
+- low, second avis 3 : corrigé. Au dernier pas, le message demande l'action `answer` (`test_derniere_etape_demande_answer`). Une sortie qui n'y répond pas mène toujours à l'abstention prévue par le critère.
+- low, second avis 4 : rejeté. Le choix est consigné dans les Design Notes : l'extrait est enregistré tel que l'agent l'a vu, pour que `retrieved` reflète le contexte réel de la Réponse. La troncature n'a lieu que si la fenêtre l'impose, et elle est signalée par un avertissement.
+- low, second avis 5 : corrigé. Si les résultats dépassent encore la fenêtre une fois réduits et l'historique vidé, une `ConfigError` est levée (`test_fenetre_identifiants_trop_longs_erreur_de_configuration`).
+- low, second avis 6 : corrigé. La réserve de fenêtre compte le schéma JSON de `AgentStep`, qu'un fournisseur `schema_in_prompt` ajoute au prompt.
+- low, second avis 7 : corrigé. Un `agentic.json` malformé lève une `WlError` (`test_index_agentic_json_malforme_erreur`).
+- Reporté (4.14) : la Configuration `agentic` dans `experiments/mini-test.yaml` et le passage de la conformité et du SM-3. Vérification à faire : `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` verts pour `agentic`, sans réseau, dont au moins une Citation valide avec le Faux.

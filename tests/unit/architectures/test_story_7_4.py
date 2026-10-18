@@ -299,3 +299,71 @@ def test_fenetre_ecarte_l_historique_ancien(
 
 def test_index_key_ne_depend_pas_des_bornes(ctx: RunCtx) -> None:
     assert _arch(ctx).index_key() == _arch(ctx, max_steps=2, k=3).index_key()
+
+
+# -- revue ------------------------------------------------------------------------------------
+
+
+def _fautif_puis_defaut() -> Any:
+    """Première tentative de l'étape 1 non conforme, puis sortie par défaut du Faux."""
+    from wavelibrarian.llm.providers.fake import default_output
+
+    appels: list[str] = []
+
+    def sortie(request: Any) -> str:
+        appels.append(request.step)
+        if appels == ["agent.step1"]:
+            return "pas du json"
+        return default_output(request.role, request.inputs)
+
+    return sortie
+
+
+def test_borne_de_cout_compte_la_tentative_non_conforme(
+    ctx: RunCtx, index: Path, tmp_path: Path
+) -> None:
+    _script(ctx, _fautif_puis_defaut())
+    _repondre(ctx, index, max_steps=2)
+    spans = _spans(ctx)
+    assert [s["wl.step"] for s in spans] == ["agent.step1", "agent.step1", "agent.step2"]
+    faute, c1 = (Decimal(s["wl.cost_uncached"]) for s in spans[:2])
+    assert faute > 0
+    # sans la tentative fautive, c1 < borne : l'étape 2 partirait ; avec elle, borne atteinte
+    borne = {"amount": str(c1 + faute / 2), "currency": "USD"}
+    provider = FakeProvider()
+    autre = RunCtx.from_profile(
+        "test", wl_home=tmp_path / "wl2", run_id="r-2", seed=1, providers={"fake": provider}
+    )
+    autre.parser = "markdown"
+    autre.provider = provider  # type: ignore[attr-defined]
+    with autre:
+        _script(autre, _fautif_puis_defaut())
+        _, rep = _repondre(autre, index, max_cost_per_question=borne)
+        assert [s["wl.step"] for s in _spans(autre)] == ["agent.step1", "agent.step1"]
+    assert rep.abstained
+
+
+def test_derniere_etape_demande_answer(ctx: RunCtx, index: Path) -> None:
+    arch = _arch(ctx, max_steps=4)
+    arch.load(index)
+    assert "Dernière étape" in arch._contenu(_question(), 4, [], [])
+    assert "Dernière étape" not in arch._contenu(_question(), 3, [], [])
+
+
+def test_fenetre_identifiants_trop_longs_erreur_de_configuration(
+    ctx: RunCtx, index: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    arch = _arch(ctx)
+    arch.load(index)
+    monkeypatch.setattr(arch, "_fenetre", lambda: 1000)
+    resultats = [{"id": f"doc-{n:04d}-" + "x" * 40, "text": "t"} for n in range(200)]
+    with pytest.raises(ConfigError):
+        arch._tenir(_question(), 2, [], resultats)
+
+
+def test_index_agentic_json_malforme_erreur(ctx: RunCtx, index: Path) -> None:
+    from wavelibrarian.core.errors import WlError
+
+    (index / "agentic.json").write_text('{"anchors": {}}', encoding="utf-8")
+    with pytest.raises(WlError, match="malformé"):
+        _arch(ctx).load(index)

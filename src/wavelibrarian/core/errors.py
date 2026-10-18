@@ -1,5 +1,7 @@
 """Exceptions du banc ; `WlError` est la racine."""
 
+from decimal import Decimal
+
 
 class WlError(Exception):
     """Erreur de base du banc."""
@@ -48,4 +50,12 @@ class ProviderError(WlError):
 
 
 class NonConformantOutput(WlError):
-    """La sortie structurée d'un modèle ne respecte pas le schéma attendu."""
+    """La sortie structurée d'un modèle ne respecte pas le schéma attendu.
+
+    `cost_uncached` : coût hors cache de la tentative fautive (déjà tracée), pour que
+    `complete_structured` le rende à l'appelant avec le nouvel essai.
+    """
+
+    def __init__(self, message: str, *, cost_uncached: Decimal = Decimal(0)) -> None:
+        self.cost_uncached = cost_uncached
+        super().__init__(message)

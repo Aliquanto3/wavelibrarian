@@ -15,10 +15,10 @@ réessaie une fois, puis `NonConformantOutput` remonte et le runner passe la Que
 Bornes, vérifiées avant chaque appel : `max_steps` ; `max_cost_per_question` sur la somme des
 `cost_uncached` des appels déjà engagés (identique avec ou sans Cache de réponses, FR-4) :
 borne atteinte, l'agent s'abstient sans émettre l'appel suivant. Le coût d'une première
-tentative non conforme n'est pas rendu par la passerelle : il n'entre pas dans la somme.
+tentative non conforme (`retry_cost_uncached`) entre dans la somme.
 Fenêtre : avant chaque appel, les résultats de l'étape précédente puis l'historique les plus
 anciens sont réduits (avertissement) jusqu'à tenir dans la fenêtre du modèle de l'agent ;
-`ConfigError` si même la question seule n'y tient pas.
+`ConfigError` si la question seule, ou les identifiants des résultats, n'y tiennent pas.
 
 Réponse : les Passages retrouvés sont les extraits lus (`read`), dans l'ordre de lecture
 (`retrieval_method: provided`). Une Citation de l'agent est un `anchor_id` lu ; les autres sont
@@ -188,8 +188,17 @@ class Agentic(ArchitectureBase):
             brut = json.loads((directory / FICHIER).read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise WlError(f"index illisible : {directory / FICHIER} absent ou illisible") from exc
-        self._ancrages = brut["anchors"]
-        self._documents = brut["documents"]
+        try:
+            self._ancrages = {
+                a: {"doc_id": str(v["doc_id"]), "text": str(v["text"])}
+                for a, v in brut["anchors"].items()
+            }
+            self._documents = [
+                {"doc_id": str(d["doc_id"]), "source_path": str(d["source_path"])}
+                for d in brut["documents"]
+            ]
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise WlError(f"index illisible : {directory / FICHIER} malformé") from exc
 
     # -- outils (lecture seule, limités au Corpus indexé) ---------------------------------------
 
@@ -237,9 +246,10 @@ class Agentic(ArchitectureBase):
         borne: int = self.params.max_steps  # type: ignore[attr-defined]
         lignes = "\n".join(historique) if historique else "(aucune)"
         derniers = json.dumps(resultats, ensure_ascii=False)
+        consigne = "\nDernière étape : réponds avec l'action answer." if etape >= borne else ""
         return (
             f"Question : {question.text}\nÉtape : {etape}/{borne}\nHistorique :\n{lignes}\n"
-            f"Résultats de l'étape précédente : {derniers}"
+            f"Résultats de l'étape précédente : {derniers}{consigne}"
         )
 
     def _tenir(
@@ -255,7 +265,15 @@ class Agentic(ArchitectureBase):
             return historique, resultats
         tokenizer = self.ctx.tokenizer_for(self._modele)  # type: ignore[attr-defined]
         p: Any = self.params
-        libre = fenetre - tokenizer.count(_SYSTEM) - p.agent_max_tokens - _MARGE
+        # le schéma compte : un fournisseur `schema_in_prompt` l'ajoute au prompt
+        schema = json.dumps(AgentStep.model_json_schema(), ensure_ascii=False, sort_keys=True)
+        libre = (
+            fenetre
+            - tokenizer.count(_SYSTEM)
+            - tokenizer.count(schema)
+            - p.agent_max_tokens
+            - _MARGE
+        )
 
         def taille(h: list[str], r: list[dict[str, str]]) -> int:
             return int(tokenizer.count(self._contenu(question, etape, h, r)))
@@ -280,6 +298,13 @@ class Agentic(ArchitectureBase):
         historique = list(historique)
         while taille(historique, resultats) > libre and historique:
             historique.pop(0)
+        if taille(historique, resultats) > libre:
+            raise ConfigError(
+                "agent_max_tokens",
+                f"`agentic` : les identifiants des {len(resultats)} résultat(s) de l'étape "
+                f"{etape - 1} ne tiennent pas dans la fenêtre de {fenetre} tokens de "
+                f"`{self._modele}`",
+            )
         return historique, resultats
 
     # -- boucle ---------------------------------------------------------------------------------
@@ -305,7 +330,8 @@ class Agentic(ArchitectureBase):
             inputs={"question": question.text, "step": etape, "last_results": resultats},
         )
         sortie, res = self.ctx.gateway.complete_structured(requete, AgentStep)  # type: ignore[attr-defined]
-        return sortie, res.cost_uncached, res.currency
+        # la tentative non conforme réessayée par la passerelle a aussi été payée
+        return sortie, res.cost_uncached + res.retry_cost_uncached, res.currency
 
     @staticmethod
     def _passage_lu(identifiant: str, doc_id: str, texte: str) -> Passage:
