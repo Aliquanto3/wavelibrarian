@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 04:57 |
-| Story en cours | 7.4 (voie A, intégration) ; 4.10 (voie B) |
-| Stories livrées | 44 / 56 |
+| Mis à jour | 2026-10-18 05:00 |
+| Story en cours | 4.10 (voie B) ; 7.5 (voie A) |
+| Stories livrées | 45 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -173,6 +173,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 04:14 | 8 tronq. (qwen3.5:4b) : think_off reasoning/bbeh-mini 7 tronq., 36 s/tronq. (pas de réf.) ; think_off instructions/mifeval-fr 1 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 17 % | 16.7 Go | 1 s, 86 Mo, 79 thr (14 proc) | Sous les seuils : on continue (7.3) |
 | 04:38 | 16 tronq. (qwen3.5:4b) : think_on instructions/mifeval-fr 5 tronq., 35 s/tronq. (pas de réf.) ; think_on rag/piaf 4 tronq., 36 s/tronq. (pas de réf.) ; think_on writing/writing-fr 4 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 16 % | 12.8 Go | 1 s, 86 Mo, 77 thr (14 proc) | Sous les seuils : on continue (7.4) |
 | 04:57 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 2 tronq., 52 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 42 s/tronq. (pas de réf.) ; think_on extraction/jsonschemabench 1 tronq., 37 s/tronq. (pas de réf.) ; pire +0 % | 6 % | 18.7 Go | 1 s, 86 Mo, 78 thr (12 proc) | Sous les seuils : on continue |
+| 05:00 | 7 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 2 tronq., 52 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 42 s/tronq. (pas de réf.) ; think_on extraction/jsonschemabench 1 tronq., 37 s/tronq. (pas de réf.) ; pire +0 % | 1 % | 21.1 Go | 1 s, 86 Mo, 73 thr (12 proc) | Sous les seuils : on continue |
 
 ## Journal des stories
 
@@ -222,3 +223,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 7.2 | 03:50 | 04:14 | 4274fba212307ddbe4aef0834e2af13cceefe781 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : sections lues bornées par la fenêtre avant generate, sélection découpée en lots (PDF de 150 pages), update d'un Document modifié testé sur le vrai Scénario, Document absent de l'ancien index reconstruit. |
 | 7.3 | 04:16 | 04:38 | 9ec982f85724c389eb25a8545cc3ef669c68418f | 0 $ | Livrée sous réserve de la conformité 4.14 ; affichage du taux reporté au Rapport. Revue : 1 high corrigé (juge de fidélité d'une autre Famille que le modèle de compilation, refus si même Famille), graine et juge dans l'index_key, Ancrages limités au Document source. |
 | 4.9 | 04:12 | 04:58 | 84c3c5b5a1f450f5e544a460ab2dc4da52f93e4b | 0 $ | Revue : nDCG sans double gain par Ancrage, Citations inventées → citation_correctness non, unjudged au manifeste et reprise possible d'un run completed avec Critères manquants, Critère absent sans plantage, test d'égalité de bout en bout. 885 tests verts. |
+| 7.4 | 04:39 | 05:00 | 57ac1280e6b483ca8d5d6d91682986e3f89fa0e2 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : coût des tentatives non conformes rendu par LLMResult.retry_cost_uncached et compté dans la borne, answer imposé au dernier pas, schéma compté dans la réserve, ConfigError si les résultats ne tiennent pas, agentic.json malformé → WlError. |
