@@ -32,7 +32,7 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 | 8.5 | — | 12:20 | 6a8f65c | 0 $ | Tests 1.8 (0,90 + 0,90 sous 2,00, soldes vérifiés, mois suivant par horloge injectée ; ancien test à 3,00 supprimé) et 1.4 (3,00 et 0,03 sur le Catalogue livré) ; relevé de prix recopié, aucun écart, Catalogue inchangé. 1181 tests verts. |
 | 8.3 | — | 12:41 | 36efec0 | 0 $ | completed_with_errors (aucune ok, Critère sans verdict, taux d'error > max_error_rate 0,2), causes au manifeste avec taux réel, code 1 ou 0 avec --tolerer-erreurs (all_failed compris, AC 2), budget_exceeded/3 prime, bandeau du Rapport, reprise des error et Critères sans verdict. 1195 tests verts. Points non bloquants soumis (spec 8-3). |
 | 8.7 | — | 13:12 | 76d6be3 | 0 $ | Option (c), décision d'Anaël : select_model granite4.2:3b pour PageIndex, sans repeat_penalty ; options Ollama dans la clé du Cache. Réel : mini-cpu completed, 8/8 ok, 56 verdicts, 0 sortie tronquée, 560 s. |
-| 8.6 | — | 13:58 | fa334b9 | 0 $ | windows_emi suit la charge (repos ~44 W, charge ~107 W, 4 processus, deux répétitions, écart ≈ 1 %) → measured ; wl.energy_source partout, nvml prioritaire, contracts.md §6 aligné ; part RAM estimée par formule signalée au Rapport. 1216+ tests verts. Point non bloquant : méthode mixed ? |
+| 8.6 | — | 13:58 | fa334b9 | 0 $ | windows_emi suit la charge (repos ~44 W, charge ~107 W, 4 processus, deux répétitions, écart ≈ 1 %) → measured ; wl.energy_source partout, nvml prioritaire, contracts.md §6 aligné ; part RAM estimée par formule signalée au Rapport. 1227 tests verts. Point non bloquant : méthode mixed ? |
 
 ## Reports entre stories
 
@@ -54,3 +54,4 @@ Fichier tenu par l'orchestrateur. Après `/clear`, relire ce fichier puis `sprin
 - 2026-10-18 13:22 : à la demande d'Anaël, topic GitHub repassé de status-test à status-dev pendant le lot v0.2.0 ; à remettre à status-test avec la release v0.2.0.
 - 2026-10-18 13:24 : « Ollama de nouveau disponible ». 8.8 démarre après la mesure de 8.6 et l'intégration de 8.6 et 8.9.
 - 2026-10-18 13:44 : code de 8.9 intégré (862a16e, 1216 tests verts) ; reste le paquet réel depuis le run_id de 8.8.
+- 2026-10-18 13:59 : 8.8 lancée : WL_HOME neuf C:/Users/Utilisateur/Documents/GitHub/wl-runs-v0.2.0 (hors dépôt), mini-cpu (19 Questions) puis lazy-seuil-cpu ; RAM libre et ollama ps relevés chaque minute dans ram.log. Sorties : mini-cpu.out, lazy-seuil-cpu.out.
