@@ -176,7 +176,7 @@ def test_costs_cle_inconnue(tmp_path: Path) -> None:
 
 def test_profils() -> None:
     cpu, gpu, test = (load_profile(n) for n in PROFILS)
-    assert cpu.ollama.options == {"num_gpu": 0}
+    assert cpu.ollama.options == {"num_gpu": 0, "repeat_penalty": 1.15}
     assert cpu.embedder_device == "cpu"
     assert cpu.defaults.embedder == "multilingual-e5-small"
     assert cpu.defaults.generator_models == (HAIKU, "minicpm5:1b-q4_k_m")

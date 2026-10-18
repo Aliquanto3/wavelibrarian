@@ -1,6 +1,7 @@
 # Profil CPU, par défaut du run autonome (PRD §7.3) : zéro couche GPU pour Ollama.
 profile: cpu
-ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {num_gpu: 0}}
+# repeat_penalty (story 8.7) : sans lui, select_nodes de minicpm5:1b dégénère jusqu'à select_max_tokens.
+ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {num_gpu: 0, repeat_penalty: 1.15}}
 embedder_device: cpu
 tokenizer: reference
 energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}
