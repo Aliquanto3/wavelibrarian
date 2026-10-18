@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-18-2026 03:48
+last_updated: 10-18-2026 04:11
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -78,7 +78,7 @@ development_status:
   4-5-mesure-de-l-exécution-postes-latence-énergie-et-rejeu: done
   4-6-condition-contexte-parfait-et-paliers-de-volume: done
   4-7-phase-après-mise-à-jour: done
-  4-8-arrêt-au-plafond-et-reprise-d-une-exécution: backlog
+  4-8-arrêt-au-plafond-et-reprise-d-une-exécution: done
   4-9-métriques-de-recherche-critères-automatiques-et-panel-de-jug: backlog
   4-10-statistiques-bootstrap-mcnemar-et-fronts-de-pareto: backlog
   4-11-rapport-scores-recherche-et-comparaisons-appariées: backlog
