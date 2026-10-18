@@ -175,9 +175,11 @@ def test_reprise_saute_les_cles_presentes_et_ne_fait_que_les_appels_manquants(
     assert (dossier / "traces.jsonl").read_bytes().startswith(avant_traces)
     # Aucun appel repayé : 2 * N appels payants en tout, un par Question.
     spans = [s for s in _lignes(dossier, "traces.jsonl") if s["wl.kind"] == "llm"]
+    spans = [s for s in spans if s["wl.post"] == "query"]  # le jugement : story 4.9
     payes = [s for s in spans if s["wl.status"] == "ok" and not s["wl.llm_cache_hit"]]
     assert len(payes) == 2 * N
-    assert [s for s, _, _ in _reservations(wl_home)] == ["settled"] * (2 * N)
+    statuts = [s for s, _, _ in _reservations(wl_home)]
+    assert set(statuts) == {"settled"} and len(statuts) >= 2 * N  # appels des Juges compris
     # Somme des wl.cost = dépense réelle du registre pour ce run_id.
     total = sum(Decimal(s["wl.cost"]) for s in _lignes(dossier, "traces.jsonl"))
     reel = sum(Decimal(r or "0") for _, _, r in _reservations(wl_home, dossier.name))
@@ -255,7 +257,9 @@ def test_arret_brutal_reservation_orpheline_reglee_puis_running_et_completed(
 
     # Appels déjà payés et refaits : cache, coût nul, et marqués pour ne pas être recomptés.
     spans = [
-        s for s in _lignes(dossier, "traces.jsonl")[len(appels_traces) :] if s["wl.kind"] == "llm"
+        s
+        for s in _lignes(dossier, "traces.jsonl")[len(appels_traces) :]
+        if s["wl.kind"] == "llm" and s["wl.post"] != "judging"
     ]
     rejoues = [s for s in spans if s.get("wl.resumed")]
     # Questions 1 à 4 : la 4e, payée puis interrompue au règlement, est sortie du cache.
@@ -339,9 +343,10 @@ def test_arret_brutal_reel_manifeste_failed_puis_reprise_sans_repayer(
     assert len(read_answers(dossier)) == N
     # Un appel payé par Question, le 4e compris : aucun n'est repayé à la reprise.
     lignes = _reservations(wl_home)
-    assert [s for s, _, _ in lignes] == ["settled"] * N
+    assert [s for s, _, _ in lignes] == ["settled"] * (3 * N)  # N réponses + 2 Juges par réponse
     spans = [s for s in _lignes(dossier, "traces.jsonl") if s["wl.kind"] == "llm"]
-    assert len([s for s in spans if not s["wl.llm_cache_hit"]]) == N
+    neufs = [s for s in spans if not s["wl.llm_cache_hit"] and s["wl.post"] == "query"]
+    assert len(neufs) == N
 
 
 def test_reprise_refusee_si_le_contenu_du_corpus_change(tmp_path: Path, wl_home: Path) -> None:

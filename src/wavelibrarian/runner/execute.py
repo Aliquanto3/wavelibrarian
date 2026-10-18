@@ -17,8 +17,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
+from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import charger_yaml
 from wavelibrarian.config.experiment import ResolvedConfiguration, ResolvedExperiment
+from wavelibrarian.config.panel import excluded_judges, form_panel
 from wavelibrarian.config.schemas import valider
 from wavelibrarian.core.errors import BudgetExceeded, ConfigError
 from wavelibrarian.core.ids import answer_id, canonical_json, new_run_id, sha16
@@ -60,10 +62,13 @@ from wavelibrarian.runner.rundir import (
     create_run_dir,
     detach_run_log,
     read_answers,
+    read_panel,
+    read_verdicts,
     reopen_run_dir,
     resolve_parsers,
     set_status,
 )
+from wavelibrarian.scoring.panel import construire_juges, juger_reponse
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +90,7 @@ class RunOutcome:
     status: RunStatus
     n_answers: int
     counts: dict[str, int]
+    unjudged: int = 0  # Critères jugés sans verdict de panel (appel d'un Juge en échec)
 
     @property
     def all_failed(self) -> bool:
@@ -185,6 +191,20 @@ def passages_de_reference(parse: ParsedCorpus, q: Question) -> list[Passage]:
     return list(passages.values())
 
 
+def panels_de(experience: ResolvedExperiment) -> dict[str, tuple[str, ...]]:
+    """Panel admissible de chaque Configuration (AD-14) : les `panel_size` premiers Juges du
+    réservoir d'une autre Famille que les `answer_producers`, hors exclus de la calibration
+    (`judges.excluded_from`) ; ces Juges exclus ne sont jamais appelés. `ConfigError` (code 2)
+    si moins de deux restent."""
+    j = experience.judges
+    catalogue = load_catalog(Path(experience.catalog) if experience.catalog else None)
+    exclus = excluded_judges(Path(j.excluded_from)) if j.excluded_from else frozenset[str]()
+    return {
+        c.id: form_panel(j.pool or (), j.panel_size or 0, c.answer_producers, catalogue, exclus)
+        for c in experience.configurations
+    }
+
+
 def _question_input(q: Question) -> QuestionInput:
     """L'Architecture ne voit que la Question (AD-6) : jamais la référence."""
     return QuestionInput(question_id=q.id, text=q.text, lang=q.lang, history=q.history)
@@ -232,6 +252,7 @@ class _Runner:
         # la dernière ligne est `budget_exceeded` (reposés ; non réécrits si le plafond rebloque).
         self.faits: set[str] = set()
         self.en_attente: set[str] = set()
+        self.non_jugees = 0
 
     @property
     def n_answers(self) -> int:
@@ -294,6 +315,81 @@ class _Runner:
                                 a = self._answer(conf, q, vide, "budget_exceeded", message)
                                 if a.answer_id not in self.faits | self.en_attente:
                                     self._ecrire(writer, a)
+        finally:
+            ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
+
+    # --- jugement (story 4.9) --------------------------------------------------------------
+
+    def _corpus_de_phase(self, conf: ResolvedConfiguration, phase: Phase) -> ParsedCorpus:
+        """Corpus dont les Ancrages servent à noter une Réponse de la phase (après mise à jour :
+        le Corpus du Scénario ; s'il ne s'applique plus, celui de la base)."""
+        parser = conf.parser.name
+        if phase == "after_update" and self.scenario is not None:
+            try:
+                return self.apres_mise_a_jour(parser)[1]
+            except Exception as erreur:
+                log.warning("Corpus après mise à jour indisponible pour le jugement : %s", erreur)
+        return self.preparer(parser)[0]
+
+    def juger(self, experience: ResolvedExperiment, panels: dict[str, tuple[str, ...]]) -> None:
+        """Note chaque Réponse `ok` au Poste `judging` : Critères automatiques, puis Panel
+        (`scoring/panel.py`). `error`, `inapplicable` et `budget_exceeded` n'ont ni verdict ni
+        appel de Juge. Reprise : `verdicts.jsonl` et `panel.jsonl` sont relus, seules les clés
+        absentes sont redemandées. `BudgetExceeded` remonte (verdicts déjà écrits conservés)."""
+        ctx = self.ctx
+        configs = {c.id: c for c in experience.configurations}
+        questions = {q.id: q for q in self.questions}
+        par_reponse: dict[str, dict[Any, Any]] = {}
+        for cle, v in read_verdicts(self.dossier).items():
+            par_reponse.setdefault(cle[0], {})[cle] = v
+        deja_panel = set(read_panel(self.dossier))
+        juges: dict[tuple[str, ...], Any] = {}
+        corpus_de: dict[tuple[str, str], tuple[ParsedCorpus, set[str]]] = {}
+        self.non_jugees = 0
+        reponses = read_answers(self.dossier)
+        log.info("étape jugement : %d Réponses", len(reponses))
+        try:
+            with (
+                JsonlWriter(self.dossier, "verdicts.jsonl") as verdicts,
+                JsonlWriter(self.dossier, "panel.jsonl") as panel,
+            ):
+                for a in reponses.values():
+                    conf, q = configs.get(a.config_id), questions.get(a.question_id)
+                    if a.status != "ok" or conf is None or q is None:
+                        continue
+                    if (conf.id, a.phase) not in corpus_de:
+                        parse = self._corpus_de_phase(conf, a.phase)
+                        tout = {i for d in parse.documents for i in d.anchors}
+                        corpus_de[(conf.id, a.phase)] = (parse, tout)
+                    parse, tout = corpus_de[(conf.id, a.phase)]
+                    ancres = [
+                        i
+                        for r in q.reference_anchors
+                        if (i := parse.resolve(r.doc, r.page, r.headings)) is not None
+                    ]
+                    membres = panels[conf.id]
+                    if membres not in juges:
+                        juges[membres] = construire_juges(ctx, membres)
+                    ctx.config_id, ctx.condition, ctx.tier, ctx.phase = (
+                        a.config_id,
+                        a.condition,
+                        a.tier,
+                        a.phase,
+                    )
+                    with ctx.scope(post="judging", question_id=q.id):
+                        self.non_jugees += juger_reponse(
+                            a,
+                            q,
+                            reference_texts=[parse.anchor_text(i) for i in ancres],
+                            reference_anchor_ids=ancres,
+                            corpus_anchor_ids=tout,
+                            juges=juges[membres],
+                            passes=experience.judges.passes,
+                            deja=par_reponse.get(a.answer_id, {}),
+                            deja_panel=deja_panel,
+                            verdicts=verdicts,
+                            panel=panel,
+                        )
         finally:
             ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
 
@@ -758,6 +854,7 @@ def run_experiment(
     verifier_paliers(experience, questions)
     corpus = declare(Path(experience.corpus))
     experience = resolve_parsers(experience, corpus)
+    panels = panels_de(experience)  # Panel inadmissible : refus (code 2) avant tout appel
     scenario = Path(experience.scenario) if experience.scenario else None
     if scenario is not None:  # Scénario invalide : refus (code 2) avant le dossier d'Exécution
         charger(scenario, ingest(corpus, experience.configurations[0].parser.name, wl_home=wl_home))
@@ -811,6 +908,12 @@ def run_experiment(
                         runner.marquer_budget_exceeded(writer, experience)
             finally:
                 runner.ecrire_applicabilite()
+            if statut == "completed":  # jugement après toutes les Réponses (AD-11)
+                try:
+                    runner.juger(experience, panels)
+                except BudgetExceeded as erreur:  # arrêt propre ; reprise : --reprendre
+                    log.warning("Plafond atteint pendant le jugement : %s", erreur)
+                    statut = "budget_exceeded"
             runner.compter()
             set_status(dossier, statut, answers=dict(runner.counts))
             log.info("Exécution %s : %s, Réponses %s", run_id, statut, runner.counts)
@@ -828,4 +931,5 @@ def run_experiment(
         status=statut,
         n_answers=runner.n_answers,
         counts=dict(runner.counts),
+        unjudged=runner.non_jugees,
     )

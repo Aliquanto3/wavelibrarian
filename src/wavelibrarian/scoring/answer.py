@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from collections.abc import Collection
 
 MAX_MOTS_COURTE = 5
 
@@ -74,3 +75,28 @@ def exact_match(reference: str, answer: str) -> bool:
         return False
     n = len(ref)
     return any(rep[i : i + n] == ref for i in range(len(rep) - n + 1))
+
+
+# --- Critères automatiques (FR-36, AD-14) : jamais de Juge, `judge_model: "auto"` ---------------
+
+JUGE_AUTO = "auto"
+
+
+def citation_correctness(
+    cited: Collection[str],
+    reference_anchor_ids: Collection[str],
+    corpus_anchor_ids: Collection[str],
+    *,
+    unanswerable: bool,
+) -> bool:
+    """Oui si au moins une Citation désigne un Ancrage de référence et qu'aucune n'est hors du
+    Corpus ; pour une Question `unanswerable`, oui si la Réponse ne cite rien."""
+    if unanswerable:
+        return not cited
+    corpus = set(corpus_anchor_ids)
+    return any(a in set(reference_anchor_ids) for a in cited) and all(a in corpus for a in cited)
+
+
+def abstention_correctness(abstained: bool, *, unanswerable: bool) -> bool:
+    """Oui si la Réponse s'abstient exactement quand la Question est `unanswerable`."""
+    return abstained == unanswerable

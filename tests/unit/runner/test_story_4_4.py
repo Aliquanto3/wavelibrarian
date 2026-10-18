@@ -123,7 +123,7 @@ def test_wl_run_trois_baselines_de_bout_en_bout(tmp_path: Path, wl_home: Path) -
         json.loads(ligne)
         for ligne in (dossier / "traces.jsonl").read_text(encoding="utf-8").splitlines()
     ]
-    llm = [s for s in spans if s.get("wl.kind") == "llm"]
+    llm = [s for s in spans if s.get("wl.kind") == "llm" and s["wl.post"] != "judging"]
     assert llm and all(s["wl.post"] == "query" and s["wl.question_id"] in ids for s in llm)
     assert {s["wl.config_id"] for s in llm} == {"sans-contexte", "contexte-long", "bm25"}
 

@@ -17,11 +17,12 @@ from wavelibrarian.config.experiment import Budget, ResolvedExperiment
 from wavelibrarian.config.resolve import write_resolved
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import canonical_json
-from wavelibrarian.core.types import Answer
+from wavelibrarian.core.types import Answer, Verdict
 from wavelibrarian.corpus.declare import DeclaredCorpus
 from wavelibrarian.corpus.ingest import nom_parser_resolu, parsers_par_format
 from wavelibrarian.llm.gateway import limiter_journaux
 from wavelibrarian.ports.components import ComponentSpec
+from wavelibrarian.scoring.panel import CleVerdict, PanelVerdict, cle
 
 Status = Literal["running", "completed", "budget_exceeded", "failed"]
 JsonlName = Literal["answers.jsonl", "verdicts.jsonl", "panel.jsonl"]
@@ -150,6 +151,33 @@ def read_answers(dossier: Path) -> dict[str, Answer]:
             reponse = Answer.model_validate(json.loads(ligne))
             effectives[reponse.answer_id] = reponse
     return effectives
+
+
+def read_verdicts(dossier: Path) -> dict[CleVerdict, Verdict]:
+    """Verdicts de `verdicts.jsonl` par (answer_id, judge_model, criterion, pass_id) ; la dernière
+    ligne d'une clé fait foi (reprise : seules les clés absentes sont redemandées, AD-11)."""
+    chemin = dossier / "verdicts.jsonl"
+    if not chemin.is_file():
+        return {}
+    effectifs: dict[CleVerdict, Verdict] = {}
+    for ligne in chemin.read_text(encoding="utf-8").splitlines():
+        if ligne.strip():
+            v = Verdict.model_validate(json.loads(ligne))
+            effectifs[cle(v)] = v
+    return effectifs
+
+
+def read_panel(dossier: Path) -> dict[tuple[str, str], PanelVerdict]:
+    """Lignes de `panel.jsonl` par (answer_id, criterion) ; la dernière ligne d'une clé fait foi."""
+    chemin = dossier / "panel.jsonl"
+    if not chemin.is_file():
+        return {}
+    effectifs: dict[tuple[str, str], PanelVerdict] = {}
+    for ligne in chemin.read_text(encoding="utf-8").splitlines():
+        if ligne.strip():
+            v = PanelVerdict.model_validate(json.loads(ligne))
+            effectifs[(v.answer_id, v.criterion)] = v
+    return effectifs
 
 
 def attach_run_log(dossier: Path) -> logging.Handler:

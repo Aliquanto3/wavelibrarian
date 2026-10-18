@@ -115,7 +115,8 @@ def test_postes_fixes_par_le_runner_et_span_answer_par_question(
     dossier = _wl_run(_experience(tmp_path), wl_home)
     spans = _jsonl(dossier / "traces.jsonl")
     ids = _ids_dev()
-    assert {s["wl.post"] for s in spans} == {"indexing", "query"}
+    assert {s["wl.post"] for s in spans} == {"indexing", "query", "judging"}
+    spans = [s for s in spans if s["wl.post"] != "judging"]  # le jugement : story 4.9
     for s in spans:
         if s["name"] == "index":
             assert s["wl.post"] == "indexing" and s["wl.question_id"] == ""

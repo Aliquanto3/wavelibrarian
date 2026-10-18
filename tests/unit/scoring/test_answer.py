@@ -79,3 +79,26 @@ def test_exact_match_vrai(reference: str, reponse: str) -> None:
 )
 def test_exact_match_faux(reference: str, reponse: str) -> None:
     assert not exact_match(reference, reponse)
+
+
+# --- Story 4.9, AC 2 : Critères automatiques ----------------------------------------------------
+
+
+def test_citation_correctness() -> None:
+    from wavelibrarian.scoring.answer import citation_correctness as cc
+
+    ref, corpus = {"d#a"}, {"d#a", "d#b"}
+    assert cc(["d#a"], ref, corpus, unanswerable=False)
+    assert cc(["d#b", "d#a"], ref, corpus, unanswerable=False)
+    assert not cc(["d#b"], ref, corpus, unanswerable=False)  # aucun Ancrage de référence
+    assert not cc(["d#a", "x#hors"], ref, corpus, unanswerable=False)  # une hors du Corpus
+    assert not cc([], ref, corpus, unanswerable=False)
+    assert cc([], set(), corpus, unanswerable=True)
+    assert not cc(["d#a"], set(), corpus, unanswerable=True)
+
+
+def test_abstention_correctness() -> None:
+    from wavelibrarian.scoring.answer import abstention_correctness as ac
+
+    assert ac(True, unanswerable=True) and ac(False, unanswerable=False)
+    assert not ac(False, unanswerable=True) and not ac(True, unanswerable=False)
