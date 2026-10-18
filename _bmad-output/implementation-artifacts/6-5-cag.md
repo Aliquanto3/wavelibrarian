@@ -1,7 +1,7 @@
 ---
 story: "6.5"
 title: CAG
-status: review
+status: done
 ---
 
 # Story 6.5 : CAG
@@ -19,7 +19,7 @@ status: review
 - Le préchargement est un appel `complete` en texte libre, sans schéma : sa sortie est ignorée et ne peut pas être refusée comme non conforme.
 - Refus d'un Generator sans `prompt_cache` : déjà porté par `requires_prompt_cache` dans `_verifier_capacites` (1.6), aucun code nouveau.
 - `min_cacheable_tokens` : aucun test d'Architecture ne peut le faire respecter par le Faux LLM ; le test utilise un faux provider qui ne lit rien sous 512 mots. L'appel réussit, les tokens en cache sont nuls.
-- Le préchargement passe par le Cache de réponses de la passerelle : sur un rejeu à l'identique, il est servi sans appel fournisseur (`wl.llm_cache_hit: true`), comme tout appel rejoué (FR-34).
+- Le préchargement ne passe jamais par le Cache de réponses (`gateway.complete(..., use_cache=False)`) : il doit réchauffer le cache de prompt du fournisseur, et son écriture reste au Poste `indexing`. Un rejeu d'une Expérience CAG (reprise comprise) repaie donc le préchargement ; sa réponse remplace l'entrée du Cache de réponses.
 - Pas de Configuration `cag` dans `experiments/mini-test.yaml` ni de suite de conformité : absents du dépôt (4.14).
 
 ## Tâches et critères
@@ -36,4 +36,21 @@ status: review
 
 - Statut : review. Vérifications finales dans le rapport.
 - Reports : Configuration `cag` dans `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` (4.14) ; `Cag` dépend de `long_context.py` (4.6 en revue en parallèle) : à revérifier à l'intégration.
-- Le Cache de réponses peut servir le préchargement sans réchauffer le cache du fournisseur lors d'un rejeu ; une option de contournement exigerait de toucher la passerelle (hors périmètre).
+- Le préchargement contourne le Cache de réponses (revue) : un rejeu le repaie.
+
+## Revue
+
+- high, orchestrateur (n° 1), corrigé : le Cache de réponses servait le préchargement lors d'un rejeu ou d'un hit d'index (`wl.llm_cache_hit: true`), sans réchauffer le cache du fournisseur et en faisant disparaître l'écriture du Poste `indexing`. `MeteredGateway.complete` (et le Protocol, et la passerelle sous Poste du runner) prend `use_cache: bool = True` ; `preload` passe `use_cache=False`. Tests : hit d'index et rejeu entre deux Exécutions qui partagent `WL_HOME` atteignent le fournisseur (échouent si l'on retire `use_cache=False`). contracts.md mis à jour.
+- medium, second avis (n° 2), corrigé : les deux Questions étaient identiques, la seconde était un rejeu du Cache de réponses. Deux Questions distinctes, `wl.llm_cache_hit` faux sur les deux, `cache_read_tokens` non nul dès la première grâce au préchargement.
+- medium, second avis (n° 3), rejeté : le respect de `min_cacheable_tokens` est un comportement du fournisseur, aucun code du dépôt ne le décide ; le double le simule pour vérifier que l'appel réussit et que des lectures nulles remontent telles quelles, ce que demande le critère. Un cas « au-dessus de 512 » ne testerait que le double. La vérification réelle part en report (ci-dessous).
+- low, second avis (n° 4), corrigé : `test_rejeu_d_une_experience_repaie_le_prechargement_au_poste_indexing` vérifie `wl.usage.cache_write_tokens > 0` au Poste `indexing` (faux provider qui facture l'écriture), et une Question qui lit sans écrire.
+- low, second avis (n° 5), corrigé : `pytest.raises(ConfigError, ...)`.
+- low, second avis (n° 10), consigné : `check` estime le Corpus brut (`tokens_for`), sans le system ni les étiquettes ; même écart que `long_context` (4.6), quelques dizaines de tokens par Ancrage. Seule une marge serrée près de la fenêtre ou du palier peut passer `check` puis dépasser de peu la fenêtre ou le palier chez le fournisseur. Accepté en l'état.
+- low, second avis (n° 11), consigné : un Generator sans `preload` n'est refusé qu'à la construction (`ConfigError`), pas à la validation statique ; seul `llm` existe aujourd'hui. Report vers la validation statique si un second Generator apparaît.
+- low, revue, consigné : le refus de `cache_system: false` sous `cag` cite « `long_context` » (validateur hérité). Cosmétique.
+
+### Reports
+
+- Rapport (coût de possession) : avec `use_cache=False`, chaque Exécution CAG repaie l'écriture du cache de prompt au Poste `indexing`, y compris sur un hit d'index et à la reprise ; la story Rapport doit présenter ce coût comme récurrent par Exécution, non amorti comme un index.
+- Fournisseur réel (Anthropic, sans réseau ici) : vérifier sur `claude-haiku-5-5` qu'un préchargement d'un Corpus de plus de 512 tokens donne `cache_write_tokens > 0`, que la première Question lit le cache dans le TTL, et qu'un Corpus plus court donne des tokens en cache nuls sans erreur.
+- Conformité 4.14 : Configuration `cag` dans `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py`, `tests/e2e/test_sm3.py`.

@@ -166,12 +166,52 @@ def test_index_construit_ou_servi_par_le_cache_prechargent_de_la_meme_facon(
     _espion(ctx, vues)
     _construire(ctx, minicorpus, home)  # miss : index puis load
     _construire(ctx, minicorpus, home)  # hit : load seul
-    assert len(vues) == 1 and vues[0].cache_system  # le miss précharge
-    # le hit précharge aussi : un second appel `cag.preload` part, ici servi par le Cache de
-    # réponses de la passerelle (même requête), donc sans seconde sortie scénarisée
+    # le miss et le hit préchargent tous deux chez le fournisseur : le préchargement ne passe
+    # jamais par le Cache de réponses, qui ne réchaufferait pas le cache de prompt
+    assert len(vues) == 2 and all(v.cache_system for v in vues)
+    assert vues[0].system == vues[1].system
     spans = _llm(ctx, "cag.preload")
     assert [s["wl.post"] for s in spans] == ["indexing", "indexing"]
-    assert [s["wl.llm_cache_hit"] for s in spans] == [False, True]
+    assert [s["wl.llm_cache_hit"] for s in spans] == [False, False]
+
+
+class _ProviderEcriture(FakeProvider):
+    """Faux provider qui facture l'écriture du cache : un system en cache jamais vu est écrit."""
+
+    def _usage(self, request: LLMRequest, sortie: str) -> Usage:
+        usage = super()._usage(request, sortie)
+        if request.cache_system and usage.cache_read_tokens == 0:
+            ecrit = len(request.system.split())
+            return Usage(
+                input_tokens=usage.input_tokens - ecrit,
+                output_tokens=usage.output_tokens,
+                cache_write_tokens=ecrit,
+            )
+        return usage
+
+
+def test_rejeu_d_une_experience_repaie_le_prechargement_au_poste_indexing(
+    tmp_path: Path, minicorpus: ParsedCorpus
+) -> None:
+    # Deux Exécutions sans sortie scénarisée partagent `WL_HOME`, donc le Cache de réponses et
+    # le cache d'index : la seconde sert l'index du cache mais repaie le préchargement.
+    for i, run_id in enumerate(("r-1", "r-2")):
+        provider = _ProviderEcriture()
+        with RunCtx.from_profile(
+            "test", wl_home=tmp_path / "wl", run_id=run_id, seed=1, providers={"fake": provider}
+        ) as c:
+            c.parser = "markdown"
+            arch = _construire(c, minicorpus, tmp_path / "home")
+            spans = _llm(c, "cag.preload")
+            assert len(spans) == 1, i
+            assert spans[0]["wl.llm_cache_hit"] is False
+            assert spans[0]["wl.post"] == "indexing"
+            assert spans[0]["wl.usage.cache_write_tokens"] > 0  # écriture tracée à l'indexation
+            with c.scope(post="query", question_id="q-001"):
+                arch.answer(_question())
+            q = [s for s in _llm(c, "generate") if s["wl.post"] == "query"]
+            assert q[0]["wl.usage.cache_write_tokens"] == 0  # la Question lit, n'écrit pas
+            assert q[0]["wl.usage.cache_read_tokens"] > 0
 
 
 def test_seconde_question_lit_le_cache_trace_a_part_et_reponse_cited(
@@ -179,11 +219,17 @@ def test_seconde_question_lit_le_cache_trace_a_part_et_reponse_cited(
 ) -> None:
     arch = _construire(ctx, minicorpus, tmp_path / "home")
     reps = []
-    for _ in range(2):
-        with ctx.scope(post="query", question_id="q-001"):
-            reps.append(arch.answer(_question()))
+    textes = ("Que sait-on de la guilde Orvane ?", "Qui dirige le port de Brume ?")
+    for i, texte in enumerate(textes, start=1):
+        q_in = QuestionInput(question_id=f"q-00{i}", text=texte, lang="fr")
+        with ctx.scope(post="query", question_id=q_in.question_id):
+            reps.append(arch.answer(q_in))
     q = [s for s in _llm(ctx, "generate") if s["wl.post"] == "query"]
     assert len(q) == 2
+    # deux Questions différentes : appels réels au fournisseur, pas des rejeux du Cache de
+    # réponses ; le préfixe préchargé est lu dès la première
+    assert [s["wl.llm_cache_hit"] for s in q] == [False, False]
+    assert q[0]["wl.usage.cache_read_tokens"] > 0
     assert q[1]["wl.usage.cache_read_tokens"] > 0
     # le system lu en cache n'est pas compté comme entrée : champ à part
     assert q[1]["gen_ai.usage.input_tokens"] < q[1]["wl.usage.cache_read_tokens"]
@@ -236,7 +282,7 @@ def test_cache_system_faux_refuse_et_corpus_vide_sans_prechargement(
     ctx: RunCtx, tmp_path: Path
 ) -> None:
     mauvais = {"name": "llm", "params": {"model": "fake-llm-a", "cache_system": False}}
-    with pytest.raises(Exception, match="cache_system"):
+    with pytest.raises(ConfigError, match="cache_system"):
         _arch(ctx, generator=mauvais)
     vide = ParsedCorpus(corpus_id="v", fingerprint="fp", documents=())
     _construire(ctx, vide, tmp_path / "home")

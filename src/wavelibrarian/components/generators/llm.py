@@ -56,7 +56,9 @@ class LLMGenerator:
         """Appel de préchargement du cache de prompt (CAG) : même system que `generate`.
 
         Texte libre (`complete`), sans schéma : la sortie est ignorée et ne peut pas être
-        « non conforme ». Exige `cache_system: true`.
+        « non conforme ». Exige `cache_system: true`. Jamais servi par le Cache de réponses
+        (`use_cache=False`) : il doit réchauffer le cache du fournisseur, et son écriture reste
+        comptée au Poste `indexing` ; un rejeu repaie donc le préchargement.
         """
         if not self._cache_system:
             raise WlError("`preload` exige `cache_system: true`")
@@ -71,7 +73,7 @@ class LLMGenerator:
             seed=self._ctx.seed,
             inputs={"question": "", "blocks": {}},
         )
-        return self._ctx.gateway.complete(requete)
+        return self._ctx.gateway.complete(requete, use_cache=False)
 
     def generate(self, question: QuestionInput, context: Context) -> GenerationResult:
         blocs = {

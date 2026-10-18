@@ -60,7 +60,7 @@ class LLMResult(BaseModel):
 
 
 class ModelGateway(Protocol):
-    def complete(self, request: LLMRequest) -> LLMResult: ...
+    def complete(self, request: LLMRequest, *, use_cache: bool = True) -> LLMResult: ...
 
     def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]:
         """Lève `NonConformantOutput` après un nouvel essai si la sortie ne valide pas le schéma."""

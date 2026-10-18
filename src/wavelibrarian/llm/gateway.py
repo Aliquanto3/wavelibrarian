@@ -88,8 +88,10 @@ class MeteredGateway:
 
     # --- API publique ------------------------------------------------------------------------
 
-    def complete(self, request: LLMRequest) -> LLMResult:
-        return self._run(request, None, use_cache=True)[1]
+    def complete(self, request: LLMRequest, *, use_cache: bool = True) -> LLMResult:
+        """`use_cache=False` : ne lit pas le Cache de réponses (l'appel part toujours chez le
+        fournisseur) ; la réponse remplace l'entrée. Sert au préchargement CAG (story 6.5)."""
+        return self._run(request, None, use_cache=use_cache)[1]
 
     def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]:
         """Un nouvel essai (sans lecture du cache) si la sortie ne valide pas `schema`."""

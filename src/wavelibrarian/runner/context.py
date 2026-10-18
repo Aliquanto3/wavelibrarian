@@ -52,9 +52,9 @@ class _PasserelleSousPoste:
         if self._ctx._post is None:  # pyright: ignore[reportPrivateUsage]
             raise WlError("Poste de coût non fixé : appeler la passerelle dans ctx.scope(post=…)")
 
-    def complete(self, request: LLMRequest) -> LLMResult:
+    def complete(self, request: LLMRequest, *, use_cache: bool = True) -> LLMResult:
         self._verifier()
-        return self._interne.complete(request)
+        return self._interne.complete(request, use_cache=use_cache)
 
     def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]:
         self._verifier()

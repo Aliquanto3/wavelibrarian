@@ -404,7 +404,8 @@ class LLMResult(BaseModel):
     from_cache: bool
 
 class ModelGateway(Protocol):
-    def complete(self, request: LLMRequest) -> LLMResult: ...
+    def complete(self, request: LLMRequest, *, use_cache: bool = True) -> LLMResult: ...
+        # use_cache=False : ne lit pas le Cache de réponses (préchargement CAG, story 6.5) ; un rejeu d'une Expérience CAG repaie donc le préchargement au Poste indexing
     def complete_structured(self, request: LLMRequest, schema: type[T]) -> tuple[T, LLMResult]: ...
         # lève NonConformantOutput après 1 nouvel essai si la sortie ne valide pas le schéma
 
