@@ -6,14 +6,14 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 05:21 |
-| Story en cours | 7.5 (voie A, revue) ; 4.11 (voie B) |
-| Stories livrées | 46 / 56 |
+| Mis à jour | 2026-10-18 05:34 |
+| Story en cours | 4.11 (voie B) ; 7.6 (voie A) |
+| Stories livrées | 47 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
 | Blocages | aucun |
-| À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. Story 1.7 (vérification réelle) : sous Windows, codecarbon lit le CPU par `windows_emi`, absent de `_MODES_MATERIELS` ; la méthode vaut `estimated` — ajouter `windows_emi` si la mesure CPU doit compter comme `measured`. Story 2.1 : « licence restrictive » non définie au contrat ; retenu = toute licence hors `LICENCES_OUVERTES` (CC0, CC-BY*, MIT, Apache, BSD, ODbL, PDDL, Etalab, LO) ; deux Documents de contenu identique sont refusés (Ancrages ambigus). Story 3.1 : l'AC dit « signalée » pour une `unanswerable` avec Ancrages ou une autre Question sans Ancrage ; retenu = bloquant (code 2) si `validated`/`corrected`, simple signalement sinon. |
+| À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. Story 7.5 : l'AC demande l'extracteur d'entités « enregistré comme Composant », mais `contracts.md` §2 ferme `KINDS` ; extracteur et rédacteur de rapports restent des classes de `components/graph/` (ajouter un `kind` si tu le souhaites). Story 1.7 (vérification réelle) : sous Windows, codecarbon lit le CPU par `windows_emi`, absent de `_MODES_MATERIELS` ; la méthode vaut `estimated` — ajouter `windows_emi` si la mesure CPU doit compter comme `measured`. Story 2.1 : « licence restrictive » non définie au contrat ; retenu = toute licence hors `LICENCES_OUVERTES` (CC0, CC-BY*, MIT, Apache, BSD, ODbL, PDDL, Etalab, LO) ; deux Documents de contenu identique sont refusés (Ancrages ambigus). Story 3.1 : l'AC dit « signalée » pour une `unanswerable` avec Ancrages ou une autre Question sans Ancrage ; retenu = bloquant (code 2) si `validated`/`corrected`, simple signalement sinon. |
 
 ## Consignes du run
 
@@ -121,6 +121,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **4.11 (Rapport)** : calculer rappel@k / MRR / nDCG par Question depuis `answers.jsonl` et écrire `retrieval.csv` ; en Palier, juger une Citation « hors du Corpus » par rapport au sous-corpus du Palier ; afficher `unjudged` (story 4.9).
 - **Story 4.15 / vraie Exécution** : vérifier que le plafond couvre les appels des Juges (2 par Réponse ok) (story 4.9).
 - **4.11 (Rapport, statistiques)** : appeler `graine_derivee(seed_experience, config_id, condition, tier, phase, critère ou paire)` pour chaque IC et comparaison ; traiter `None` de `compare()` (pas de « Qualité égale » ni de point mort) ; signaler l'absence de correction de multiplicité à côté de `pairs.csv` ; écrire `pairs.csv` et `pareto.csv` (story 4.10).
+- **7.6 (GraphRAG)** : brancher `louvain_seed(ctx.seed)` et le GraphStore `networkx` ; utiliser `components/graph/` (extraction, communautés, rapports) ; vérifier le majorant de 400 tokens contre `count_tokens` Anthropic en 4.15 (story 7.5).
 
 ## Journal de surveillance
 
@@ -228,3 +229,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 4.9 | 04:12 | 04:58 | 84c3c5b5a1f450f5e544a460ab2dc4da52f93e4b | 0 $ | Revue : nDCG sans double gain par Ancrage, Citations inventées → citation_correctness non, unjudged au manifeste et reprise possible d'un run completed avec Critères manquants, Critère absent sans plantage, test d'égalité de bout en bout. 885 tests verts. |
 | 7.4 | 04:39 | 05:00 | 57ac1280e6b483ca8d5d6d91682986e3f89fa0e2 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : coût des tentatives non conformes rendu par LLMResult.retry_cost_uncached et compté dans la borne, answer imposé au dernier pas, schéma compté dans la réserve, ConfigError si les résultats ne tiennent pas, agentic.json malformé → WlError. |
 | 4.10 | 05:02 | 05:21 | aae51740d069cb4b8e20e27464140c4ea875e7ab | 0 $ | Revue : IC apparié testé contre scipy.stats.bootstrap et p-valeur contre une valeur théorique, graine_derivee conforme à AD-20, compare() sans Question commune → None, NaN refusés. 922 tests verts. |
+| 7.5 | 05:05 | 05:34 | 95a07c2f76f13b300a7ffa4a23ddbfb69a262cca | 0 $ | GraphStore networkx, extraction, Louvain à graine dérivée, rapports de communauté. Revue : fusion des entités indépendante de l'ordre (type extrait > générique, nom le plus mentionné), slug_entite (’ et œ/æ), réserve du schéma, couper() dans core/fenetre.py, test PYTHONHASHSEED. 945 tests verts. |
