@@ -1,11 +1,11 @@
 """Decider `llm` : rôle `grade_relevance`, un score dans [0, 1] par Passage (FR-21, AD-4)."""
 
 from collections.abc import Sequence
+from functools import cache
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from wavelibrarian.core.errors import NonConformantOutput
 from wavelibrarian.core.types import ModelRefMeta, Passage, QuestionInput
 from wavelibrarian.llm.roles import GradeRelevanceOutput
 from wavelibrarian.ports.gateway import LLMRequest, Message
@@ -17,6 +17,18 @@ _SYSTEM = (
     "l'ordre reçu : "
     '{"scores": [0.0, 0.0]}.'
 )
+
+
+@cache
+def _schema_pour(n: int) -> type[GradeRelevanceOutput]:
+    """Schéma du rôle borné à `n` scores : la passerelle refuse un autre nombre comme toute
+    sortie non conforme (second essai sans cache, aucune mise en cache). `minItems`/`maxItems`
+    partent aussi au provider (outil imposé, `format` d'Ollama)."""
+    return create_model(
+        "GradeRelevanceOutput",
+        __base__=GradeRelevanceOutput,
+        scores=(list[float], Field(min_length=n, max_length=n)),
+    )
 
 
 @register("decider", "llm")
@@ -52,10 +64,6 @@ class LLMDecider:
             seed=self._ctx.seed,
             inputs={"question": question.text, "passages": textes},
         )
-        sortie, _ = self._ctx.gateway.complete_structured(requete, GradeRelevanceOutput)
-        scores = [float(s) for s in sortie.scores]
-        if len(scores) != len(textes):
-            raise NonConformantOutput(
-                f"grade_relevance : {len(scores)} scores pour {len(textes)} Passages"
-            )
-        return scores
+        schema = _schema_pour(len(textes))
+        sortie, _ = self._ctx.gateway.complete_structured(requete, schema)
+        return [float(s) for s in sortie.scores]

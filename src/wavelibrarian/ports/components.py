@@ -170,13 +170,14 @@ class Generator(Protocol):
 class Decider(Protocol):
     model_id: str | None
 
+    # `loop` : rang de la boucle de l'Architecture, qui nomme l'étape de la Trace (`….loopN`).
     def grade(
-        self, question: QuestionInput, passages: Sequence[Passage]
+        self, question: QuestionInput, passages: Sequence[Passage], loop: int = 0
     ) -> list[float]: ...  # dans [0, 1]
 
 
 class QueryRewriter(Protocol):
-    def rewrite(self, question: QuestionInput) -> str: ...
+    def rewrite(self, question: QuestionInput, loop: int = 1) -> str: ...
 
 
 class JudgeInput(BaseModel):

@@ -230,3 +230,38 @@ def test_retriever_autre_que_dense_refuse(ctx: RunCtx) -> None:
     for nom in ("lexical", "hybrid"):
         with pytest.raises(ConfigError):
             _arch(ctx, retriever={"name": nom})
+
+
+def test_un_mauvais_nombre_de_scores_est_rejoue_sans_cache_et_jamais_mis_en_cache(
+    ctx: RunCtx, minicorpus: ParsedCorpus, tmp_path: Path
+) -> None:
+    """Revue : le nombre de scores est validé par la passerelle (schéma borné à n), qui fait le
+    second essai sans lire le cache ; la réponse fautive n'est jamais servie depuis le cache."""
+    arch = _construire(ctx, minicorpus, tmp_path)
+    passages = list(arch._index.passages.values())[:3]
+    sorties = ['{"scores": [0.9]}', '{"scores": [0.9, 0.2, 0.5]}']
+    appels: list[int] = []
+
+    def sortie(req: LLMRequest) -> str:
+        appels.append(1)
+        return sorties[min(len(appels), len(sorties)) - 1]
+
+    ctx.provider.script("grade_relevance", "crag.grade.loop0", sortie)  # type: ignore[attr-defined]
+    with ctx.scope(post="query"):
+        assert arch.decider.grade(_question(), passages, loop=0) == [0.9, 0.2, 0.5]
+        assert len(appels) == 2  # second essai de la passerelle, sans lecture du cache
+        assert arch.decider.grade(_question(), passages, loop=0) == [0.9, 0.2, 0.5]
+        assert len(appels) == 2  # la réponse conforme est servie par le cache
+
+    toujours_faux: list[int] = []
+
+    def faux(req: LLMRequest) -> str:
+        toujours_faux.append(1)
+        return '{"scores": [0.9, 0.2]}'
+
+    ctx.provider.script("grade_relevance", "crag.grade.loop1", faux)  # type: ignore[attr-defined]
+    with ctx.scope(post="query"):
+        for _ in range(2):
+            with pytest.raises(NonConformantOutput):
+                arch.decider.grade(_question(), passages, loop=1)
+    assert len(toujours_faux) == 4  # deux essais par appel, rien de fautif mis en cache

@@ -1,7 +1,7 @@
 ---
 story: "6.4"
 title: Corrective RAG
-status: review
+status: done
 ---
 
 # Story 6.4 : Corrective RAG
@@ -16,11 +16,11 @@ status: review
 ## Design Notes
 
 - Index, `update`, `load`, `embedder_dim()` et capacités hérités de `naive_rag`. `query_params` = `k`, `threshold`, `max_loops`, `decider`, `query_rewriter` : tous hors de la clé d'index, qui reste celle de `naive_rag` (index dense réutilisé).
-- Étape de la Trace : `Decider.grade` et `QueryRewriter.rewrite` reçoivent un argument nommé `loop` (défaut 0 et 1) en plus de la signature du contrat §2, pour nommer `crag.grade.loopN` / `crag.rewrite.loopN`. Seule la passerelle trace ; l'Architecture ne trace rien.
+- Étape de la Trace : `Decider.grade` et `QueryRewriter.rewrite` reçoivent un argument nommé `loop` (défaut 0 et 1) ajouté aux Protocols `Decider`/`QueryRewriter` et au contrat §2, pour nommer `crag.grade.loopN` / `crag.rewrite.loopN`. Seule la passerelle trace ; l'Architecture ne trace rien.
 - Boucle : recherche par la Question, notation (`loop0`). Tant qu'aucun Passage n'atteint `threshold` et que `boucle < max_loops` (borne vérifiée avant chaque reformulation) : reformulation de la requête courante, nouvelle recherche dense, notation. Les Passages sont notés au regard de la Question d'origine. Un Passage noté `>= threshold` (0,5 compris) entre dans le Contexte, dans l'ordre du Retriever.
 - Sans Passage retenu après `max_loops` : `abstained: true`, texte vide, aucun appel `generate`. `max_loops: 0` note une fois puis s'abstient.
 - `retrieved` : la liste classée de la dernière recherche (rangs du Retriever, `ranked`), pour les métriques de recherche ; le Contexte n'en garde que les Passages retenus. `generate` reçoit la Question d'origine, pas la reformulation.
-- Décider : un nombre de scores différent du nombre de Passages est une sortie non conforme (`NonConformantOutput`) ; hors [0, 1] est refusé par le schéma du rôle. Aucun Passage : pas d'appel.
+- Decider : le schéma passé à la passerelle est celui du rôle borné à n scores (`minItems`/`maxItems`) ; un autre nombre, comme un score hors [0, 1], est une sortie non conforme refusée par la passerelle (second essai sans cache, rien de fautif mis en cache). Aucun Passage : pas d'appel.
 - Choix hors AC : retriever autre que `dense` refusé à la construction (`ConfigError`), comme `hyde`. Pas de repli web.
 
 ## Tâches et critères
@@ -36,3 +36,10 @@ status: review
 - Statut : review. Vérifications finales dans le rapport.
 - Reports : Configuration `corrective_rag` dans `experiments/mini-test.yaml`, `tests/conformance/test_architectures.py` et `tests/e2e/test_sm3.py` : absents du dépôt (story 4.14) ; à passer quand ils existent, sans réseau.
 - Le cache de réponses de la passerelle (fake) inclut `step` dans la clé : les étapes `crag.*` ne se servent pas mutuellement.
+
+## Revue
+
+- medium, second avis 1 et 5 : corrigé. Le contrôle du nombre de scores venait après la validation et la mise en cache par la passerelle, sans second essai, et une relance relisait la réponse fautive. Le schéma est désormais `GradeRelevanceOutput` borné à n (`_schema_pour`), que la passerelle valide (second essai sans cache, remplacement). Test : `test_un_mauvais_nombre_de_scores_est_rejoue_sans_cache_et_jamais_mis_en_cache`.
+- low, second avis 2 : corrigé. `loop` est ajouté aux Protocols `Decider` et `QueryRewriter` (`ports/components.py`) et à `contracts.md` §2.
+- low, second avis 3 : rejeté. La réécriture par défaut du Faux LLM rend la Question inchangée, et l'AC 3 exige pourtant deux reformulations et les cinq étapes `crag.*` : s'arrêter sur une réécriture identique violerait l'AC.
+- low, second avis 4 : reporté (déjà consigné). La conformité, `mini-test.yaml` et la SM-3 attendent la 4.14.

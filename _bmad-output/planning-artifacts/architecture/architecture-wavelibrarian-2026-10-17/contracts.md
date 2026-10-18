@@ -287,10 +287,10 @@ class GenerationResult(BaseModel):
 
 class Decider(Protocol):
     model_id: str | None
-    def grade(self, question: QuestionInput, passages: Sequence[Passage]) -> list[float]: ...  # dans [0, 1]
+    def grade(self, question: QuestionInput, passages: Sequence[Passage], loop: int = 0) -> list[float]: ...  # dans [0, 1] ; `loop` nomme l'étape `….loopN`
 
 class QueryRewriter(Protocol):
-    def rewrite(self, question: QuestionInput) -> str: ...
+    def rewrite(self, question: QuestionInput, loop: int = 1) -> str: ...
 
 class JudgeInput(BaseModel):
     question: str
