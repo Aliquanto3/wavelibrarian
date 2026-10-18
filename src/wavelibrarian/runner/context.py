@@ -7,6 +7,8 @@ de réponses depuis un profil et un Catalogue. Seul un contexte d'Exécution pre
 
 import random
 import re
+import shutil
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -106,6 +108,7 @@ class Context:
         self._lock: RunLock | None = None
         self._ledger: Ledger | None = None
         self._cache: ResponseCache | None = None
+        self._cache_jetable: Path | None = None
         if execution:
             self._lock = RunLock(wl_home, run_id)
             self._lock.acquire()
@@ -117,7 +120,13 @@ class Context:
                 recover_orphans=execution,  # seulement sous `run.lock` (AD-11)
                 hors_execution=not execution,
             )
-            self._cache = ResponseCache(wl_home)
+            if execution and any(getattr(p, "scripted", False) for p in (providers or {}).values()):
+                # Faux LLM scénarisé : Cache de réponses jetable, hors `WL_HOME` (report 1.10).
+                # Lu à la construction : scénariser le Faux LLM avant de créer le contexte.
+                self._cache_jetable = Path(tempfile.mkdtemp(prefix="wl-cache-scenarise-"))
+                self._cache = ResponseCache(self._cache_jetable)
+            else:
+                self._cache = ResponseCache(wl_home)
             self.tracer: PortTracer = Tracer(self, self.run_dir / "traces.jsonl")
             self.tokenizer: Tokenizer = make_tokenizer(profile.tokenizer)
             mesuree = build_gateway(
@@ -241,6 +250,9 @@ class Context:
             finally:
                 if cache is not None:
                     cache.close()
+                if self._cache_jetable is not None:
+                    shutil.rmtree(self._cache_jetable, ignore_errors=True)
+                    self._cache_jetable = None
         finally:
             if lock is not None:  # libéré même si une fermeture échoue
                 lock.release()

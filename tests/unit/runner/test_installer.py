@@ -121,6 +121,13 @@ def _resultat(modeles: list[str], profil: str = "cpu", juge_calibration: str | N
     return SimpleNamespace(resolved=resolu, catalog=load_catalog())
 
 
+def _sans_execution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Préflight seul : l'Exécution (story 4.4) est testée dans `test_story_4_4.py`."""
+    issue = SimpleNamespace(run_id="r", status="completed", n_answers=0, run_dir=Path("r"))
+    monkeypatch.setattr(cli, "load_questions", lambda _r: None)
+    monkeypatch.setattr(cli, "run_experiment", lambda *_a, **_k: issue)
+
+
 def test_wl_run_preflight_en_echec_code_4(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(cli, "validate_file", lambda _c: _resultat(["claude-haiku-5-5"]))
     monkeypatch.setattr(
@@ -142,6 +149,7 @@ def test_wl_run_cle_manquante_code_4(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 def test_wl_run_preflight_reussi(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(cli, "validate_file", lambda _c: _resultat(["fake-llm-a"], "test"))
+    _sans_execution(monkeypatch)
     res = CliRunner().invoke(app, ["run", str(tmp_path / "e.yaml")])
     assert res.exit_code == 0
     assert "Préflight réussi" in res.output

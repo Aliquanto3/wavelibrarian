@@ -43,3 +43,12 @@ def new_run_id(experiment_hash: str) -> str:
 def sha16_bytes(data: bytes) -> str:
     """16 premiers caracteres hexadecimaux du sha256 d octets bruts (doc_id, AD-5)."""
     return hashlib.sha256(data).hexdigest()[:16]
+
+
+def answer_id(
+    run_id: str, config_id: str, condition: str, tier: int | None, phase: str, question_id: str
+) -> str:
+    """`<run_id>/<config_id>/<condition>/<tier>/<phase>/<question_id>`, `tier = "all"` sans
+    Palier (contracts.md §1)."""
+    palier = "all" if tier is None else str(tier)
+    return "/".join((run_id, config_id, condition, palier, phase, question_id))

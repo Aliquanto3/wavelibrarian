@@ -205,6 +205,12 @@ class FakeProvider:
         self._scenarios: list[_Scenario] = []
         self._prefixes_vus: set[str] = set()
 
+    @property
+    def scripted(self) -> bool:
+        """Vrai dès qu'une sortie est scénarisée : le runner isole alors le Cache de réponses,
+        pour qu'une sortie scénarisée ne serve jamais une autre Exécution (story 1.10)."""
+        return bool(self._scenarios)
+
     def script(self, role: str, step_glob: str, output: ScriptOutput) -> None:
         """Sortie scénarisée (FR-52) pour le rôle et les étapes qui correspondent au glob.
 

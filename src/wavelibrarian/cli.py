@@ -31,6 +31,7 @@ from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.context import Context
+from wavelibrarian.runner.execute import load_questions, run_experiment
 
 app = typer.Typer(
     name="wl",
@@ -79,7 +80,11 @@ def run(
         Path, typer.Argument(help="Fichier YAML de l'Expérience à valider puis exécuter.")
     ],
 ) -> None:
-    """Valide une Expérience, vérifie ses dépendances (préflight) ; le runner arrive à l'epic 4."""
+    """Valide une Expérience, vérifie ses dépendances (préflight), puis l'exécute.
+
+    Codes de sortie : 0 succès, 1 erreur (dont une autre Exécution en cours), 2 configuration
+    invalide (Jeu non Gelé ou modifié compris), 3 plafond atteint, 4 préflight échoué.
+    """
     try:
         resultat = validate_file(experience)
     except ValidationFailed as echec:
@@ -101,6 +106,23 @@ def run(
             typer.echo(f"  - {e}", err=True)
         raise typer.Exit(4)
     typer.echo("Préflight réussi.")
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    try:
+        questions = load_questions(resultat.resolved)  # Gel vérifié avant tout appel (AD-15)
+        issue = run_experiment(resultat.resolved, questions, wl_home=wl_home)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except WlError as erreur:  # dont « Exécution <run_id> en cours » (run.lock)
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    typer.echo(
+        f"Exécution {issue.run_id} : {issue.status}, {issue.n_answers} Réponse(s) "
+        f"dans {issue.run_dir}"
+    )
+    if issue.status == "budget_exceeded":
+        typer.echo("Plafond de dépense atteint : Exécution arrêtée.", err=True)
+        raise typer.Exit(3)
 
 
 @app.command("installer")
