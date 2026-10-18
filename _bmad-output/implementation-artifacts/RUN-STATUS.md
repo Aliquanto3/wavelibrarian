@@ -152,6 +152,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 02:21 | 3 tronq. (qwen3.5:4b) : think_on reasoning/var-math-fr 2 tronq., 70 s/tronq. (pas de réf.) ; think_on abstention/oneruler-fr-none 1 tronq., 43 s/tronq. (pas de réf.) ; pire +0 % | 11 % | 18.1 Go | 1 s, 86 Mo, 76 thr (13 proc) | Sous les seuils : on continue (6.2) |
 | 02:38 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 3 tronq., 53 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on reasoning/bbeh-mini 1 tronq., 74 s/tronq. (pas de réf.) ; pire -14 % | 17 % | 13.0 Go | 1 s, 86 Mo, 76 thr (13 proc) | -14 % sur 2 réponses seulement (rag/oneruler-fr-cwe), juste sous le seuil de 15 % : vigilance, mesure suivante surveillée ; on continue (6.3) |
 | 02:45 | 6 tronq. (qwen3.5:4b) : think_on rag/oneruler-fr-niah 3 tronq., 51 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 48 s/tronq. vs 41 (-14 %) ; think_on abstention/oneruler-fr-none 1 tronq., 51 s/tronq. (pas de réf.) ; pire -14 % | 19 % | 19.3 Go | 1 s, 86 Mo, 105 thr (21 proc) | Sous les seuils : on continue (4.6) |
+| 02:51 | Génération du banc terminée à 02:42 (« génération complète », 3 376 lignes, 0 ERROR) ; plus de réponses à mesurer. `generation.lock` encore présent, un `llama-server` (pid 11716) occupe toujours le GPU, sans `pilot-report.md` | 33 % | 18,0 Go | 10 s, 154 Mo, 136 thr | Contraintes Ollama/GPU maintenues jusqu'au contrôle de 5 h (consigne d'Anaël) ; on continue sur deux voies |
 
 ## Journal des stories
 
