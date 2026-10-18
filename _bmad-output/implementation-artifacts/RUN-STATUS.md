@@ -10,7 +10,7 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 | Story en cours | 4.10 (voie B) ; 7.5 (voie A) |
 | Stories livrées | 45 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
-| Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
+| Pilote slm-quality-bench | **terminé** : `pilot-report.md` écrit à 04:59, fin confirmée à 05:03 et 05:08, GPU libre. **Ollama et GPU autorisés** depuis 05:08 (consigne d'Anaël) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
 | Blocages | aucun |
 | À arbitrer par Anaël | Story 1.4, AC 3 : l'exemple « 1 M + 1 M → 0,60 $ » contredit le palier ×5 au-delà de 100 000 tokens (3,00 $ sur le vrai Catalogue). Règle de palier gardée. Story 1.8, AC 2 : deux Exécutions de 1,50 $ réglées dépassent le plafond de période de 2,00 $ ; test écrit avec un plafond de période de 3,00 $. Story 2.1 : « licence restrictive » non définie au contrat ; retenu = toute licence hors `LICENCES_OUVERTES` (CC0, CC-BY*, MIT, Apache, BSD, ODbL, PDDL, Etalab, LO) ; deux Documents de contenu identique sont refusés (Ancrages ambigus). Story 3.1 : l'AC dit « signalée » pour une `unanswerable` avec Ancrages ou une autre Question sans Ancrage ; retenu = bloquant (code 2) si `validated`/`corrected`, simple signalement sinon. |
@@ -174,6 +174,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 04:38 | 16 tronq. (qwen3.5:4b) : think_on instructions/mifeval-fr 5 tronq., 35 s/tronq. (pas de réf.) ; think_on rag/piaf 4 tronq., 36 s/tronq. (pas de réf.) ; think_on writing/writing-fr 4 tronq., 35 s/tronq. (pas de réf.) ; pire +0 % | 16 % | 12.8 Go | 1 s, 86 Mo, 77 thr (14 proc) | Sous les seuils : on continue (7.4) |
 | 04:57 | 6 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 2 tronq., 52 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 42 s/tronq. (pas de réf.) ; think_on extraction/jsonschemabench 1 tronq., 37 s/tronq. (pas de réf.) ; pire +0 % | 6 % | 18.7 Go | 1 s, 86 Mo, 78 thr (12 proc) | Sous les seuils : on continue |
 | 05:00 | 7 tronq. (qwen3.5:4b) : think_on abstention/oneruler-fr-none 2 tronq., 52 s/tronq. (pas de réf.) ; think_on rag/oneruler-fr-cwe 2 tronq., 42 s/tronq. (pas de réf.) ; think_on extraction/jsonschemabench 1 tronq., 37 s/tronq. (pas de réf.) ; pire +0 % | 1 % | 21.1 Go | 1 s, 86 Mo, 73 thr (12 proc) | Sous les seuils : on continue |
+| 05:08 | Banc terminé (pilot-report.md présent, nvidia-smi vide), double confirmation à 5 min d'écart | — | — | — | Fin de la surveillance du banc ; contraintes de cohabitation levées (Ollama, GPU, téléchargements) |
 
 ## Journal des stories
 
