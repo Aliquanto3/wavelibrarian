@@ -1,7 +1,7 @@
 ---
 story: "fix-8-8"
 title: "Juges tronqués et source d'énergie nvml à tort"
-status: review
+status: done
 ---
 
 # Correctif 8.8 : Juges tronqués et source d'énergie `nvml` à tort
