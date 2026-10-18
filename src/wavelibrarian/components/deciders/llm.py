@@ -31,6 +31,9 @@ def _schema_pour(n: int) -> type[GradeRelevanceOutput]:
     )
 
 
+schema_scores = _schema_pour  # public : réutilisé par `lazy_graphrag`
+
+
 @register("decider", "llm")
 class LLMDecider:
     """Un appel `grade_relevance` par lot de Passages. L'étape de la Trace est `crag.grade.loopN`
