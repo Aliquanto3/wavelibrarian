@@ -333,8 +333,9 @@ def test_plafond_atteint_code_3_et_manifeste_budget_exceeded(
     dossier = _un_run(wl_home)
     manifest = _manifest(dossier)
     assert manifest["status"] == "budget_exceeded" and "finished_at" in manifest
-    assert manifest["answers"] == {"ok": 1, "error": 0, "inapplicable": 0}
-    assert [a.status for a in _answers(dossier)] == ["ok"]  # arrêt : la 3e n'est pas posée
+    # Story 4.8 : les Questions non traitées sont écrites `budget_exceeded`.
+    assert manifest["answers"] == {"ok": 1, "error": 0, "inapplicable": 0, "budget_exceeded": 2}
+    assert [a.status for a in _answers(dossier)] == ["ok", "budget_exceeded", "budget_exceeded"]
     assert len(appels) == 2
     assert json.loads((dossier / "applicability.json").read_text(encoding="utf-8")) == {}
 

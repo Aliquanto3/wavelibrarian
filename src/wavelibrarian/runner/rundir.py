@@ -13,10 +13,11 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Literal, get_args
 
-from wavelibrarian.config.experiment import ResolvedExperiment
+from wavelibrarian.config.experiment import Budget, ResolvedExperiment
 from wavelibrarian.config.resolve import write_resolved
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.core.ids import canonical_json
+from wavelibrarian.core.types import Answer
 from wavelibrarian.corpus.declare import DeclaredCorpus
 from wavelibrarian.corpus.ingest import nom_parser_resolu, parsers_par_format
 from wavelibrarian.llm.gateway import limiter_journaux
@@ -112,6 +113,40 @@ def set_status(dossier: Path, status: Status, *, answers: dict[str, int] | None 
     if status != "running":
         donnees["finished_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _ecrire_manifest(dossier, donnees)
+
+
+def reopen_run_dir(dossier: Path, budget: Budget) -> None:
+    """Reprise (contracts.md §7) : le manifeste repasse à `running`, sans `finished_at` ; la
+    reprise est consignée dans `resumptions` avec les plafonds en vigueur. Les fichiers
+    `experiment.resolved.yaml` et `experiment.sha256` restent ceux du départ."""
+    chemin = dossier / "manifest.json"
+    donnees = json.loads(chemin.read_text(encoding="utf-8"))
+    donnees["status"] = "running"
+    donnees.pop("finished_at", None)
+    donnees.pop("answers", None)
+    reprises = donnees.setdefault("resumptions", [])
+    reprises.append(
+        {
+            "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "budget": budget.model_dump(mode="json"),
+        }
+    )
+    _ecrire_manifest(dossier, donnees)
+
+
+def read_answers(dossier: Path) -> dict[str, Answer]:
+    """Réponses effectives de `answers.jsonl`, par `answer_id` : la dernière ligne d'une clé fait
+    foi. Le fichier est en ajout seulement : une Question restée `budget_exceeded` est reposée à
+    la reprise, et sa nouvelle ligne remplace la précédente."""
+    chemin = dossier / "answers.jsonl"
+    if not chemin.is_file():
+        return {}
+    effectives: dict[str, Answer] = {}
+    for ligne in chemin.read_text(encoding="utf-8").splitlines():
+        if ligne.strip():
+            reponse = Answer.model_validate(json.loads(ligne))
+            effectives[reponse.answer_id] = reponse
+    return effectives
 
 
 def attach_run_log(dossier: Path) -> logging.Handler:

@@ -28,6 +28,7 @@ from wavelibrarian.core.types import (
     CorpusProfile,
     ParsedCorpus,
     Passage,
+    Phase,
     Question,
     QuestionInput,
     Usage,
@@ -47,11 +48,14 @@ from wavelibrarian.ports.architecture import Applicability, ArchitectureBase, Co
 from wavelibrarian.ports.components import ComponentSpec
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.index_cache import IndexCache, index_key
+from wavelibrarian.runner.resume import cles_tracees, verifier_reprise
 from wavelibrarian.runner.rundir import (
     JsonlWriter,
     attach_run_log,
     create_run_dir,
     detach_run_log,
+    read_answers,
+    reopen_run_dir,
     resolve_parsers,
     set_status,
 )
@@ -219,14 +223,74 @@ class _Runner:
         self.requis = tuple(sorted(requis))
         self.inapplicables: dict[str, dict[str, Any]] = {}
         self.counts: dict[str, int] = {"ok": 0, "error": 0, "inapplicable": 0}
+        # Reprise : `faits` = answer_id déjà traités (jamais refaits), `en_attente` = answer_id dont
+        # la dernière ligne est `budget_exceeded` (reposés ; non réécrits si le plafond rebloque).
+        self.faits: set[str] = set()
+        self.en_attente: set[str] = set()
 
     @property
     def n_answers(self) -> int:
         return sum(self.counts.values())
 
+    def compter(self) -> None:
+        """Décompte des Réponses effectives (dernière ligne par clé) de `answers.jsonl`, pour le
+        manifeste ; `budget_exceeded` n'y figure que s'il en reste."""
+        self.counts = {"ok": 0, "error": 0, "inapplicable": 0}
+        for a in read_answers(self.dossier).values():
+            self.counts[a.status] = self.counts.get(a.status, 0) + 1
+
+    def reprendre(self) -> None:
+        """Reprise (AD-11) : relit `answers.jsonl` (clés présentes sautées, sauf `budget_exceeded`),
+        `applicability.json`, et repère les Questions interrompues, c'est-à-dire déjà tracées au
+        Poste `query` sans Réponse : leurs appels refaits sortent du cache et sont marqués
+        `wl.resumed` (ni appel ni latence en double dans le Rapport)."""
+        existantes = read_answers(self.dossier)
+        self.faits = {i for i, a in existantes.items() if a.status != "budget_exceeded"}
+        self.en_attente = set(existantes) - self.faits
+        faites = {
+            (a.config_id, a.condition, a.tier, a.phase, a.question_id)
+            for i, a in existantes.items()
+            if i in self.faits
+        }
+        self.ctx.traceur.reprises = frozenset(cles_tracees(self.dossier) - faites)
+        chemin = self.dossier / "applicability.json"
+        if chemin.is_file():
+            self.inapplicables = json.loads(chemin.read_text(encoding="utf-8"))
+
     def _ecrire(self, writer: JsonlWriter, answer: Answer) -> None:
+        if answer.answer_id in self.faits:  # reprise : une clé présente n'est jamais réécrite
+            return
         writer.append(answer.model_dump(mode="json"))
-        self.counts[answer.status] += 1
+        if answer.status != "budget_exceeded":
+            self.faits.add(answer.answer_id)
+
+    def _tailles(self, experience: ResolvedExperiment) -> list[int | None]:
+        tiers = self.corpus.spec.tiers
+        if experience.tier is None or tiers is None:
+            return [None]
+        return list(_tailles_demandees(experience.tier, tiers))
+
+    def marquer_budget_exceeded(self, writer: JsonlWriter, experience: ResolvedExperiment) -> None:
+        """Plafond atteint : chaque clé de la grille (Configuration, Condition, Palier, phase,
+        Question) sans Réponse devient un `Answer` `budget_exceeded`, la Question interrompue
+        comprise. Les Réponses déjà écrites restent telles quelles."""
+        ctx = self.ctx
+        vide = ArchAnswer(text="", abstained=False, retrieval_method="none")
+        message = "plafond de dépense atteint avant que la Question soit posée"
+        phases: list[Phase] = ["base", "after_update"] if experience.scenario else ["base"]
+        try:
+            for conf in experience.configurations:
+                for phase in phases:
+                    ctx.phase = phase
+                    for condition in experience.conditions:
+                        for taille in self._tailles(experience):
+                            ctx.condition, ctx.tier = condition, taille
+                            for q in self.questions:
+                                a = self._answer(conf, q, vide, "budget_exceeded", message)
+                                if a.answer_id not in self.faits | self.en_attente:
+                                    self._ecrire(writer, a)
+        finally:
+            ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
 
     # --- ingestion et profilage ------------------------------------------------------------
 
@@ -409,7 +473,7 @@ class _Runner:
         conf: ResolvedConfiguration,
         q: Question,
         arch_answer: ArchAnswer,
-        status: Literal["ok", "error", "inapplicable"],
+        status: Literal["ok", "error", "inapplicable", "budget_exceeded"],
         error: str | None = None,
         *,
         latency_s: float = 0.0,
@@ -454,12 +518,7 @@ class _Runner:
         ctx.config_id = conf.id
         ctx.parser = conf.parser.name
         parse, profil = self.preparer(conf.parser.name)
-        tiers = self.corpus.spec.tiers
-        tailles: list[int | None] = (
-            [None]
-            if experience.tier is None or tiers is None
-            else list(_tailles_demandees(experience.tier, tiers))
-        )
+        tailles = self._tailles(experience)
         try:
             for condition in experience.conditions:
                 for taille in tailles:
@@ -538,6 +597,15 @@ class _Runner:
         index."""
         ctx = self.ctx
         questions = self.questions if questions is None else questions
+        if self.faits:  # reprise : seules les clés absentes (ou `budget_exceeded`) sont refaites
+            questions = [
+                q
+                for q in questions
+                if answer_id(ctx.run_id, conf.id, ctx.condition, ctx.tier, ctx.phase, q.id)
+                not in self.faits
+            ]
+            if not questions:
+                return
         parfait = condition == "perfect_context"
         spec = ComponentSpec(name=conf.architecture, params=conf.params)
 
@@ -671,12 +739,15 @@ def run_experiment(
     wl_home: Path,
     run_id: str | None = None,
     providers: Providers | None = None,
+    reprendre: str | None = None,
 ) -> RunOutcome:
     """Exécute une Expérience validée dont le Jeu est vérifié (`load_questions`).
 
     `run.lock` est pris (et les réservations orphelines récupérées) avant d'écrire quoi que ce
     soit ; un second `wl run` échoue donc sans créer de dossier. `providers` : Faux LLM
     scénarisé des tests ; sinon les adaptateurs du Catalogue (`build_providers`, `fake` compris).
+    `reprendre` : `run_id` d'une Exécution à reprendre (story 4.8) ; `ConfigError` (code 2) si
+    elle est introuvable, terminée, ou si l'Expérience ou le Gel diffèrent (plafonds exceptés).
     """
     verifier_paliers(experience, questions)
     corpus = declare(Path(experience.corpus))
@@ -684,12 +755,23 @@ def run_experiment(
     scenario = Path(experience.scenario) if experience.scenario else None
     if scenario is not None:  # Scénario invalide : refus (code 2) avant le dossier d'Exécution
         charger(scenario, ingest(corpus, experience.configurations[0].parser.name, wl_home=wl_home))
+    if reprendre is not None:
+        verifier_reprise(experience, wl_home, reprendre, questions.freeze_sha256)
+        run_id = reprendre
     if run_id is None:
         run_id = new_run_id(sha16(canonical_json(experience.model_dump(mode="json"))))
+    # Le verrou est pris d'abord, puis les réservations orphelines sont réglées à leur estimation
+    # (`Ledger(recover_orphans=True)`) : une reprise après arrêt brutal repart d'un registre sain.
     with Context.from_experiment(
         experience, wl_home=wl_home, run_id=run_id, providers=providers, execution=True
     ) as ctx:
-        dossier = create_run_dir(wl_home, run_id, experience, freeze_sha256=questions.freeze_sha256)
+        if reprendre is None:
+            dossier = create_run_dir(
+                wl_home, run_id, experience, freeze_sha256=questions.freeze_sha256
+            )
+        else:
+            dossier = wl_home / "runs" / run_id
+            reopen_run_dir(dossier, experience.budget)
         handler: logging.Handler | None = None
         paquet = logging.getLogger("wavelibrarian")
         niveau = paquet.level
@@ -699,18 +781,24 @@ def run_experiment(
                 paquet.setLevel(logging.INFO)
             log.info("Exécution %s : %d Questions posées", run_id, len(questions.questions))
             runner = _Runner(ctx, dossier, corpus, questions.questions, experience.tier, scenario)
+            if reprendre is not None:
+                runner.reprendre()
+                log.info("Exécution %s reprise : %d clés déjà traitées", run_id, len(runner.faits))
             _, profil = runner.preparer(experience.configurations[0].parser.name)
             runner.ecrire_profil(profil)
             statut: RunStatus = "completed"
             try:
                 with JsonlWriter(dossier, "answers.jsonl") as writer:
-                    for conf in experience.configurations:
-                        runner.configuration(writer, conf, experience)
-            except BudgetExceeded as erreur:  # arrêt propre ; reprise : story 4.8
-                log.warning("Plafond atteint : %s", erreur)
-                statut = "budget_exceeded"
+                    try:
+                        for conf in experience.configurations:
+                            runner.configuration(writer, conf, experience)
+                    except BudgetExceeded as erreur:  # arrêt propre ; reprise : --reprendre
+                        log.warning("Plafond atteint : %s", erreur)
+                        statut = "budget_exceeded"
+                        runner.marquer_budget_exceeded(writer, experience)
             finally:
                 runner.ecrire_applicabilite()
+            runner.compter()
             set_status(dossier, statut, answers=dict(runner.counts))
             log.info("Exécution %s : %s, Réponses %s", run_id, statut, runner.counts)
         except BaseException:

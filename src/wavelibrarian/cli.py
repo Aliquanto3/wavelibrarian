@@ -32,6 +32,7 @@ from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.execute import load_questions, run_experiment, verifier_paliers
+from wavelibrarian.runner.resume import verifier_reprise
 
 app = typer.Typer(
     name="wl",
@@ -79,11 +80,20 @@ def run(
     experience: Annotated[
         Path, typer.Argument(help="Fichier YAML de l'Expérience à valider puis exécuter.")
     ],
+    reprendre: Annotated[
+        str | None,
+        typer.Option(
+            "--reprendre",
+            help="run_id d'une Exécution arrêtée à reprendre : seules les clés absentes sont "
+            "refaites (plafonds relevables ; toute autre différence d'Expérience est refusée).",
+        ),
+    ] = None,
 ) -> None:
     """Valide une Expérience, vérifie ses dépendances (préflight), puis l'exécute.
 
     Codes de sortie : 0 succès, 1 erreur (dont une autre Exécution en cours), 2 configuration
-    invalide (Jeu non Gelé ou modifié compris), 3 plafond atteint, 4 préflight échoué.
+    invalide (Jeu non Gelé ou modifié compris, reprise d'une Expérience différente), 3 plafond
+    atteint, 4 préflight échoué.
     """
     try:
         resultat = validate_file(experience)
@@ -93,9 +103,12 @@ def run(
             typer.echo(f"  - {e.path} : {e.message}", err=True)
         raise typer.Exit(2) from echec
     typer.echo("Validation réussie.")
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
     try:  # Gel vérifié à la validation, avant le préflight et tout appel (AD-11, AD-15)
         questions = load_questions(resultat.resolved)
         verifier_paliers(resultat.resolved, questions)  # Palier non déclaré : code 2
+        if reprendre is not None:  # Expérience ou Gel différents de l'Exécution : code 2
+            verifier_reprise(resultat.resolved, wl_home, reprendre, questions.freeze_sha256)
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
@@ -112,9 +125,8 @@ def run(
             typer.echo(f"  - {e}", err=True)
         raise typer.Exit(4)
     typer.echo("Préflight réussi.")
-    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
     try:
-        issue = run_experiment(resultat.resolved, questions, wl_home=wl_home)
+        issue = run_experiment(resultat.resolved, questions, wl_home=wl_home, reprendre=reprendre)
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur

@@ -111,6 +111,10 @@ class Tracer:
         # de l'appel d'origine (p50/p95 comparables au rejeu) mais n'a rien coûté en temps.
         self.elapsed_total = 0.0
         self._phase: list[_Retenu] | None = None
+        # Reprise (story 4.8) : clés (config_id, condition, tier, phase, question_id) de Questions
+        # interrompues dont les appels déjà tracés sont refaits ; un hit du cache sur l'une d'elles
+        # porte `wl.resumed`, pour que le Rapport ne recompte ni l'appel ni sa latence.
+        self.reprises: frozenset[tuple[str, str, int | None, str, str]] = frozenset()
 
     def begin_phase(self) -> None:
         """Retient les spans locaux jusqu'à `end_phase` : leur énergie n'est connue qu'en fin de
@@ -194,6 +198,13 @@ class Tracer:
             attrs["gen_ai.provider.name"] = provider
         if model_id is not None:
             attrs["gen_ai.request.model"] = model_id
+        if (
+            from_cache
+            and ctx.post == "query"
+            and (ctx.config_id, ctx.condition, ctx.tier, ctx.phase, ctx.question_id or "")
+            in self.reprises
+        ):
+            attrs["wl.resumed"] = True
         reel = 0.0 if from_cache else float(latency_s)
         self.latency_total += float(latency_s)
         self.elapsed_total += reel
