@@ -22,3 +22,11 @@ Exigences : FR-5, NFR-4 ; AD-19 ; `contracts.md` §4.1 (arbitrage P5). Correctif
 ## Reports
 
 Aucun.
+
+## Revue
+
+- medium, second avis 1 : corrigé. AC 2 couvert seulement pour `declare` dans un dossier ignoré ; ajout de `test_licence_restrictive_ignoree_ou_hors_depot_declaree_puis_ingeree` (`CC-BY-NC-4.0` hors dépôt puis ignoré : `declare` puis `ingest` réels).
+- low, second avis 2 : corrigé au passage dans le même test (licence restrictive ignorée mais déjà suivie par git : refus qui nomme la licence) ; le chemin de code est commun avec `publishable: false`.
+- low, second avis 3 : rejeté. La comparaison passe par `.lower()` sur les deux côtés, `CC-BY-4.0`/`cc-by-4.0` et `Etalab-2.0`/`etalab-2.0` couvrent déjà la casse ; vérifié `CC0-1.0` → ouverte.
+- low, second avis 4 : rejeté. « CC BY 4.0 » n'est pas un identifiant SPDX ; le refus est fail-closed, conforme à l'AC (espaces de bord seulement) et à `contracts.md` §4.1, et le message nomme la licence.
+- info, revue : `contracts.md` §4.1 correspond au code (liste blanche identique, refus seulement pour un `path` suivi par git) ; seul le Mini-corpus est livré (`CC-BY-4.0`), les fixtures de tests utilisent `CC-BY-4.0` ou `MIT`.

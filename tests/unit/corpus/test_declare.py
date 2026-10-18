@@ -225,3 +225,28 @@ def test_fichiers_caches_et_liens_exclus(tmp_path: Path):
         pass  # liens non autorisés sous Windows sans privilège
     sources = [d.source_path for d in declare(fichier).documents]
     assert sources == ["a.md", "b.txt", "c.html", "d.pdf"]
+
+
+def test_licence_restrictive_ignoree_ou_hors_depot_declaree_puis_ingeree(
+    tmp_path: Path, wl_home: Path
+):
+    # AC 2 (story 8.1) : comme `publishable: false`, un Corpus `CC-BY-NC-4.0` hors du dépôt
+    # ou dans un dossier ignoré reste déclarable puis ingérable.
+    from wavelibrarian.corpus.ingest import ingest
+
+    hors = tmp_path / "hors"
+    hors.mkdir()
+    corpus = declare(_corpus(hors, license="CC-BY-NC-4.0"))
+    assert ingest(corpus, wl_home=wl_home).documents
+
+    depot = tmp_path / "depot"
+    depot.mkdir()
+    _depot(depot)
+    (depot / ".gitignore").write_text("docs/\n", encoding="utf-8")
+    corpus = declare(_corpus(depot, license="CC-BY-NC-4.0"))
+    assert ingest(corpus, wl_home=wl_home).documents
+
+    # Ignoré mais déjà suivi par git : refusé, comme pour `publishable: false`.
+    subprocess.run(["git", "-C", str(depot), "add", "-f", "docs"], check=True)  # noqa: S603, S607
+    with pytest.raises(ConfigError, match="'CC-BY-NC-4.0'.*dossier ignoré"):
+        declare(depot / "corpus.yaml")
