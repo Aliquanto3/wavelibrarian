@@ -175,11 +175,14 @@ class MeteredGateway:
         from_cache: bool = False,
         energie: bool = False,
         energy_kwh: float | None = None,
+        raw_output: str | None = None,
     ) -> None:
         usage = usage or Usage()
         extra: dict[str, str | int | float | bool] = {}
         if request.temperature is None:
             extra["wl.temperature_omitted"] = True
+        if raw_output is not None:  # sortie non conforme : son début, pour le diagnostic
+            extra["wl.raw_output"] = raw_output[: NonConformantOutput.RAW_OUTPUT_MAX]
         if energie:
             kwh = None
             if self._catalog.get(request.model_id).kind == "api":
@@ -340,7 +343,7 @@ class MeteredGateway:
         self._trace(
             request, nom, devise, statut, usage=usage, cost=cost, cost_uncached=cost_uncached,
             latency_s=latency_s, from_cache=from_cache, energie=not from_cache,
-            energy_kwh=energy_kwh,
+            energy_kwh=energy_kwh, raw_output=texte if statut == "non_conformant" else None,
         )  # fmt: skip
         if statut == "ok" and stocker is not None:
             self._cache.put(stocker, texte, usage, replace=remplacer, latency_s=latency_s)
@@ -349,6 +352,7 @@ class MeteredGateway:
                 f"sortie de {request.model_id!r} non conforme au schéma "
                 f"{schema.__name__ if schema else '?'}",
                 cost_uncached=cost_uncached,
+                raw_output=texte,
             )
         resultat = LLMResult(
             text=texte, usage=usage, cost=cost, cost_uncached=cost_uncached, currency=devise,

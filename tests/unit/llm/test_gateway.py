@@ -301,6 +301,17 @@ def test_sortie_non_conforme_deux_fois(make_env: Callable[..., Env]) -> None:
     assert env.gw.complete(_req()).from_cache is False
 
 
+def test_sortie_non_conforme_porte_la_sortie_brute_tronquee(
+    make_env: Callable[..., Env],
+) -> None:
+    longue = "x" * 5000
+    env = make_env("pas du json", longue)
+    with pytest.raises(NonConformantOutput) as exc:
+        env.gw.complete_structured(_req(), Schema)
+    assert exc.value.raw_output == "x" * 2000 and "xxx" not in str(exc.value)
+    assert [s["wl.raw_output"] for s in env.spans()] == ["pas du json", "x" * 2000]
+
+
 def test_sortie_conforme_au_second_essai(make_env: Callable[..., Env]) -> None:
     env = make_env("n'importe quoi", '{"reponse": "Paris"}')
     valeur, res = env.gw.complete_structured(_req(), Schema)

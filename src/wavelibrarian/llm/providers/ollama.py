@@ -11,6 +11,7 @@ réponse qui remplit la fenêtre (`prompt_eval_count + eval_count >= num_ctx`) e
 avertissement : le prompt a probablement été tronqué.
 """
 
+import json
 import logging
 import re
 from collections.abc import Mapping
@@ -27,19 +28,24 @@ from wavelibrarian.ports.gateway import LLMRequest
 _log = logging.getLogger(__name__)
 
 
-_THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*(.*?)\s*```$", re.DOTALL)
+_FENCE_JSON = re.compile(r"```json\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
+_OUVRE, _FERME = "<think>", "</think>"
 
 
 def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
-    """Schéma JSON sans `$defs`/`$ref` : chaque référence est remplacée par sa définition.
+    """Schéma JSON où chaque `$ref` vers `#/$defs/…` est remplacé par sa définition.
 
     La grammaire d'Ollama (`format`) ne résout pas les `$ref` : un schéma imbriqué (Pydantic en
-    génère dès qu'un modèle en contient un autre) contraignait mal ou pas la sortie.
+    génère dès qu'un modèle en contient un autre) contraignait mal ou pas la sortie. Sans
+    récursion, `$defs` disparaît. Une définition récursive ne peut pas être dépliée : son `$ref`
+    reste, et `$defs` est alors conservé pour que la référence reste résoluble.
     """
     defs: dict[str, Any] = schema.get("$defs", {})
+    garde = False
 
     def resoudre(noeud: Any, pile: tuple[str, ...]) -> Any:
+        nonlocal garde
         if isinstance(noeud, list):
             return [resoudre(x, pile) for x in noeud]
         if not isinstance(noeud, dict):
@@ -47,21 +53,59 @@ def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
         ref = noeud.get("$ref")
         if isinstance(ref, str) and ref.startswith("#/$defs/"):
             nom = ref.removeprefix("#/$defs/")
-            if nom in defs and nom not in pile:  # une définition récursive reste en l'état
+            if nom in defs and nom not in pile:
                 reste = {k: v for k, v in noeud.items() if k != "$ref"}
                 return {**resoudre(defs[nom], (*pile, nom)), **resoudre(reste, pile)}
+            garde = True  # récursive (ou inconnue) : la référence reste
         return {k: resoudre(v, pile) for k, v in noeud.items() if k != "$defs"}
 
     resolu: dict[str, Any] = resoudre(schema, ())
+    if garde and defs:
+        resolu["$defs"] = defs
     return resolu
 
 
-def clean_content(texte: str) -> str:
-    """Retire les blocs `<think>…</think>` et une clôture markdown autour du JSON."""
-    texte = _THINK.sub("", texte).strip()
-    if "</think>" in texte:  # ouverture perdue : on garde ce qui suit la fermeture
-        texte = texte.rsplit("</think>", 1)[1].strip()
-    m = _FENCE.match(texte)
+def _sans_think_de_tete(texte: str, *, structure: bool) -> str:
+    """Retire un bloc `<think>…</think>` placé en tête (après des blancs), jamais ailleurs.
+
+    Sortie structurée : un `</think>` orphelin (ouverture absorbée par le gabarit du modèle)
+    placé avant le premier `{` ou `[` est aussi traité comme la fin d'une réflexion de tête.
+    """
+    tete = texte.lstrip()
+    if tete.startswith(_OUVRE):
+        fin = tete.find(_FERME)
+        return tete[fin + len(_FERME) :].lstrip() if fin >= 0 else texte
+    if structure:
+        fin = tete.find(_FERME)
+        debuts = [i for i in (tete.find("{"), tete.find("[")) if i >= 0]
+        if fin >= 0 and (not debuts or fin < min(debuts)):
+            return tete[fin + len(_FERME) :].lstrip()
+    return texte
+
+
+def _est_json(texte: str) -> bool:
+    try:
+        json.loads(texte)
+    except ValueError:
+        return False
+    return True
+
+
+def clean_content(texte: str, *, structure: bool = False) -> str:
+    """Nettoie la sortie d'un petit modèle local.
+
+    Toujours : retire un bloc `<think>…</think>` de tête. Sortie structurée seulement : retire
+    une clôture markdown qui entoure tout le texte, sinon extrait le premier bloc ```json d'un
+    texte qui l'entoure de prose (« Voici : ```json … ``` »). Un texte déjà JSON valide n'est
+    jamais retouché ; un texte libre garde ses clôtures (une Réponse peut contenir du code).
+    """
+    texte = _sans_think_de_tete(texte, structure=structure)
+    if not structure:
+        return texte
+    texte = texte.strip()
+    if _est_json(texte):
+        return texte
+    m = _FENCE.match(texte) or _FENCE_JSON.search(texte)
     return m.group(1) if m else texte
 
 
@@ -104,7 +148,9 @@ class OllamaProvider:
             "keep_alive": self._settings.keep_alive,
             "options": options,
             # Un modèle à raisonnement (qwen3.5) dépenserait `num_predict` en réflexion, hors de
-            # `message.content` : la sortie structurée arriverait vide ou tronquée.
+            # `message.content` : la sortie structurée arriverait vide ou tronquée. Envoyé à tous
+            # les modèles : validé en réel sur granite4.2 et minicpm (3e série du 2026-10-18), qui
+            # l'ignorent ou l'acceptent ; un modèle qui le refuserait répondrait HTTP 400.
             "think": False,
         }
         if output_schema is not None:
@@ -139,7 +185,8 @@ class OllamaProvider:
             )
         try:
             donnees = reponse.json()
-            texte = clean_content(str(donnees["message"]["content"]))
+            brut = str(donnees["message"]["content"])
+            texte = clean_content(brut, structure=output_schema is not None)
             usage = Usage(
                 input_tokens=int(donnees.get("prompt_eval_count") or 0),
                 output_tokens=int(donnees.get("eval_count") or 0),

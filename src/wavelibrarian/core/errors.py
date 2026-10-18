@@ -53,9 +53,15 @@ class NonConformantOutput(WlError):
     """La sortie structurée d'un modèle ne respecte pas le schéma attendu.
 
     `cost_uncached` : coût hors cache de la tentative fautive (déjà tracée), pour que
-    `complete_structured` le rende à l'appelant avec le nouvel essai.
+    `complete_structured` le rende à l'appelant avec le nouvel essai. `raw_output` : début de la
+    sortie fautive (au plus `RAW_OUTPUT_MAX` caractères), pour le diagnostic ; hors du message.
     """
 
-    def __init__(self, message: str, *, cost_uncached: Decimal = Decimal(0)) -> None:
+    RAW_OUTPUT_MAX = 2000
+
+    def __init__(
+        self, message: str, *, cost_uncached: Decimal = Decimal(0), raw_output: str = ""
+    ) -> None:
         self.cost_uncached = cost_uncached
+        self.raw_output = raw_output[: self.RAW_OUTPUT_MAX]
         super().__init__(message)

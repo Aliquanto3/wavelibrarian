@@ -103,3 +103,17 @@ Critères d'acceptation atteints : plus aucun « Critère sans verdict », panel
 Reste : PageIndex q-004. Les deux essais de `minicpm5:1b` à l'étape `pageindex.select.1` s'arrêtent à `output_tokens = 256` = `select_max_tokens` (entrée 1932 tokens) : la sortie est tronquée, très probablement une dégénérescence répétitive de la liste `node_ids` d'un modèle de 1 B, plutôt qu'un défaut de schéma. Non investigué davantage (hors critères) ; pistes : `select_max_tokens` plus haut, `repeat_penalty` dans `ollama.options`, ou un `select_model` de 3-4 B. `wl run` sort toujours avec 0 et `completed` malgré cette erreur (seuil ou avertissement à décider, déjà reporté).
 
 Fin de vérification : `ollama stop` sur les trois modèles, `ollama ps` vide.
+
+## Revue du correctif (fix-juges-schema)
+
+Rebasé sur `main` (story 4.15) sans conflit : `temperature` n'est envoyé que s'il n'est pas `None`. Constats du second avis (Haiku), repris un par un :
+
+- medium, second avis 1 : `<think>…</think>` retiré n'importe où, y compris dans une valeur JSON. Corrigé : seul un bloc en tête (après des blancs) part.
+- medium, second avis 2 : `rsplit("</think>")` coupait un JSON contenant `</think>`. Corrigé : un `</think>` orphelin n'est traité qu'avant le premier `{` ou `[`, et seulement en sortie structurée.
+- medium, second avis 3 : clôtures de code retirées du texte libre. Corrigé : `clean_content(…, structure=…)`, le texte libre ne perd que le bloc `<think>` de tête.
+- medium, second avis 4 : prose avant le JSON. Corrigé : extraction du premier bloc ```json ; sinon texte laissé tel quel. Un texte déjà JSON valide n'est jamais retouché.
+- low, second avis 5 : `inline_refs` supprimait `$defs` d'un schéma récursif. Corrigé : `$defs` conservé dès qu'un `$ref` reste ; docstring corrigée.
+- medium, second avis 6 : `think: false` envoyé à tous les modèles. Gardé (validé en réel, 3e série), documenté dans le code. À vérifier au premier modèle Ollama nouveau : un HTTP 400 sur `think` signalerait un refus.
+- low, second avis 8 : un hit de cache rend un texte libre écrit avant le correctif, non nettoyé (la clé de cache ne dépend pas du corps natif). Reporté : le nettoyage est propre au provider et la passerelle n'a pas à le connaître. Vérification : vider le Cache de réponses (`WL_HOME` neuf) avant de comparer un run à la 3e série, ce qui a été fait.
+- medium, second avis 9 : `NonConformantOutput` sans sortie brute. Corrigé : `raw_output` (2 000 premiers caractères) dans l'erreur, hors du message, et `wl.raw_output` dans le span `non_conformant` (les deux essais).
+- low, second avis 10 : tests ajoutés pour 1 à 5 et 9 (`tests/unit/llm/test_providers.py`, `tests/unit/llm/test_gateway.py`). Pas d'appel réel : comportement validé en 3e série inchangé sur ses entrées (bloc de tête, clôture json).

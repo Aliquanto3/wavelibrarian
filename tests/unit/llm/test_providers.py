@@ -515,12 +515,70 @@ def test_ollama_schema_des_juges_sans_ref_ni_defs_et_think_desactive() -> None:
 
 
 def test_ollama_retire_les_blocs_think_et_la_cloture_markdown() -> None:
+    schema = Sortie.model_json_schema()
     brut = '<think>\nje réfléchis {"x": 1}\n</think>\n```json\n{"reponse": "Paris"}\n```'
-    rep = _ollama(Transport(_ollama_contenu(brut))).complete(_req(MINICPM), timeout_s=5)
+    ollama = _ollama(Transport(_ollama_contenu(brut)))
+    rep = ollama.complete(_req(MINICPM), timeout_s=5, output_schema=schema)
     assert Sortie.model_validate_json(rep.text).reponse == "Paris"
     seul = _ollama(Transport(_ollama_contenu('pensée</think>{"reponse": "Lyon"}')))
-    texte = seul.complete(_req(MINICPM), timeout_s=5).text
+    texte = seul.complete(_req(MINICPM), timeout_s=5, output_schema=schema).text
     assert Sortie.model_validate_json(texte).reponse == "Lyon"
+
+
+@pytest.mark.parametrize(
+    ("brut", "attendu"),
+    [
+        # Un <think> ou un </think> dans une valeur JSON n'est pas une réflexion (1, 2).
+        ('{"j": "<think>x</think>"}', '{"j": "<think>x</think>"}'),
+        ('{"j": "a</think>b"}', '{"j": "a</think>b"}'),
+        ('[1, "</think>"]', '[1, "</think>"]'),
+        ('  <think>r</think> {"j": "<think>y</think>"}', '{"j": "<think>y</think>"}'),
+        # Prose autour d'une clôture json : le bloc est extrait (4).
+        ('Voici :\n```json\n{"j": 1}\n```\nVoilà.', '{"j": 1}'),
+        # Prose sans clôture : laissée telle quelle, sans heuristique.
+        ('Réponse: {"j": 1}', 'Réponse: {"j": 1}'),
+        # JSON valide dont une valeur contient une clôture : intouché.
+        ('{"j": "```json\\n{}\\n```"}', '{"j": "```json\\n{}\\n```"}'),
+        # Réflexion ouverte et jamais fermée (sortie tronquée) : laissée.
+        ('<think>sans fin {"j": 1}', '<think>sans fin {"j": 1}'),
+    ],
+)
+def test_clean_content_structure(brut: str, attendu: str) -> None:
+    from wavelibrarian.llm.providers.ollama import clean_content
+
+    assert clean_content(brut, structure=True) == attendu
+
+
+def test_clean_content_texte_libre_garde_les_clotures() -> None:
+    """Texte libre (generate, hyde, raptor) : seul le bloc <think> de tête part (3)."""
+    from wavelibrarian.llm.providers.ollama import clean_content
+
+    code = "Exemple :\n```python\nprint(1)\n```"
+    assert clean_content("```json\n{}\n```") == "```json\n{}\n```"
+    assert clean_content(f"<think>plan</think>\n{code}") == code
+    assert clean_content("Le tag </think> ferme un bloc.") == "Le tag </think> ferme un bloc."
+    assert clean_content("Voir <think>x</think> ici") == "Voir <think>x</think> ici"
+    rep = _ollama(Transport(_ollama_contenu(code))).complete(_req(MINICPM), timeout_s=5)
+    assert rep.text == code
+
+
+def test_inline_refs_garde_les_defs_d_une_definition_recursive() -> None:
+    """Une définition récursive garde son `$ref`, et donc `$defs` pour le résoudre (5)."""
+    from pydantic import BaseModel
+
+    from wavelibrarian.llm.providers.ollama import inline_refs
+
+    class Noeud(BaseModel):
+        nom: str
+        enfants: list["Noeud"] = []
+
+    class Arbre(BaseModel):
+        racine: Noeud
+
+    resolu = inline_refs(Arbre.model_json_schema())
+    assert resolu["properties"]["racine"]["properties"]["nom"]["type"] == "string"
+    assert "$ref" in json.dumps(resolu) and "Noeud" in resolu["$defs"]
+    assert "$defs" not in inline_refs(Sortie.model_json_schema())
 
 
 def test_ollama_corps_du_profil_cpu_avec_schema() -> None:
