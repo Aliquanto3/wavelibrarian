@@ -1,0 +1,22 @@
+# Expérience du test réel SM-4 avec un Juge réel (story 4.15) : le plafond de 5 USD doit couvrir
+# les appels des Juges (un Juge Haiku 5.5 et un Juge factice, par Réponse). Generator factice : la Famille
+# du Generator écarte son propre Juge. 2 Questions seulement.
+experiment_id: sm4-real-haiku-juges
+seed: 42
+profile: cpu
+corpus: ../../corpora/minicorpus/corpus.yaml
+questions: ../../corpora/minicorpus/questions.yaml
+split: dev
+max_questions: 2
+conditions: [standard]
+judges:
+  pool: [claude-haiku-5-5, fake-llm-b]
+  panel_size: 2
+budget:
+  per_run: {anthropic: {amount: "5.00", currency: USD}}
+configurations:
+  - id: rag-naif
+    architecture: naive_rag
+    params:
+      embedder: {name: fake, params: {model: fake-embedder}}
+      generator: {name: llm, params: {model: fake-llm-a}}

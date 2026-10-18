@@ -144,7 +144,7 @@ def test_anthropic_cache_control_temperature_et_modele() -> None:
     )
     rep = _anthropic(t).complete(_req(cache_system=True, messages=msgs), timeout_s=30)
     corps = t.body()
-    assert corps["model"] == HAIKU and corps["temperature"] == 0 and corps["max_tokens"] == 100
+    assert corps["model"] == HAIKU and "temperature" not in corps and corps["max_tokens"] == 100
     assert corps["system"] == [
         {"type": "text", "text": "Réponds en français.", "cache_control": {"type": "ephemeral"}}
     ]

@@ -15,7 +15,7 @@ _log = logging.getLogger(__name__)
 MARGE = 128
 # Majorant des tokens fixes qu'un provider `schema_in_prompt` ajoute au prompt en plus du schéma
 # (`schema_prompt_overhead` d'Anthropic) ; les providers ne sont pas visibles des Composants.
-SURCOUT_SCHEMA = 400
+SURCOUT_SCHEMA = 600
 
 __all__ = ["MARGE", "SURCOUT_SCHEMA", "borner", "couper", "reserve_schema"]
 

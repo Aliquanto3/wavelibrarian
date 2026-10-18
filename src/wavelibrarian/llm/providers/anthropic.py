@@ -54,7 +54,7 @@ def _traduire(exc: anthropic.AnthropicError) -> ProviderError:
 class AnthropicProvider:
     # Le schéma part dans un outil : il est compté en entrée, plus la consigne d'outil imposé.
     schema_in_prompt = True
-    schema_prompt_overhead = 400
+    schema_prompt_overhead = 600  # mesuré : ~520 tokens (count_tokens, 4.15)
 
     def __init__(
         self,
@@ -126,10 +126,9 @@ class AnthropicProvider:
     ) -> ProviderResponse:
         corps = self.native_request(request, output_schema)
         try:
-            # `temperature` n'est plus un paramètre typé du SDK 1.15 : corps additionnel.
-            reponse = self._sdk().messages.create(
-                timeout=timeout_s, extra_body={"temperature": request.temperature}, **corps
-            )
+            # Pas de `temperature` : l'API la refuse pour Haiku 5.5 (HTTP 400 « deprecated for this
+            # model », vérifié en réel, story 4.15). La reproductibilité vient du Cache de réponses.
+            reponse = self._sdk().messages.create(timeout=timeout_s, **corps)
         except anthropic.AnthropicError as exc:
             raise _traduire(exc) from None
         if output_schema is not None:
