@@ -1,8 +1,9 @@
 """Génération du Rapport `report/` d'une Exécution (story 4.11, FR-40, contracts.md §5 et §7).
 
 `generer_rapport` lit les seuls fichiers de l'Exécution et écrit `report.md`, `scores.csv`,
-`retrieval.csv` et `pairs.csv`. Il ne dépend pas du runner (AD-1) : `cli.py` l'appelle après
-`wl run` (y compris sur une Exécution arrêtée au plafond) ou par `wl rapport <run_id>`.
+`retrieval.csv`, `pairs.csv` et `costs.csv`. Il ne dépend pas du runner (AD-1) : `cli.py`
+l'appelle après `wl run` (y compris sur une Exécution arrêtée au plafond) ou par
+`wl rapport <run_id>`.
 """
 
 import csv
@@ -15,6 +16,7 @@ from typing import Any
 from wavelibrarian.config.panel import excluded_judges
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.report.ancrages import Resolveur, ResolveurCorpus, resolveur_de
+from wavelibrarian.report.couts import ENTETE_COUTS, Couts, calculer_couts, ligne_csv
 from wavelibrarian.report.lecture import CleGroupe, Execution, charger
 from wavelibrarian.report.scores import (
     CRITERES,
@@ -25,6 +27,7 @@ from wavelibrarian.report.scores import (
     etiquette_palier,
     evaluer,
 )
+from wavelibrarian.report.section_couts import section_couts
 from wavelibrarian.report.wiki import section_fidelite
 
 log = logging.getLogger(__name__)
@@ -76,8 +79,10 @@ def _ecrire_csv(chemin: Path, entete: list[str], lignes: list[list[Any]]) -> Non
         w.writerows(lignes)
 
 
-def ecrire_csv(dossier: Path, res: Resultats) -> None:
-    """`scores.csv`, `retrieval.csv` et `pairs.csv`. Aucune colonne de score global."""
+def ecrire_csv(dossier: Path, res: Resultats, couts: Couts | None = None) -> None:
+    """`scores.csv`, `retrieval.csv`, `pairs.csv` et `costs.csv`. Aucun score global."""
+    if couts is not None:
+        _ecrire_csv(dossier / "costs.csv", ENTETE_COUTS, [ligne_csv(x) for x in couts.lignes])
     _ecrire_csv(
         dossier / "scores.csv",
         ENTETE_SCORES,
@@ -447,7 +452,7 @@ def _non_notees(ex: Execution, res: Resultats) -> list[str]:
     ]
 
 
-def construire_markdown(ex: Execution, res: Resultats) -> str:
+def construire_markdown(ex: Execution, res: Resultats, couts: Couts | None = None) -> str:
     sections = [
         *_entete(ex),
         *_corpus(ex),
@@ -471,6 +476,7 @@ def construire_markdown(ex: Execution, res: Resultats) -> str:
         *_contaminees(ex, res),
         *_recherche(res),
         *_paires(res),
+        *(section_couts(ex, couts) if couts is not None else []),
         *_non_notees(ex, res),
     ]
     fidelite = section_fidelite(ex.run_dir)
@@ -495,6 +501,9 @@ def generer_rapport(
         res.alertes_recherche = resoudre.alertes()
     sortie = run_dir / "report"
     sortie.mkdir(exist_ok=True)
-    ecrire_csv(sortie, res)
-    (sortie / "report.md").write_text(construire_markdown(ex, res), encoding="utf-8", newline="\n")
+    couts = calculer_couts(ex, res)
+    ecrire_csv(sortie, res, couts)
+    (sortie / "report.md").write_text(
+        construire_markdown(ex, res, couts), encoding="utf-8", newline="\n"
+    )
     return sortie
