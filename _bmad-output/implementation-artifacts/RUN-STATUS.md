@@ -6,9 +6,9 @@ Fichier tenu par l'orchestrateur. Une session neuve (après `/clear`) reprend le
 
 | Champ | Valeur |
 | --- | --- |
-| Mis à jour | 2026-10-18 03:16 |
-| Story en cours | 6.5 (voie A) ; 4.7 (voie B) |
-| Stories livrées | 37 / 56 |
+| Mis à jour | 2026-10-18 03:28 |
+| Story en cours | 4.7 (voie B, revue) ; voie A : epic 7 |
+| Stories livrées | 38 / 56 |
 | Dépense Anthropic | 0,00 $ / plafond 5 $ |
 | Pilote slm-quality-bench | en cours (`pilot-report.md` absent) |
 | Dernière mesure du banc | voir « Journal de surveillance » |
@@ -111,6 +111,8 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 - **4.8 (reprise)** : à la reprise, ne pas compter deux fois les spans `query` déjà émis pour une Question interrompue par `BudgetExceeded` (story 4.5).
 - **Rapport (4.12), Coût de possession** : exclure les spans `wl.llm_cache_hit=true` (latence d'origine, bornes fictives) de la durée des spans locaux (story 4.5).
 - **4.14 (Expériences livrées)** : toute Expérience à Paliers sur le Mini-corpus pose `max_questions` ou un `tier` adapté (split dev = 12 Documents requis) ; vérifier `wl run` en code 0 sur chacune (story 4.6).
+- **Rapport (4.12), CAG** : l'écriture du préchargement CAG revient à chaque Exécution au Poste `indexing` (hit d'index et reprise compris), elle ne s'amortit pas comme un index (story 6.5).
+- **Story 4.15 / fournisseur réel, CAG** : sur `claude-haiku-5-5`, Corpus > 512 tokens → écriture positive et lecture dès la première Question ; Corpus plus court → tokens en cache nuls sans erreur (story 6.5).
 
 ## Journal de surveillance
 
@@ -157,6 +159,7 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 02:54 | 16 tronq. (lfm2.5:8b-a1b-q4_K_M) : think_off reasoning/bbeh-mini 6 tronq., 14 s/tronq. (pas de réf.) ; think_off instructions/ifbench 4 tronq., 14 s/tronq. (pas de réf.) ; think_off extraction/jsonschemabench 3 tronq., 14 s/tronq. (pas de réf.) ; pire -1 % | 17 % | 19.1 Go | 11 s, 182 Mo, 106 thr (20 proc) | Sous les seuils ; seconde campagne du banc (replay) démarrée à 02:42, mesure et contrôle de fin adaptés ; on continue (6.4) |
 | 03:09 | 12 tronq. (lfm2.5:8b-a1b-q4_K_M) : think_off reasoning/bbeh-mini 7 tronq., 16 s/tronq. (pas de réf.) ; think_off reasoning/bbeh-mini 1 tronq., 15 s/tronq. (pas de réf.) ; think_off tools/bfcl-multi 1 tronq., 44 s/tronq. (pas de réf.) ; pire +0 % | 32 % | 19.1 Go | 4 s, 136 Mo, 113 thr (20 proc) | Sous les seuils : on continue (6.5) |
 | 03:16 | 21 tronq. (ling3-tiny:8b-q4_k_m) : think_off reasoning/bbeh-mini 8 tronq., 16 s/tronq. (pas de réf.) ; think_on extraction/extraction-fr 3 tronq., 16 s/tronq. (pas de réf.) ; think_on instructions/mifeval-fr 3 tronq., 16 s/tronq. (pas de réf.) ; pire +0 % | 37 % | 19.8 Go | 15 s, 179 Mo, 101 thr (20 proc) | Sous les seuils : on continue (4.7) |
+| 03:28 | 10 tronq. (ling3-tiny:8b-q4_k_m) : think_on reasoning/bbeh-mini 4 tronq., 32 s/tronq. (pas de réf.) ; think_on extraction/extraction-fr 3 tronq., 20 s/tronq. (pas de réf.) ; think_on extraction/jsonschemabench 1 tronq., 16 s/tronq. (pas de réf.) ; pire +0 % | 8 % | 19.5 Go | 1 s, 86 Mo, 79 thr (14 proc) | Sous les seuils : on continue |
 
 ## Journal des stories
 
@@ -199,3 +202,4 @@ Dès que `pilot-report.md` existe dans le dossier de la campagne, Ollama local r
 | 6.3 | 02:39 | 02:54 | 71e8d7bbc1da6d11b83271ea1a0973110316034a | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : retriever hybrid refusé (il échouait après l'appel hyde payé), espion embed_queries vs embed_passages, test hyde_model / hyde_max_tokens, repli journalisé. 747 tests verts. |
 | 6.4 | 02:55 | 03:09 | 39ed8f788e1cf6eb33188002b8cb1fdf0d376dd4 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : schéma de notation borné à n scores passé à la passerelle (réponse fautive rejouée sans cache, jamais mise en cache), loop ajouté aux Protocols et au contrat §2. 759 tests verts. |
 | 4.6 | 02:46 | 03:16 | 06dcc99c3f6f971696b60a02340c71d812cef61f | 0 $ | Revue : Question ancrée sur un Document du Scénario → inapplicable en phase base, tirage limité aux Paliers demandés (emboîtement conservé), answer_with_context par défaut via build_arch_answer (déplacé dans ports), retrieved renseigné en provided, échec de Palier en error par cellule. |
+| 6.5 | 03:11 | 03:28 | 8ee838166850acad820f9709ed82699ade9f2ca7 | 0 $ | Livrée sous réserve de la conformité 4.14. Revue : préchargement hors Cache de réponses (use_cache=False, rejeu repaie le préchargement, documenté), tests de lecture du cache avec Questions distinctes et d'écriture au Poste indexing. Fin de l'epic 6 (conformité 4.14 en attente). |
