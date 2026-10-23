@@ -25,10 +25,10 @@ Sur ce parcours, le profil `test` remplace le LLM par un Faux LLM et l'embedder 
 |---|--------|-----------------|
 | 1 | `uv run wl registre` | Liste des Composants et Architectures avec leurs paramètres, lisible |
 | 2 | `uv run wl questions --help` puis `uv run wl corpus --help` | Les sous-commandes sont compréhensibles sans lire le code |
-| 3 | `uv run wl run experiments/mini-test.yaml` | Validation, préflight, puis exécution sur le Mini-corpus fictif (20 documents). Compter plusieurs minutes. |
-| 4 | Ouvrir le Rapport dans `.wl/` (dossier de l'Exécution, sous-dossier `report/`) | Scores, coûts, énergie, latence et comparaisons appariées. Les coûts fictifs doivent être distingués du coût réel. |
+| 3 | `uv run wl run experiments/mini-test.yaml` | Validation, préflight, puis exécution sur le Mini-corpus fictif (20 documents). Compter 5 à 10 min (8 min 44 mesurées le 23/10 sur un poste chargé). |
+| 4 | Ouvrir `.wl/runs/<run_id>/report/report.md` (+ CSV `costs`, `pairs`, `pareto`, `retrieval`) | Scores, coûts, énergie, latence et comparaisons appariées. Les coûts fictifs doivent être distingués du coût réel. |
 | 5 | Interrompre un run (Ctrl+C), puis `uv run wl run experiments/mini-test.yaml --reprendre <run_id>` | La reprise repart de l'état enregistré au lieu de tout recommencer |
-| 6 | `uv run wl rapport <dossier de l'Exécution>` | Régénère le Rapport à partir des seuls fichiers de l'Exécution |
+| 6 | `uv run wl rapport .wl/runs/<run_id>` | Régénère le Rapport à partir des seuls fichiers de l'Exécution |
 | 7 | Casser volontairement une Expérience (copie de `mini-test.yaml` avec une architecture inconnue, un champ manquant ou un chemin faux) | Erreur claire avant l'exécution, sans trace Python illisible |
 | 8 | `uv run pytest -q` (facultatif, long) | Suite de tests verte |
 
