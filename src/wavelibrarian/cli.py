@@ -99,16 +99,16 @@ def run(
         typer.Option(
             "--tolerer-erreurs",
             help="Sort en code 0 pour une Exécution `completed_with_errors` (résumé des causes "
-            "affiché quand même).",
+            "affiché quand même), sauf si aucune Réponse n'est valide (`all_failed`) : code 1.",
         ),
     ] = False,
 ) -> None:
     """Valide une Expérience, vérifie ses dépendances (préflight), puis l'exécute.
 
-    Codes de sortie : 0 succès, 1 erreur (dont une autre Exécution en cours, et une Exécution
-    `completed_with_errors` sauf `--tolerer-erreurs`), 2 configuration
-    invalide (Jeu non Gelé ou modifié compris, reprise d'une Expérience différente), 3 plafond
-    atteint, 4 préflight échoué.
+    Codes de sortie : 0 succès, 1 erreur (dont une autre Exécution en cours, une Exécution
+    `completed_with_errors` sauf `--tolerer-erreurs`, et `all_failed` même avec
+    `--tolerer-erreurs`), 2 configuration invalide (Jeu non Gelé ou modifié compris, reprise
+    d'une Expérience différente), 3 plafond atteint, 4 préflight échoué.
     """
     try:
         resultat = validate_file(experience)
@@ -171,9 +171,11 @@ def run(
                 err=True,
             )
         typer.echo(f"Reprise : wl run {experience} --reprendre {issue.run_id}", err=True)
-    if issue.all_failed:  # toujours `completed_with_errors` : même règle de code (AC 2, 8.3)
+    if issue.all_failed:  # toujours `completed_with_errors` : code 1 même avec --tolerer-erreurs
         typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
     if not rapport_ok:
+        raise typer.Exit(1)
+    if issue.all_failed:  # AC 1, fix-arbitrages-8-3-8-8 : arbitrage d'Anaël du 2026-10-19
         raise typer.Exit(1)
     if issue.status == "completed_with_errors" and not tolerer_erreurs:
         raise typer.Exit(1)

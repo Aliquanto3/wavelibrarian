@@ -134,9 +134,10 @@ def set_status(
     _ecrire_manifest(dossier, donnees)
 
 
-def reopen_run_dir(dossier: Path, budget: Budget) -> None:
+def reopen_run_dir(dossier: Path, budget: Budget, max_error_rate: float) -> None:
     """Reprise (contracts.md §7) : le manifeste repasse à `running`, sans `finished_at` ; la
-    reprise est consignée dans `resumptions` avec les plafonds en vigueur. Les fichiers
+    reprise est consignée dans `resumptions` avec les plafonds en vigueur (`budget` et
+    `max_error_rate`, relevables à la reprise, fix-arbitrages-8-3-8-8 AC 3). Les fichiers
     `experiment.resolved.yaml` et `experiment.sha256` restent ceux du départ."""
     chemin = dossier / "manifest.json"
     donnees = json.loads(chemin.read_text(encoding="utf-8"))
@@ -150,6 +151,7 @@ def reopen_run_dir(dossier: Path, budget: Budget) -> None:
         {
             "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "budget": budget.model_dump(mode="json"),
+            "max_error_rate": max_error_rate,
         }
     )
     _ecrire_manifest(dossier, donnees)

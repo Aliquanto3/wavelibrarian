@@ -83,8 +83,9 @@ def verifier_reprise(
     dossier de l'Exécution.
 
     L'empreinte compare l'Expérience demandée à `experiment.sha256` **à plafonds égaux** : relever
-    le plafond est justement la raison d'une reprise après `budget_exceeded` (AC 2 de la 4.8),
-    alors que `budget` fait partie de l'empreinte écrite au départ (config/resolve.py). Tout
+    un plafond est justement une raison de reprendre (`budget` après `budget_exceeded`, AC 2 de
+    la 4.8 ; `max_error_rate` après `completed_with_errors`, AC 3 de fix-arbitrages-8-3-8-8),
+    alors que les deux font partie de l'empreinte écrite au départ (config/resolve.py). Tout
     autre écart (Configuration, graine, modèles, Corpus, Questions…) est refusé. L'empreinte du
     Gel du Jeu doit aussi être celle du manifeste.
     """
@@ -100,7 +101,10 @@ def verifier_reprise(
     except OSError as exc:
         raise ConfigError("reprendre", f"experiment.sha256 illisible : {exc}") from exc
     resolue = resolve_parsers(experience, declare(Path(experience.corpus)))
-    if fingerprint(resolue.model_copy(update={"budget": stockee.budget})) != attendue:
+    plafonds_egaux = resolue.model_copy(
+        update={"budget": stockee.budget, "max_error_rate": stockee.max_error_rate}
+    )
+    if fingerprint(plafonds_egaux) != attendue:
         raise ConfigError(
             "reprendre",
             f"l'Expérience diffère de celle de l'Exécution {run_id} "

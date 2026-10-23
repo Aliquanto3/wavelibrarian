@@ -286,19 +286,21 @@ def test_reprise_repose_les_erreurs_et_rejuge(
     assert "rien à reprendre" in _wl(str(chemin), "--reprendre", dossier.name).output
 
 
-def test_toutes_en_erreur_tolerer_erreurs_code_0(
+def test_toutes_en_erreur_code_1_meme_tolerer_erreurs(
     tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`all_failed` (aucune `ok`) est un `completed_with_errors` : `--tolerer-erreurs` donne le
-    code 0 (AC 2, décision de revue), avec le même résumé."""
+    """`all_failed` (aucune `ok`) est un `completed_with_errors` : code 1 même avec
+    `--tolerer-erreurs` (arbitrage d'Anaël du 2026-10-19, fix-arbitrages-8-3-8-8, AC 1),
+    avec le même résumé affiché dans les deux cas."""
     faux = FakeProvider()
     faux.script("generate", "generate", "pas du JSON")
     _avec_faux(monkeypatch, faux)
     chemin = _experience(tmp_path)
     sans = _wl(str(chemin))
     assert sans.exit_code == 1, sans.output
+    assert "Aucune Réponse valide" in sans.output
     res = _wl(str(chemin), "--tolerer-erreurs")
-    assert res.exit_code == 0, res.output
+    assert res.exit_code == 1, res.output
     assert "Aucune Réponse valide" in res.output
     assert "bm25 : aucune Réponse ok (2 en error)" in res.output
     for dossier in (wl_home / "runs").iterdir():

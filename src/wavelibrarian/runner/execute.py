@@ -918,7 +918,7 @@ def run_experiment(
             )
         else:
             dossier = wl_home / "runs" / run_id
-            reopen_run_dir(dossier, experience.budget)
+            reopen_run_dir(dossier, experience.budget, experience.max_error_rate)
         handler: logging.Handler | None = None
         paquet = logging.getLogger("wavelibrarian")
         niveau = paquet.level
