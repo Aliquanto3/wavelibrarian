@@ -2075,7 +2075,7 @@ So that je ne prenne pas pour un résultat un run où une Architecture n'a rien 
 
 **Given** une Exécution `completed_with_errors`
 **When** `wl run` se termine
-**Then** il sort en code 1, avec un résumé des causes en français ; avec `--tolerer-erreurs`, il sort en code 0 et affiche le même résumé
+**Then** il sort en code 1, avec un résumé des causes en français ; avec `--tolerer-erreurs`, il sort en code 0 et affiche le même résumé (sauf si aucune Réponse n'est `ok` : code 1 même avec `--tolerer-erreurs`, arbitrage d'Anaël du 2026-10-19)
 **And** un plafond atteint garde `budget_exceeded` et le code 3, qui priment
 
 **Given** le Rapport d'une Exécution `completed_with_errors`

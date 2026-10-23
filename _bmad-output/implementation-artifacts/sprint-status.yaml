@@ -121,7 +121,7 @@ development_status:
   8-5-alignements-de-spec-du-catalogue-et-du-registre-de-dépense: done
   8-6-énergie-cpu-mesurée-sous-windows: done
   8-7-modèle-cpu-de-sélection-pour-pageindex: done
-  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: done  # runs faits, 7 Critères sans verdict acceptés (arbitrage B1 du 2026-10-19), balayage non discriminant
+  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: done  # runs faits, 7 Critères sans verdict acceptés (arbitrage B1 du 2026-10-19), balayage non discriminant ; B3 (q-044) reporté : voir fix-arbitrages-8-3-8-8.md AC 4
   8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: done
   8-10-calibration-réelle-des-juges-ollama: backlog
   epic-8-retrospective: optional

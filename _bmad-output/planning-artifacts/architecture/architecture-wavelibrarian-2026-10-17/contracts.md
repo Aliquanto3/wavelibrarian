@@ -652,7 +652,7 @@ catalog: null                          # null = defaults/models.yaml
 costs: null                            # null = defaults/costs.yaml, puis <WL_HOME>/costs.yaml s'il existe (§4.2 bis)
 models_frozen_at: 2026-10-17           # FR-4 : date affichée au Rapport
 max_questions: null                    # tests réels : 5
-max_error_rate: 0.2                    # au-delà, par Configuration : statut completed_with_errors (v0.2.0, P9)
+max_error_rate: 0.2                    # au-delà, par Configuration : statut completed_with_errors (v0.2.0, P9) ; relevable à la reprise, comme budget
 budget:
   per_run: {anthropic: {amount: "5.00", currency: USD}}
   period:  {anthropic: {amount: "50.00", currency: USD}, azure: {amount: "50.00", currency: EUR}}   # mois civil UTC
@@ -748,7 +748,7 @@ operations:                            # appliquées dans l'ordre
 | Fichier | Contenu | Écrivain unique |
 | --- | --- | --- |
 | `experiment.resolved.yaml`, `experiment.sha256` | Expérience résolue et son empreinte | runner |
-| `manifest.json` | `status` (`running`, `completed`, `completed_with_errors`, `budget_exceeded`, `failed`) ; `completed_with_errors` (v0.2.0, P9) : une Configuration sans Réponse `ok`, un Critère sans verdict de panel, ou un taux d'`error` d'une Configuration strictement au-dessus de `max_error_rate` (taux `error / (ok + error)`, `inapplicable` exclus) ; `causes` : liste `{config_id, cause, count}` par Configuration, `cause` parmi `no_ok_answer` (au moins une `error`, aucune `ok` ; `count` : Réponses en `error`), `error_rate` (`count` : Réponses en `error`, `rate` : taux réel), `unjudged` (`count` : Critères sans verdict), vide hors `completed_with_errors` ; reprenable par `--reprendre`, profil, `models_frozen_at`, liste des modèles, empreinte du Gel | runner |
+| `manifest.json` | `status` (`running`, `completed`, `completed_with_errors`, `budget_exceeded`, `failed`) ; `completed_with_errors` (v0.2.0, P9) : une Configuration sans Réponse `ok`, un Critère sans verdict de panel, ou un taux d'`error` d'une Configuration strictement au-dessus de `max_error_rate` (taux `error / (ok + error)`, `inapplicable` exclus) ; `causes` : liste `{config_id, cause, count}` par Configuration, `cause` parmi `no_ok_answer` (au moins une `error`, aucune `ok` ; `count` : Réponses en `error`), `error_rate` (`count` : Réponses en `error`, `rate` : taux réel), `unjudged` (`count` : Critères sans verdict), vide hors `completed_with_errors` ; reprenable par `--reprendre` ; `resumptions[i]` consigne `budget` et `max_error_rate` en vigueur à chaque reprise (tous deux exceptés de l'empreinte, donc relevables), profil, `models_frozen_at`, liste des modèles, empreinte du Gel | runner |
 | `corpus_profile.json` | Profil de corpus (FR-7) | runner, via `corpus/profile.py` |
 | `answers.jsonl` | un `Answer` par (config_id, condition, tier, phase, question_id) | runner |
 | `panel.jsonl` | verdict agrégé par (answer_id, criterion) : `verdict`, `tie: bool`, juges admissibles | runner, via `scoring/panel.py` |
@@ -817,7 +817,7 @@ Fichiers produits :
 
 ## 8. Commandes `wl` — `cli.py` (typer)
 
-Les noms des sous-commandes suivent le PRD (§5). Chaque commande a son aide `--help` en français. Les codes de sortie sont : 0 succès, 1 erreur (dont une Exécution `completed_with_errors`, sauf `--tolerer-erreurs`), 2 configuration invalide, 3 plafond atteint, 4 préflight échoué (Ollama injoignable, modèle ou clé absents).
+Les noms des sous-commandes suivent le PRD (§5). Chaque commande a son aide `--help` en français. Les codes de sortie sont : 0 succès, 1 erreur (dont une Exécution `completed_with_errors`, sauf `--tolerer-erreurs` ; une Exécution sans aucune Réponse `ok`, `all_failed`, sort en 1 même avec `--tolerer-erreurs`), 2 configuration invalide, 3 plafond atteint, 4 préflight échoué (Ollama injoignable, modèle ou clé absents).
 
 | Commande | Effet | FR |
 | --- | --- | --- |

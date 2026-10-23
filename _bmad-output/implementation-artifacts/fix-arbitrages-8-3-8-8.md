@@ -50,3 +50,15 @@ Source : `RUN-STATUS-v0.2.0.md`, journal 2026-10-19. Exigences : FR-1, FR-40, FR
 ```
 uv run pytest -q --tb=short tests/unit/runner/test_story_8_3.py tests/unit/runner/test_fix_arbitrages_8_3_8_8.py tests/unit/runner/test_story_4_8.py
 ```
+
+## Revue
+
+Revue Opus du 2026-10-23, branche rebasée sur `origin/main` (e1b50aa) avant jugement.
+
+- medium · second avis · corrigé · `contracts.md` §8 et `epics.md` (AC de la 8.3) disaient encore « code 0 avec `--tolerer-erreurs` » pour `all_failed` : réalignés (code 1 toujours). L'aide CLI de `--tolerer-erreurs` était déjà juste.
+- medium · second avis · corrigé · `report/generer.py::_bandeau` citait le seuil de `experiment.resolved.yaml` (valeur du départ) : après une reprise au seuil relevé mais encore dépassé, le Rapport affichait 20 % au lieu du seuil appliqué. Il lit désormais `resumptions[-1].max_error_rate` s'il existe ; test `test_bandeau_du_rapport_cite_le_seuil_releve_a_la_reprise`.
+- low · second avis · corrigé en partie · le constat « la branche `plafonds_egaux` n'est pas testée » est faux : `test_max_error_rate_relevable_a_la_reprise` sort en 2 sans le correctif. Renforcé tout de même : relever `max_error_rate` en même temps qu'un autre écart (`seed`) reste refusé.
+- low · second avis · rejeté · reprise d'une Exécution `completed` (« rien à reprendre ») : sans cause, aucun seuil n'a d'effet, relever `max_error_rate` n'y changerait rien. Le seuil modifié ne figure alors pas dans `resumptions` (aucune reprise n'a lieu), ce qui est cohérent.
+- low · second avis · corrigé · `sprint-status.yaml` : commentaire « B3 (q-044) reporté » ajouté sur 8-8 (décision de l'orchestrateur : 8-8 reste `done`).
+- low · second avis · corrigé · `contracts.md` (ligne `max_error_rate` et §5 `manifest.json`) : relevable à la reprise, consigné dans `resumptions[i]`.
+- Complexité : 0 constat (aucune structure qui grossit n'est parcourue par événement dans le diff ; `resumptions[-1]` est en O(1)).

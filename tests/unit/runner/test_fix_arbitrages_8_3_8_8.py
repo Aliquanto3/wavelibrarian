@@ -140,3 +140,23 @@ def test_max_error_rate_non_releve_refuse_un_autre_ecart(tmp_path: Path, wl_home
     chemin_differente = _experience(tmp_path, seed=99)
     res = _wl(str(chemin_differente), "--reprendre", dossier.name)
     assert res.exit_code == 2, res.output
+    # Relever `max_error_rate` en même temps ne masque pas l'autre écart.
+    chemin_differente = _experience(tmp_path, seed=99, max_error_rate=0.6)
+    res = _wl(str(chemin_differente), "--reprendre", dossier.name)
+    assert res.exit_code == 2, res.output
+
+
+def test_bandeau_du_rapport_cite_le_seuil_releve_a_la_reprise(
+    tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Seuil relevé mais encore dépassé (taux 50 % > 30 %) : le bandeau du Rapport cite le seuil
+    en vigueur (`resumptions[-1]`), pas celui de `experiment.resolved.yaml` (20 %)."""
+    _avec_faux(monkeypatch, _faux_deuxieme_question_en_erreur_deterministe())
+    assert _wl(str(_experience(tmp_path))).exit_code == 1
+    dossier = _un_run(wl_home)
+    res = _wl(str(_experience(tmp_path, max_error_rate=0.3)), "--reprendre", dossier.name)
+    assert res.exit_code == 1, res.output
+    assert _manifeste(dossier)["status"] == "completed_with_errors"
+    rapport = (dossier / "report" / "report.md").read_text(encoding="utf-8")
+    assert "au-dessus de `max_error_rate` (30 %)" in rapport
+    assert "(20 %)" not in rapport

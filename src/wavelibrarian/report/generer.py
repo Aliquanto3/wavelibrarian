@@ -151,7 +151,10 @@ def _bandeau(ex: Execution) -> list[str]:
             "",
         ]
     if statut == "completed_with_errors":  # story 8.3 : Configurations et causes nommées
-        seuil = ex.experience.max_error_rate
+        # Seuil en vigueur : celui de la dernière reprise s'il a été relevé (fix-arbitrages-8-3-8-8
+        # AC 3) ; `experiment.resolved.yaml` garde la valeur du départ.
+        reprises = ex.manifeste.get("resumptions") or [{}]
+        seuil = reprises[-1].get("max_error_rate", ex.experience.max_error_rate)
         causes = ex.manifeste.get("causes") or []
         return [
             "> **Exécution terminée avec erreurs (`completed_with_errors`) : résultats à ne pas "
