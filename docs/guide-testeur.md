@@ -40,7 +40,6 @@ Sur ce parcours, le profil `test` remplace le LLM par un Faux LLM et l'embedder 
 
 ## 4. Limites connues (inutile de les signaler)
 
-- Le code de sortie de `wl run --tolerer-erreurs`, quand toutes les Questions sont en erreur, est en cours de correction.
 - Sous Windows, la console peut mal afficher les accents de l'aide (`Exp�rience`). C'est un problème d'encodage de la console. Si ça gêne, utilisez Windows Terminal ou lancez `chcp 65001` avant.
 - Les résultats sur le Faux LLM ne disent rien de la qualité réelle des architectures. Ils ne valident que la chaîne de bout en bout.
 
