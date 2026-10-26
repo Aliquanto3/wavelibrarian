@@ -91,13 +91,14 @@ def form_panel(
     exclus par la calibration. Moins de `PANEL_MIN` Juges restants : `ConfigError`.
 
     `panel_size` 1 (Juge unique calibré) n'est admis qu'avec `calibration`
-    (`judges.excluded_from`) : le premier modèle du réservoir d'une autre Famille doit y
-    figurer, non exclu, avec un kappa au moins égal à `kappa_threshold` sur chaque Critère jugé
-    (`verifier_juge_unique`).
+    (`judges.excluded_from`) : le premier modèle du réservoir d'une autre Famille et non exclu
+    doit y figurer avec un kappa au moins égal à `kappa_threshold` sur chaque Critère jugé
+    (`verifier_juge_unique`). Les trois Critères jugés sont exigés : la validation ne lit pas
+    les Questions du split, elle ne sait pas si `correctness` sera noté par un Juge.
     """
     familles = {catalog.get(m).family for m in producers}
     if panel_size == 1:
-        return _juge_unique(pool, familles, calibration, kappa_threshold, catalog)
+        return _juge_unique(pool, familles, excluded, calibration, kappa_threshold, catalog)
     admissibles = [m for m in pool if m not in excluded and catalog.get(m).family not in familles]
     panel = tuple(admissibles[:panel_size])
     if len(panel) < PANEL_MIN:
@@ -114,6 +115,7 @@ def form_panel(
 def _juge_unique(
     pool: Sequence[str],
     familles: Collection[str],
+    excluded: Collection[str],
     calibration: Path | None,
     kappa_threshold: float,
     catalog: ModelCatalog,
@@ -132,8 +134,11 @@ def _juge_unique(
             f"Famille du Generator ({', '.join(sorted(familles))}) ; demander un Juge d'une "
             "autre Famille (AD-14)",
         )
-    verifier_juge_unique(candidats[0], calibration, kappa_threshold)
-    return (candidats[0],)
+    # Premier Juge non exclu, comme pour panel_size >= 2 ; tous exclus : le premier est refusé
+    # par `verifier_juge_unique`, avec un message qui le nomme.
+    juge = next((m for m in candidats if m not in excluded), candidats[0])
+    verifier_juge_unique(juge, calibration, kappa_threshold)
+    return (juge,)
 
 
 def closed_book_judge(tested_model: str, pool: Sequence[str], catalog: ModelCatalog) -> str:

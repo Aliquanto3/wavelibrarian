@@ -441,6 +441,35 @@ def test_juge_unique_de_la_famille_du_generator_refuse(
     assert "'a'" in echec.errors[0].message
 
 
+def test_juge_unique_saute_le_juge_exclu_en_tete(
+    ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
+) -> None:
+    """Revue 9.5 : premier Juge admissible non exclu, comme pour panel_size >= 2."""
+    fiche = {"excluded": False, "criteria": {c: {"kappa": 0.8} for c in TROIS}}
+    cal = tmp_path / "cal.json"
+    cal.write_text(
+        json.dumps({"judges": {"fake-llm-b": {"excluded": True}, "fake-llm-c": fiche}}),
+        encoding="utf-8",
+    )
+    juges = {"pool": ["fake-llm-b", "fake-llm-c"], "panel_size": 1, "excluded_from": "cal.json"}
+    res = validate_file(ecrire({**BASE, "judges": juges}), wl_home)
+    assert res.panels == {"a": ("fake-llm-c",)}
+    # Seul Juge d'une autre Famille, et exclu : refusé en le nommant.
+    juges = {**juges, "pool": ["fake-llm-b"]}
+    echec = _echec(ecrire({**BASE, "judges": juges}, "seul.yaml"), wl_home)
+    assert "'fake-llm-b'" in echec.errors[-1].message and "exclu" in echec.errors[-1].message
+
+
+def test_juge_unique_exige_les_trois_criteres_sans_lire_les_questions(
+    ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
+) -> None:
+    """Revue 9.5 : la validation ne lit pas les Questions du split ; un kappa `correctness`
+    absent est refusé même si toutes les Questions étaient `short` (correspondance exacte)."""
+    _calibration_unique(tmp_path / "cal.json", kappas={"completeness": 0.9, "faithfulness": 0.9})
+    echec = _echec(_unique(ecrire, excluded_from="cal.json"), wl_home)
+    assert "absent (Critère non calibré) sur le Critère 'correctness'" in echec.errors[0].message
+
+
 def test_panel_de_deux_inchange_avec_calibration(
     ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
 ) -> None:

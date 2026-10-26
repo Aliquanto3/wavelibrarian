@@ -198,7 +198,8 @@ def panels_de(experience: ResolvedExperiment) -> dict[str, tuple[str, ...]]:
     """Panel admissible de chaque Configuration (AD-14) : les `panel_size` premiers Juges du
     réservoir d'une autre Famille que les `answer_producers`, hors exclus de la calibration
     (`judges.excluded_from`) ; ces Juges exclus ne sont jamais appelés. `ConfigError` (code 2)
-    si moins de deux restent."""
+    si moins de deux restent, ou, avec `panel_size: 1`, si le Juge unique n'a pas un kappa
+    suffisant sur chaque Critère jugé (story 9.5)."""
     j = experience.judges
     catalogue = load_catalog(Path(experience.catalog) if experience.catalog else None)
     exclus = excluded_judges(Path(j.excluded_from)) if j.excluded_from else frozenset[str]()

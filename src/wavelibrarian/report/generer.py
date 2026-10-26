@@ -276,7 +276,7 @@ def _juges(ex: Execution) -> list[str]:
         + (", ".join(f"`{j}`" for j in exclus) if exclus else "aucun")
         + f"{note}.",
         "",
-        *_juge_unique(ex, tous),
+        *_juge_unique(ex, admissibles),
         *_juges_factices(ex, tous),
     ]
 
@@ -289,25 +289,46 @@ def _donnees_calibration(ex: Execution) -> dict[str, Any] | None:
     return next((d for c in chemins if isinstance(d := lire_json(c), dict)), None)
 
 
-def _juge_unique(ex: Execution, juges: set[str]) -> list[str]:
+def _juge_unique(ex: Execution, admissibles: dict[str, set[str]]) -> list[str]:
     """Mention « Juge unique calibré » avec ses kappas, à la place de la règle de majorité
-    (`judges.panel_size: 1`, story 9.5). Verdict du Panel = verdict de ce Juge, `na` compris."""
-    if ex.experience.judges.panel_size != 1 or len(juges) != 1:
+    (`judges.panel_size: 1`, story 9.5). Verdict du Panel = verdict de ce Juge, `na` compris.
+    Une ligne par Juge ; les Configurations sont nommées quand elles ont des Juges différents
+    (Generators de Familles différentes)."""
+    if ex.experience.judges.panel_size != 1:
         return []
-    (juge,) = juges
+    configs_de: dict[str, list[str]] = defaultdict(list)
+    for c in ex.experience.configurations:
+        for juge in admissibles.get(c.id, ()):
+            configs_de[juge].append(c.id)
     donnees = _donnees_calibration(ex)
     fiches = (donnees or {}).get("judges")
-    fiche = fiches.get(juge) if isinstance(fiches, dict) else None
-    criteres = (fiche.get("criteria") or {}) if isinstance(fiche, dict) else {}
-    kappas = ", ".join(
-        f"{c} {_kappa(f.get('kappa'))}" for c, f in sorted(criteres.items()) if isinstance(f, dict)
-    )
-    return [
-        f"Juge unique calibré : `{juge}` ; le verdict du Panel est le verdict de ce Juge "
-        "(`na` compris), sans règle de majorité ni égalité. "
-        f"Kappas juge-humain : {kappas or 'calibration absente'}.",
-        "",
-    ]
+    lignes: list[str] = []
+    for juge in sorted(configs_de):
+        fiche = fiches.get(juge) if isinstance(fiches, dict) else None
+        criteres = fiche.get("criteria") if isinstance(fiche, dict) else None
+        kappas = ", ".join(
+            f"{c} {_kappa(f.get('kappa'))}"
+            for c, f in sorted((criteres if isinstance(criteres, dict) else {}).items())
+            if isinstance(f, dict)
+        )
+        if not kappas:
+            kappas = (
+                "calibration absente"
+                if fiche is None
+                else "aucun kappa par Critère dans la calibration"
+            )
+        portee = (
+            " (Configurations " + ", ".join(f"`{c}`" for c in configs_de[juge]) + ")"
+            if len(configs_de) > 1
+            else ""
+        )
+        lignes += [
+            f"Juge unique calibré : `{juge}`{portee} ; le verdict du Panel est le verdict de ce "
+            "Juge (`na` compris), sans règle de majorité ni égalité. "
+            f"Kappas juge-humain : {kappas}.",
+            "",
+        ]
+    return lignes
 
 
 def _juges_factices(ex: Execution, juges: set[str]) -> list[str]:

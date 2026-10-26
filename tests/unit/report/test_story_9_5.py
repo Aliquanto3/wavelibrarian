@@ -9,7 +9,7 @@ import yaml
 from typer.testing import CliRunner
 
 from wavelibrarian.cli import app
-from wavelibrarian.report.generer import _juges, generer_rapport
+from wavelibrarian.report.generer import _juge_unique, _juges, generer_rapport
 from wavelibrarian.report.lecture import charger
 
 RACINE = Path(__file__).resolve().parents[3] / "corpora" / "minicorpus"
@@ -74,3 +74,33 @@ def test_rapport_juges_factices_avec_generator_reel(tmp_path: Path, wl_home: Pat
         _juges(replace(ex, experience=ex.experience.model_copy(update={"configurations": reelles})))
     )
     assert "**Qualité non interprétable : Juges factices.**" in md
+
+
+def test_rapport_juge_unique_par_configuration_et_fiche_sans_kappas(
+    tmp_path: Path, wl_home: Path
+) -> None:
+    """Revue 9.5 : Generators de Familles différentes, un Juge unique par Configuration ; une
+    fiche sans `criteria` n'est pas « calibration absente »."""
+    trois = {c: {"kappa": 0.7} for c in ("correctness", "completeness", "faithfulness")}
+    cal = tmp_path / "cal.json"
+    cal.write_text(
+        json.dumps({"judges": {"fake-llm-c": {"excluded": False, "criteria": trois}}}),
+        encoding="utf-8",
+    )
+    juges = {"pool": ["fake-llm-c"], "panel_size": 1, "excluded_from": str(cal)}
+    ex = charger(_executer(tmp_path, wl_home, juges))
+    fiche = {"excluded": False, "criteria": {"completeness": {"kappa": 0.7}}}
+    cal.write_text(
+        json.dumps({"judges": {"fake-llm-b": {"excluded": False}, "fake-llm-c": fiche}}),
+        encoding="utf-8",
+    )
+    (conf,) = ex.experience.configurations
+    deux = (conf, conf.model_copy(update={"id": "autre"}))
+    ex = replace(ex, experience=ex.experience.model_copy(update={"configurations": deux}))
+    lignes = _juge_unique(ex, {"bm25": {"fake-llm-c"}, "autre": {"fake-llm-b"}, "x": set()})
+    md = "\n".join(lignes)
+    assert "Juge unique calibré : `fake-llm-b` (Configurations `autre`)" in md
+    assert "aucun kappa par Critère dans la calibration" in md
+    assert "Juge unique calibré : `fake-llm-c` (Configurations `bm25`)" in md
+    assert "completeness 0,70" in md
+    assert "calibration absente" in "\n".join(_juge_unique(ex, {"bm25": {"inconnu"}}))

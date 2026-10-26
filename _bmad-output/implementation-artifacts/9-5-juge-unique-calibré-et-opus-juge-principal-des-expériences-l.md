@@ -39,12 +39,28 @@ Vérifier ensuite `uv run pytest -q --tb=short tests/e2e` (Expériences livrées
 ## Reports
 
 - Un Juge unique avec `judges.passes` ≥ 2 peut encore produire une égalité entre passes (règle de `majorite` inchangée) ; défaut `passes: 1`.
-- `contracts.md` §4.4 et AD-14 non réécrits dans cette story (déjà amendés par la proposition du 2026-10-26).
-- Le Rapport suppose un Juge unique par Exécution (union des Panels) ; plusieurs Juges uniques différents selon les Configurations n'affichent pas la mention.
+- AD-14 déjà amendé par la proposition du 2026-10-26 ; `contracts.md` §4.4 amendé à la revue (`panel_size: 1`, `excluded_from`, kappas sur les trois Critères).
+- La validation exige un kappa sur les trois Critères jugés, même si toutes les Questions du split sont `short` (`correctness` par correspondance exacte) : elle ne lit pas les Questions.
 - Plafond Anthropic de 3,00 / 2,00 USD : à valider contre le coût mesuré de la 9.9.
 
 ## Commande de vérification
 
 ```
-uv run pytest -q --tb=short tests/unit/config tests/unit/scoring/test_panel.py tests/unit/report/test_story_9_5.py tests/unit/runner/test_story_4_9.py tests/e2e/test_experiences_livrees.py
+uv run pytest -q --tb=short tests/unit/config tests/unit/scoring/test_panel.py tests/unit/report/test_story_9_5.py tests/unit/runner/test_juge_unique_rejuger.py tests/unit/runner/test_story_4_9.py tests/e2e/test_experiences_livrees.py
 ```
+
+## Revue
+
+### Passe 1 (2026-10-26, SHA revu 6b88688)
+
+Base `story/9-3` 920da8f : à jour (ni `story/9-3` ni `main` n'ont avancé). Bascule YAML non faite (orchestrateur, après 9.9).
+
+- Important · medium · second avis 1 · rejeté (code gardé) · `verifier_juge_unique` exige les trois Critères : `config/validate.py` ne charge pas les Questions du split, il ne peut pas savoir si `correctness` sera noté ; décision de l'orchestrateur. Comportement documenté (docstring `form_panel`, Reports) et testé (`test_juge_unique_exige_les_trois_criteres_sans_lire_les_questions`) ; un Critère jugé sans kappa reste refusé (tests existants).
+- Important · low · second avis 2 · corrigé · `_juge_unique` prenait `candidats[0]` même exclu : premier Juge d'une autre Famille non exclu, puis contrôle des kappas ; seul candidat exclu, refus qui le nomme (`test_juge_unique_saute_le_juge_exclu_en_tete`).
+- Important · low · second avis 5 · corrigé · Rapport : une ligne « Juge unique calibré » par Juge, avec les Configurations nommées quand elles ont des Juges différents (avant : mention omise).
+- Nit · low · second avis 8 · corrigé · `contracts.md` §4.4 amendé (`panel_size: 1`, `excluded_from`, kappas) ; phrase « déjà amendés » de la spec corrigée.
+- Nit · low · second avis 9 · corrigé · tests `panels_de` et `wl rejuger` avec `panel_size: 1` (Faux LLM, calibration factice, Questions toutes `short`, Juge exclu en tête) : `tests/unit/runner/test_juge_unique_rejuger.py`.
+- Nit · low · second avis 10 · corrigé · fiche du Juge sans `criteria` : « aucun kappa par Critère dans la calibration » au lieu de « calibration absente » ; `criteria` non dict toléré.
+- Nit · low · revue · corrigé · docstring de `panels_de` (refus du Juge unique).
+- Nit · low · revue · non corrigé · calibration illisible avec `panel_size: 1` : l'erreur sort deux fois (lecture des exclus, puis par Configuration).
+- Complexité : 0 constat (Rapport : un parcours des Configurations par Juge, aucune structure qui grossit).

@@ -666,12 +666,12 @@ budget:
   period:  {anthropic: {amount: "50.00", currency: USD}, azure: {amount: "50.00", currency: EUR}}   # mois civil UTC
 judges:
   pool: null                           # null = profil.defaults.judge_pool
-  panel_size: 2
+  panel_size: 2                        # 1 = Juge unique calibré (AD-14 amendé, v0.3.0, 9.5) : exige excluded_from ; premier Juge du pool d'une autre Famille que les Generators, non exclu, avec un kappa >= kappa_threshold sur correctness, completeness et faithfulness (absent ou null = refus, code 2) ; verdict du Panel = verdict de ce Juge, na compris
   passes: 1                            # `wl calibrer` impose au moins calibration_passes
   calibration_passes: 5
   kappa_threshold: 0.6
   calibration_judge: null
-  excluded_from: null                  # chemin d'un calibration.json (Juges exclus)
+  excluded_from: null                  # chemin d'un calibration.json (Juges exclus) ; avec panel_size: 1, fournit aussi les kappas du Juge unique (`judges.<modèle>.criteria.<Critère>.kappa`)
 stats: {resamples: 2000, confidence: 0.95, alpha: 0.05}
 llm_cache: {isoler_configurations: false}   # true : l'id de Configuration entre dans la clé du Cache de réponses (v0.3.0, 9.7) ; clés inchangées avec false. Portée : appels du Poste `query` seulement (génération, Decider, sélection…) ; Juges (`judging`, calibration comprise), indexation et `update` gardent une clé commune. À `false`, la clé est omise de `experiment.resolved.yaml` et de l'empreinte (une Exécution v0.2.0 se reprend)
 retries: {max_attempts: 3, backoff_s: 1.0, max_backoff_s: 30.0}
