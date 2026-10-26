@@ -72,3 +72,9 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 09:21 · 9.8 · review · lancé (Opus) · 
 - 2026-10-26 09:22 · 9.2 · fusion · suite complète 1260 passed (13 min 45), fast-forward sur main · 3436cb7
 - 2026-10-26 09:22 · 9.7+9.1 · décision · pile 9.7 puis 9.1 rebasée sur main, une suite complète pour la pile · 
+- 2026-10-26 09:22 · 9.3 · dev · lancé (Opus, story/9-3 depuis la pile ef72d47) · 
+- 2026-10-26 09:29 · 9.6 · review · 1 high corrigé (Catalogue, date et chemins), contenu du Jeu vérifié par le Gel ; sonde sur la source réelle : acceptée, 76/76 ok · 3a5e104
+- 2026-10-26 09:30 · 9.8 · review · 4 medium corrigés (règle mixed, GPU visibles, pas d'énergie sur les hits, lignes de contrats 9.2 restaurées) · 2a83b26
+- 2026-10-26 09:33 · 9.7 · fusion · suite complète de la pile 1285 passed (10 min 20), fast-forward · 05eb5b5
+- 2026-10-26 09:33 · 9.1 · fusion · même pile · a9819d0
+- 2026-10-26 09:33 · 9.6+9.8 · décision · pile 9.6 puis 9.8 rebasée sur main (sans conflit), une suite complète · 
