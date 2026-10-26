@@ -224,6 +224,11 @@ Anaël obtient d'un run réel un statut, des coûts et une calibration auxquels 
 **FR couvertes :** FR-5 (licences), FR-29 (coût réel), FR-1 et FR-40 (statut et Rapport), FR-30 et FR-33 (alignements de spec), FR-32 (énergie Windows), FR-24 (PageIndex CPU), FR-38 et SM-5 (calibration réelle).
 **Notes :** ordre imposé F, B, A, G, H, E, D, run du split dev, C. Les stories 8.8 et 8.10 sont des stories réelles (Ollama, CPU) ; 8.10 attend les annotations d'Anaël. Toute story qui écrit un test `real_*` l'exécute au moins une fois avant `done`, ou le marque en attente dans le sprint status (action 4 de la rétro).
 
+### Epic 9 : Juge calibré et scores de qualité fiables (lot v0.3.0)
+Anaël lit des scores de qualité jugés par un Juge calibré (Opus 5.5), sur des annotations qui distinguent « sans objet », avec une calibration qui ne perd plus rien de payé et un paquet d'annotation court, produit par le code. Source : reports du lot v0.2.0 (`implementation-artifacts/RUN-STATUS-v0.2.0.md`, `verifications-reelles-2026-10-26-v0.2.0.md`, `fix-arbitrages-8-3-8-8.md`, `8-11-juges-claude-calibration.md`) ; proposition `planning-artifacts/sprint-change-proposal-2026-10-26.md`.
+**FR couvertes :** FR-36 et FR-37 (Panel, sans objet, justification), FR-38 et SM-5 (calibration), FR-32 (énergie), FR-27 (LazyGraphRAG), FR-1 et FR-40 (rejugement, Rapport).
+**Notes :** 9.9, 9.10 et 9.11 sont des stories réelles (API Anthropic ; 9.11 aussi Ollama CPU, sur accord d'Anaël). 9.12 est humaine, hors run.
+
 ## Epic 1 : Un banc configurable, mesuré et testable sans réseau
 
 Anaël valide une Expérience YAML avant tout appel et liste ce que le banc sait faire. Tout appel de modèle passe par une passerelle unique qui applique le Plafond de dépense et le Cache de réponses, et qui trace coût, tokens et énergie. Un agent de développement ajoute un Composant et le teste avec le Faux LLM et le faux embedder, sans réseau ni clé.
@@ -2253,3 +2258,321 @@ So that SM-5 soit mesuré sur des données réelles et que les Juges trop peu fi
 **When** on conclut la story
 **Then** l'exclusion d'un Juge sous le seuil est constatée, ou son absence est justifiée par les valeurs ; le kappa inter-annotateurs n'est rapporté que s'il y a une double annotation, sinon son absence est signalée
 **And** le résultat (kappas, instabilités, exclusions, taille de l'échantillon) est consigné dans une série de vérifications réelles datée
+
+### Story 8.11 : Juges Claude calibration
+
+As a Anaël,
+I want calibrer aussi des Juges Claude (Haiku 5.5 et Opus 5.5) sur mes annotations,
+So that je sache si un Juge d'API passe le seuil là où les Juges locaux échouent.
+
+**Exigences :** FR-38, SM-5 ; AD-14, AD-3. Ajoutée le 2026-10-26 sur décision d'Anaël (spec : `implementation-artifacts/8-11-juges-claude-calibration.md`).
+
+**Acceptance Criteria:**
+
+**Given** `claude-opus-5-5` au Catalogue et `experiments/calibration-claude.yaml` (2 passes, plafond 10 USD)
+**When** on lance `wl calibrer` réel sur les annotations d'Anaël
+**Then** les kappas par Juge et par Critère sont produits et consignés dans une série de vérifications réelles datée
+
+## Epic 9 : Juge calibré et scores de qualité fiables (lot v0.3.0)
+
+Anaël lit des scores de qualité jugés par `claude-opus-5-5`, seul Juge au-dessus du seuil de kappa (décision du 2026-10-26), avec une modalité « sans objet », une justification courte, une calibration écrite au fil de l'eau et un paquet d'annotation court produit par le code. Proposition : `sprint-change-proposal-2026-10-26.md`.
+
+Règles communes aux stories de l'epic 9 :
+- Dépense API du lot plafonnée à 10 USD au total (Registre). Ollama et GPU : aucun appel sans accord écrit d'Anaël dans la session.
+- Toute modification du prompt ou du schéma des Juges invalide la calibration d'Opus : la story 9.9 la refait après 9.2 et 9.3.
+- Chaque story met à jour les sections de `contracts.md` qu'elle touche.
+- Toute story qui écrit un test `real_*` l'exécute au moins une fois avant `done`, ou le marque en attente dans le sprint status.
+
+### Story 9.1 : `wl calibrer` écrit ses verdicts au fil de l'eau
+
+As a Anaël,
+I want que chaque verdict payé de `wl calibrer` soit écrit dès sa réception,
+So that un plafond atteint ou une erreur 4xx ne me fasse plus perdre ce que j'ai payé.
+
+**Exigences :** FR-38, FR-33 ; AD-3 ; `contracts.md` §4.6, §8. Report de la 8.11 : une `ProviderError` non réessayable ou `BudgetExceeded` en cours de calibration perd tous les verdicts.
+
+**Acceptance Criteria:**
+
+**Given** une calibration en cours
+**When** un appel de Juge rend un verdict (ou un verdict manquant)
+**Then** la ligne est ajoutée aussitôt à `<sortie>_verdicts.jsonl` (une ligne JSON par Juge, Réponse et passe), vidée sur disque
+
+**Given** `BudgetExceeded` ou une `ProviderError` non réessayable à mi-parcours
+**When** la commande s'arrête (code 3 ou 4)
+**Then** les verdicts déjà reçus restent dans le fichier, et le message indique leur nombre et la commande de reprise
+
+**Given** un fichier de verdicts partiel, avec la même Expérience, le même run et les mêmes annotations
+**When** on relance `wl calibrer ... --reprendre`
+**Then** seuls les triplets (Juge, Réponse, passe) absents sont appelés ; `calibration.json` est calculé sur l'ensemble
+**And** une relance sans `--reprendre` sur un fichier existant est refusée (code 2), sauf avec `--ecraser`
+
+**Given** des tests avec un SDK factice qui lève au 5e appel
+**When** on les lance sans réseau
+**Then** 4 verdicts sont relus du fichier et la reprise n'appelle que les manquants
+
+### Story 9.2 : Justification courte des Juges
+
+As a Anaël,
+I want que chaque Juge rende une justification d'une phrase,
+So that ses sorties ne partent plus en délibération jusqu'à la coupure (arbitrage B1 de la 8.8).
+
+**Exigences :** FR-36 ; AD-14 ; `components/judges/llm.py`, `llm/roles.py`. Constat 8.8 (b) : 7 sorties tronquées au budget par une `justification` qui délibère.
+
+**Acceptance Criteria:**
+
+**Given** le prompt système des Juges
+**When** on le lit
+**Then** il demande de décider d'abord, puis une justification d'une seule phrase de 200 caractères au plus, sans délibération ; le schéma de sortie place `verdict` avant `justification` et porte `maxLength: 200` sur `justification`
+
+**Given** un Juge Ollama
+**When** la passerelle construit la requête
+**Then** le schéma est transmis dans `format` (la grammaire borne la longueur) ; un test sans réseau vérifie le schéma envoyé
+
+**Given** un Juge Anthropic qui rend une justification plus longue
+**When** on valide sa sortie
+**Then** elle est tronquée à 200 caractères avec « … » à l'enregistrement, et la sortie reste conforme
+
+**Given** les 3 sorties tronquées de la 8.8 (q-044 en rag-naif et raptor, q-017 en pageindex), rejouées en test avec un Faux LLM qui renvoie une justification longue
+**When** on les juge
+**Then** aucune n'est `non_conformant`
+
+### Story 9.3 : Modalité « sans objet »
+
+As a Anaël,
+I want qu'un Critère qui ne s'applique pas soit noté « sans objet » par l'humain, les Juges et le calcul automatique,
+So that une Réponse vide ne gonfle plus la fidélité et que le kappa ne compte que les cas jugeables.
+
+**Exigences :** FR-36, FR-37, FR-38, FR-40 ; AD-14 ; `contracts.md` §4.6, §5 (`verdicts.jsonl`, `panel.jsonl`), §7. Limite de la série du 2026-10-26 : 5 Réponses vides de PageIndex jugées fidèles par convention.
+
+**Acceptance Criteria:**
+
+**Given** le format des annotations (§4.6) et les verdicts des Juges
+**When** on les charge
+**Then** `verdict` admet `yes`, `no` et `na` (« sans objet ») ; une annotation `na` est valide pour les trois Critères
+
+**Given** une Réponse vide ou une abstention
+**When** on la juge
+**Then** `faithfulness` vaut `na` sans appel de Juge (`judge_model: "auto"`), comme `abstention_correctness` ; les autres Critères sont jugés
+
+**Given** le prompt des Juges
+**When** une Réponse n'affirme rien de vérifiable
+**Then** le Juge peut répondre `na` pour `faithfulness` seulement ; un `na` sur un autre Critère est non conforme
+
+**Given** des verdicts de Juges avec des `na`
+**When** le Panel conclut
+**Then** le verdict est `na` si la majorité des Juges admissibles dit `na`, sinon la majorité des `yes` et `no` (égalité : `no` et signalement, inchangé)
+
+**Given** des annotations et des verdicts avec des `na`
+**When** `wl calibrer` calcule le kappa
+**Then** le kappa ne porte que sur les items où l'humain et le Juge ont tous deux dit `yes` ou `no` ; `calibration.json` ajoute, par Juge et par Critère, le nombre d'accords sur `na` et de désaccords `na` contre `yes` ou `no`
+
+**Given** un Critère avec des verdicts `na`
+**When** on génère le Rapport
+**Then** le taux de oui est calculé hors `na`, avec le `n` effectif et le nombre de `na` affichés
+
+**Given** `corpora/minicorpus/annotations/anael.yaml`
+**When** la story se termine
+**Then** les 5 annotations `faithfulness` des Réponses vides (q-014, q-016, q-025, q-040, q-042 en pageindex) passent de `yes` à `na`, avec une note qui le dit
+
+### Story 9.4 : Paquet et page d'annotation dans le code
+
+As a Anaël,
+I want un paquet d'annotation plus court, tiré par strates, et une page d'annotation produite par `wl`,
+So that annoter soit rapide et que la page ne biaise plus mes verdicts (leçon de la réannotation du 2026-10-26).
+
+**Exigences :** FR-38 ; `contracts.md` §4.6, §8 ; `report/paquet.py`, `scripts/page_annotation.py`, `scripts/importer_verdicts.py`. Mesure du paquet `anael.yaml` : environ 7 600 caractères par Réponse, dont 4 300 pour `context_passages` et 1 800 pour `cited_anchors`, répété sur chaque ligne.
+
+**Acceptance Criteria:**
+
+**Given** `wl annotations exporter`
+**When** on exporte un paquet
+**Then** les données propres à une Réponse (`question`, `answer`, `reference_answer`, `context_passages`, `reference_passages`) ne figurent que sur sa première ligne, `cited_anchors` ne garde que les identifiants d'Ancrage, et la taille par Réponse sur le run de la 8.8 baisse d'au moins 50 % (mesure consignée)
+
+**Given** `--nombre N`
+**When** on tire les Réponses
+**Then** le tirage est stratifié par Configuration × Type de question (allocation proportionnelle, au moins une Réponse par strate non vide si N le permet) et stable à graine égale ; la répartition obtenue est affichée
+
+**Given** `--depuis <paquet annoté> --annotateurs <nom> --nombre N`
+**When** on exporte
+**Then** les N lignes sont tirées parmi les lignes déjà annotées du paquet source, stratifiées par Critère, pour une double annotation
+
+**Given** `wl annotations page <paquet.yaml> --vers <page.html>`
+**When** on ouvre la page
+**Then** elle est autonome (hors ligne) et à l'aveugle (aucun verdict de Juge), sans surlignage des mots de la Réponse ; la réponse de référence n'est montrée que pour `correctness` et `completeness` ; le bloc `faithfulness` porte la consigne stricte d'étayage (une Réponse qui n'affirme rien est sans objet ; une Réponse fidèle à un extrait faux reste fidèle) ; chaque Critère propose oui, non et sans objet
+
+**Given** le fichier exporté par la page
+**When** on lance `wl annotations importer <paquet.yaml> <verdicts.json>`
+**Then** les verdicts et les notes sont reportés ligne à ligne, le reste du paquet inchangé, et le paquet passe le chargement de la story 5.1
+**And** `scripts/page_annotation.py` et `scripts/importer_verdicts.py` sont retirés du dépôt
+
+### Story 9.5 : Juge unique calibré et Opus Juge principal des Expériences livrées
+
+As a Anaël,
+I want que les Expériences livrées soient jugées par `claude-opus-5-5`, sous plafond Anthropic et dans le respect d'AD-14,
+So that les scores de qualité viennent du seul Juge fiable sur ce corpus.
+
+**Exigences :** FR-37, FR-33 ; AD-14 (amendé) ; `contracts.md` §4.4. Décision d'Anaël du 2026-10-26.
+
+**Acceptance Criteria:**
+
+**Given** `judges.panel_size: 1` et `judges.excluded_from` qui désigne un fichier de calibration
+**When** on valide l'Expérience
+**Then** elle est acceptée si l'unique Juge admissible figure dans ce fichier, non exclu, avec un kappa au-dessus de `kappa_threshold` sur chaque Critère jugé ; sinon elle est refusée en code 2, avec un message qui nomme le Juge et le Critère
+**And** `panel_size: 1` sans fichier de calibration est refusé ; la règle de famille (AD-14) s'applique toujours au Juge unique
+
+**Given** la calibration d'Opus versionnée dans le dépôt (`corpora/minicorpus/calibration/opus.json`, produite par 9.9)
+**When** on lit les Expériences livrées
+**Then** `mini-cpu.yaml` et `lazy-seuil-cpu.yaml` ont `pool: [claude-opus-5-5]`, `panel_size: 1`, `excluded_from` vers ce fichier et un plafond `per_run` Anthropic de 3,00 et 2,00 USD
+**And** `mini-real-haiku.yaml` garde ses Juges factices, avec un commentaire AD-14 (Opus ne juge pas un Generator Claude) et la mention au Rapport « qualité non interprétable : Juges factices » ; `calibration-claude.yaml` et `mini-test.yaml` sont inchangés
+
+**Given** un Generator de Famille `claude` et `pool: [claude-opus-5-5]`
+**When** on valide l'Expérience
+**Then** elle est refusée (code 2), avec un message qui demande un Juge d'une autre Famille
+
+**Given** le Rapport d'une Exécution à Juge unique
+**When** on le génère
+**Then** il mentionne « Juge unique calibré » avec ses kappas, à la place de la règle de majorité
+
+### Story 9.6 : Commande `wl rejuger`
+
+As a Anaël,
+I want rejuger les Réponses d'une Exécution terminée avec un autre Panel, sans les regénérer,
+So that je puisse faire noter par Opus le run mini-cpu de la 8.8 sans Ollama, sur les Réponses mêmes que j'ai annotées.
+
+**Exigences :** FR-1, FR-37, FR-40 ; AD-11 ; `contracts.md` §5, §8. Limite (iii) de `fix-arbitrages-8-3-8-8` : `--reprendre` est refusé pour un run fait avec l'ancien Gel.
+
+**Acceptance Criteria:**
+
+**Given** `wl rejuger <run_id> <experience.yaml>`
+**When** on le lance
+**Then** une nouvelle Exécution est créée, avec `rejudged_from: <run_id>` au manifeste : les Réponses, les Passages, les traces de génération et les mesures sont copiés de la source pour les seules Questions du split courant du Jeu gelé ; seuls les Juges et les Critères automatiques sont recalculés ; le Rapport est généré
+**And** les Questions de la source absentes du split courant sont listées (ex. q-044, hors dev depuis le Gel b2)
+
+**Given** une Expérience dont le Corpus, les Configurations ou le Generator diffèrent de ceux de la source
+**When** on lance `wl rejuger`
+**Then** la commande refuse en code 2 et nomme la différence ; seuls `judges`, `budget` et `max_error_rate` peuvent changer
+
+**Given** la nouvelle Exécution
+**When** on lit le Rapport
+**Then** les coûts, l'énergie et la latence de génération sont ceux de la source, marqués « copiés de <run_id> » ; le poste `judging` est celui du rejugement
+**And** le plafond, le statut `completed_with_errors` et `--reprendre` s'appliquent au rejugement comme à `wl run`
+
+**Given** un scénario Faux LLM (Exécution source, puis rejugement avec un autre Panel factice)
+**When** on lance les tests sans réseau
+**Then** les Réponses sont identiques octet pour octet et seuls les verdicts changent
+
+### Story 9.7 : Decider de LazyGraphRAG et Cache isolé par Configuration
+
+As a Anaël,
+I want un Decider plus capable, un prompt qui ne souffle pas de score et un Cache qui ne mélange pas les seuils,
+So that le balayage de `relevance_threshold` mesure enfin quelque chose (arbitrage B2 de la 8.8).
+
+**Exigences :** FR-27, FR-34 ; AD-3, AD-4 ; `components/deciders/llm.py`, `llm/cache.py`, `contracts.md` §4.4. Constat 8.8 (c) : 64 notes `[0.0, ...]` du Decider `minicpm5:1b`, avec l'exemple `{"scores": [0.0, 0.0]}` dans le prompt.
+
+**Acceptance Criteria:**
+
+**Given** le prompt système du Decider
+**When** on le lit
+**Then** l'exemple de format ne contient aucune valeur numérique (`{"scores": [<score du passage 1>, <score du passage 2>, ...]}`) ; un test fige le texte
+
+**Given** `llm_cache: {isoler_configurations: true}` dans l'Expérience (défaut `false`)
+**When** deux Configurations font le même appel
+**Then** leurs clés de Cache diffèrent (l'identifiant de Configuration entre dans la clé), et la latence de chacune est mesurée, pas rejouée
+**And** avec `false`, les clés sont inchangées (test de non-régression sur une clé existante)
+
+**Given** `experiments/lazy-seuil-cpu.yaml`
+**When** on le lit
+**Then** son Decider est `granite4.2:3b`, avec `isoler_configurations: true` et les seuils {0,1 ; 0,3 ; 0,5}, et la validation passe sans réseau
+
+### Story 9.8 : Énergie : méthode mixte, poste `judging` et GPU du profil `gpu`
+
+As a Anaël,
+I want que l'énergie dise quand elle est en partie estimée, compte le jugement local et mesure le GPU quand il travaille,
+So that l'énergie totale d'un run ne soit plus sous-estimée ni mal étiquetée (reports de la 8.6 et de fix-8-8).
+
+**Exigences :** FR-32, FR-31 ; AD-17 ; `contracts.md` §1 (postes), §6, §7 ; `measure/energy.py`, profils.
+
+**Acceptance Criteria:**
+
+**Given** une phase dont le CPU est lu par un compteur matériel et dont la RAM est estimée par formule
+**When** on la mesure
+**Then** sa méthode vaut `mixed` (nouvelle valeur d'`EnergyMethod`) ; le Rapport affiche séparément les kWh `measured`, `mixed` et `estimated`, avec la légende de `mixed`
+
+**Given** des Juges locaux (fournisseur `ollama`)
+**When** le Poste `judging` s'exécute
+**Then** une phase d'énergie `judging` est ouverte ; ses spans portent `wl.energy_source` et une méthode ; le Rapport l'affiche au poste `judging`, hors du coût d'une Configuration
+**And** les Juges d'API gardent l'énergie estimée par appel
+
+**Given** le profil `gpu` avec `energy: {gpu: true}` (nouveau champ, défaut `false`, `true` dans `gpu.yaml`)
+**When** une phase est mesurée
+**Then** le GPU est suivi : `wl.energy_source=nvml`, méthode `measured` si le CPU l'est aussi ; au profil `cpu`, le comportement de fix-8-8 est inchangé (GPU retiré)
+
+**Given** des compteurs injectés
+**When** on lance les tests de `measure/energy.py`
+**Then** les cas `mixed`, `judging` et GPU sont couverts sans réseau ni GPU ; la vérification réelle sur GPU reste en attente de l'accord d'Anaël
+
+### Story 9.9 : Calibration réelle d'Opus avec le prompt du lot
+
+As a Anaël,
+I want recalibrer `claude-opus-5-5` après les changements de prompt et la modalité « sans objet »,
+So that sa place de Juge unique repose sur une calibration à jour, versionnée dans le dépôt.
+
+**Exigences :** FR-38, SM-5 ; AD-14. Story réelle (API Anthropic). Dépend de 9.1, 9.2 et 9.3.
+
+**Acceptance Criteria:**
+
+**Given** `experiments/calibration-opus.yaml` (`pool: [claude-opus-5-5]`, 5 passes, plafond 4,00 USD) et `anael.yaml` après la 9.3
+**When** on lance `wl calibrer` réel sur le run `20261018-115941-a2a512`
+**Then** `calibration.json` est produit et copié dans `corpora/minicorpus/calibration/opus.json` ; les kappas, les `na`, l'instabilité, les `n` et le coût sont consignés dans une série de vérifications réelles datée
+
+**Given** un kappa d'Opus sous 0,6 sur un Critère
+**When** on conclut
+**Then** la story s'arrête en « À arbitrer par Anaël » avant 9.10 et 9.11, puisque le Juge unique serait refusé à la validation
+
+### Story 9.10 : Rejugement réel du run mini-cpu par Opus
+
+As a Anaël,
+I want les scores de qualité du run mini-cpu du split dev jugés par Opus,
+So that j'aie des scores fiables pour comparer BM25, RAG naïf, RAPTOR et PageIndex sur CPU.
+
+**Exigences :** FR-36, FR-39, FR-40, SM-5. Story réelle (API Anthropic). Dépend de 9.5, 9.6 et 9.9.
+
+**Acceptance Criteria:**
+
+**Given** `experiments/mini-cpu.yaml` (Opus Juge unique) et la source `20261018-115941-a2a512`
+**When** on lance `wl rejuger`
+**Then** l'Exécution porte sur les 18 Questions du split dev (72 Réponses) et se termine en `completed` sous le plafond, ou ses causes sont consignées
+**And** les scores par Configuration avec IC, les `na`, la comparaison aux scores des Juges granite et qwen de la 8.8, le coût et la durée sont consignés dans une série de vérifications réelles datée
+
+### Story 9.11 : Balayage réel de `relevance_threshold`
+
+As a Anaël,
+I want refaire le balayage du seuil de LazyGraphRAG avec le nouveau Decider,
+So that la valeur par défaut de `relevance_threshold` repose sur une mesure.
+
+**Exigences :** FR-27 ; arbitrage B2 de la 8.8. Story réelle : Ollama en profil `cpu` (accord d'Anaël requis avant tout appel) et API Anthropic (Juge). Dépend de 9.5, 9.7 et 9.9.
+
+**Acceptance Criteria:**
+
+**Given** `experiments/lazy-seuil-cpu.yaml` après la 9.7
+**When** on lance `wl run`
+**Then** on consigne par seuil, dans une série de vérifications réelles datée : les Passages retenus par Question, les abstentions, les métriques de recherche, la Qualité avec IC, la latence mesurée et la distribution des scores du Decider
+**And** la valeur par défaut de `lazy_graphrag.py` n'est changée que sur décision d'Anaël ; si la durée sur CPU devient déraisonnable (RAM libre sous 3 Go ou plus de 2 h), l'essai est arrêté et la limite consignée
+
+### Story 9.12 : Double annotation partielle (humaine, hors run)
+
+As a Anaël,
+I want qu'un second annotateur annote 20 à 30 lignes déjà annotées,
+So that le kappa inter-annotateurs prévu par FR-38 soit enfin mesuré.
+
+**Exigences :** FR-38, SM-5. Story humaine : le run ne fait que la préparer.
+
+**Acceptance Criteria:**
+
+**Given** la story 9.4 livrée
+**When** l'orchestrateur prépare la tâche
+**Then** un paquet de 25 lignes tirées de `anael.yaml` (`--depuis`), sa page HTML et une consigne d'une page sont écrits hors de `corpora/minicorpus/annotations/`, pour que `wl calibrer` n'y lise pas de verdicts vides, avec la commande d'import et de calibration à lancer ensuite
+
+**Given** le paquet rempli et importé
+**When** on relance `wl calibrer`
+**Then** le kappa inter-annotateurs figure dans `calibration.json` et au Rapport

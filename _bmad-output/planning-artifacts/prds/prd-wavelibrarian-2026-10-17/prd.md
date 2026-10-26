@@ -2,7 +2,7 @@
 title: WaveLibrarian
 status: final
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-26
 ---
 
 # PRD : WaveLibrarian
@@ -401,7 +401,7 @@ Le Rapport présente coût et énergie séparément pour l'indexation initiale, 
 L'énergie est mesurée en local et estimée pour les appels d'API.
 
 **Conséquences (testables) :**
-- Le Rapport étiquette chaque valeur « mesurée » ou « estimée » et avertit que les deux périmètres ne se comparent pas terme à terme.
+- Le Rapport étiquette chaque valeur « mesurée », « mixte » (CPU mesuré, RAM estimée ; v0.3.0) ou « estimée » et avertit que les deux périmètres ne se comparent pas terme à terme.
 - L'équivalent CO2 utilise l'intensité carbone déclarée de la région d'exécution.
 
 #### FR-33 : Plafond de dépense
@@ -442,7 +442,7 @@ Chaque Réponse est notée sur chaque Critère par chaque Juge du Panel ; la cor
 
 **Conséquences (testables) :**
 - Une Réponse de référence « courte » est un nombre, une date ou une expression d'au plus 5 mots ; la correspondance exacte compare après normalisation (casse, accents, ponctuation, format des nombres) et recherche la référence dans la Réponse.
-- Chaque Juge rend pour chaque Critère un verdict binaire (oui / non) et une justification courte ; l'abstention correcte est calculée sans Juge à partir de l'indicateur d'abstention et du Type « sans réponse ».
+- Chaque Juge rend pour chaque Critère un verdict (oui / non, ou « sans objet » quand le Critère ne s'applique pas, par exemple la fidélité d'une Réponse vide ; v0.3.0) et une justification d'une phrase ; l'abstention correcte est calculée sans Juge à partir de l'indicateur d'abstention et du Type « sans réponse ».
 - Le Critère « citations correctes » est calculé automatiquement à partir des Citations et des Ancrages de référence.
 - Aucun score global n'est calculé.
 
@@ -455,13 +455,14 @@ Le Panel de juges comprend deux ou trois Juges de Familles de modèles différen
 - Le verdict du Panel sur un Critère est la majorité des Juges admissibles ; en cas d'égalité, le verdict est « non » et la Question est signalée.
 - Un rôle « juge de calibration » distinct, plus coûteux, peut être déclaré : il ne note que les Réponses doublement annotées (FR-38).
 - Au MVP, faute de clé Azure AI Foundry, le Panel associe des modèles locaux de familles différentes (via Ollama) et Claude Haiku 5.5, qui ne juge pas les Réponses de modèles Claude (§7.3).
+- Exception (v0.3.0, décision d'Anaël du 2026-10-26) : un Juge unique est admis s'il est calibré au-dessus du seuil sur chaque Critère (FR-38) ; la règle de famille s'applique à lui. `claude-opus-5-5` est Juge unique calibré des Expériences livrées dont le Generator n'est pas Claude.
 
 #### FR-38 : Calibration des juges
 
 Anaël peut calibrer le Panel à partir d'un fichier d'Annotations humaines.
 
 **Conséquences (testables) :**
-- La commande calcule le kappa juge-humain par Critère, le kappa entre deux annotateurs humains sur les Réponses doublement annotées, et le taux de verdicts instables sur au moins cinq passes par Juge.
+- La commande calcule le kappa juge-humain par Critère, le kappa entre deux annotateurs humains sur les Réponses doublement annotées, et le taux de verdicts instables sur au moins cinq passes par Juge. Les verdicts « sans objet » sont exclus du kappa et comptés à part (accords et désaccords).
 - Un Juge sous le seuil de kappa (défaut 0,6, configurable) est marqué exclu ; les Rapports suivants l'ignorent et le mentionnent.
 - Le fichier d'Annotations humaines est un fichier YAML par annotateur, référencé par identifiant de Réponse et Critère.
 

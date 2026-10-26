@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-17-2026 20:53
-last_updated: 10-23-2026 11:15
+last_updated: 10-26-2026 08:45
 project: wavelibrarian
 project_key: NOKEY
 tracking_system: file-system
@@ -112,20 +112,34 @@ development_status:
   7-8-lightrag: done
   epic-7-retrospective: done
 
-  # Lot v0.2.0 (rétro epics 1-7, items F, B, A, G, H, E, D, run du split dev, C) : ordre imposé
   epic-8: done
   8-1-licences-spdx-par-liste-blanche-exacte: done
   8-2-coûts-factices-hors-du-coût-réel: done
-  8-3-statut-completed-with-errors-de-wl-run: done
+  8-3-statut-completed_with_errors-de-wl-run: done
   8-4-think-par-modèle-au-catalogue: done
   8-5-alignements-de-spec-du-catalogue-et-du-registre-de-dépense: done
   8-6-énergie-cpu-mesurée-sous-windows: done
   8-7-modèle-cpu-de-sélection-pour-pageindex: done
-  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: done  # runs faits, 7 Critères sans verdict acceptés (arbitrage B1 du 2026-10-19), balayage non discriminant ; B3 (q-044) réalisé le 2026-10-26 (option b2) : voir fix-arbitrages-8-3-8-8.md AC 4
+  8-8-run-mini-cpu-sur-tout-le-split-dev-et-seuil-de-lazygraphrag: done
   8-9-paquet-d-annotation-et-kappas-par-juge-au-rapport: done
-  8-10-calibration-réelle-des-juges-ollama: done  # verifications-reelles-2026-10-26-v0.2.0.md
-  8-11-juges-claude-calibration: done  # Opus 5.5 seul Juge au-dessus du seuil ; Juge principal au lot suivant
+  8-10-calibration-réelle-des-juges-ollama: done
+  8-11-juges-claude-calibration: done
   epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-wl-calibrer-écrit-ses-verdicts-au-fil-de-l-eau: backlog
+  9-2-justification-courte-des-juges: backlog
+  9-3-modalité-sans-objet: backlog
+  9-4-paquet-et-page-d-annotation-dans-le-code: backlog
+  9-5-juge-unique-calibré-et-opus-juge-principal-des-expériences-l: backlog
+  9-6-commande-wl-rejuger: backlog
+  9-7-decider-de-lazygraphrag-et-cache-isolé-par-configuration: backlog
+  9-8-énergie-méthode-mixte-poste-judging-et-gpu-du-profil-gpu: backlog
+  9-9-calibration-réelle-d-opus-avec-le-prompt-du-lot: backlog
+  9-10-rejugement-réel-du-run-mini-cpu-par-opus: backlog
+  9-11-balayage-réel-de-relevance_threshold: backlog
+  9-12-double-annotation-partielle-humaine-hors-run: backlog
+  epic-9-retrospective: optional
 action_items:
   - id: "epic-7-retro-item-1-trancher-les-points-p1-à-p9-et-reporter"
     epic: 7
