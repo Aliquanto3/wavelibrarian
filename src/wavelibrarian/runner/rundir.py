@@ -74,11 +74,13 @@ def create_run_dir(
     *,
     freeze_sha256: str,
     inputs: dict[str, str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> Path:
     """Crée `runs/<run_id>/` avec `experiment.resolved.yaml`, `experiment.sha256` et
     `manifest.json` (`status: running`, empreinte du Gel `freeze_sha256` exigée par §5) ;
     refuse un dossier `runs/<run_id>/` existant non vide, une empreinte du Gel qui n'est pas un
-    sha256 hexadécimal, ou une Expérience dont un parser est encore `auto`."""
+    sha256 hexadécimal, ou une Expérience dont un parser est encore `auto`. `extra` : champs
+    ajoutés au manifeste (rejugement, story 9.6 : `rejudged_from`, `excluded_questions`)."""
     if not _RUN_ID.fullmatch(run_id):
         raise ValueError(f"run_id invalide : {run_id!r} (lettres, chiffres, - et _)")
     dossier = wl_home / "runs" / run_id
@@ -101,6 +103,7 @@ def create_run_dir(
             "experiment_sha256": empreinte,
             "freeze_sha256": freeze_sha256,
             **({} if inputs is None else {"inputs": inputs}),
+            **(extra or {}),
             "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
         },
     )

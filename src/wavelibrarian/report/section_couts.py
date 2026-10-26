@@ -78,6 +78,12 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
         "d'estimation) restent dans deux colonnes, jamais additionnées : leurs périmètres "
         "ne se comparent pas. Le CO2e suit la même séparation.",
     ]
+    source = ex.manifeste.get("rejudged_from")
+    if source:  # rejugement (story 9.6) : seule la phase de jugement a été refaite
+        lignes.append(
+            f"- **Rejugement** : coûts, énergie et latence de génération (tous les Postes hors "
+            f"`judging`) copiés de `{source}` ; le Poste `judging` est celui du rejugement."
+        )
     if any(x.architecture == "cag" for x in ex.experience.configurations):
         lignes.append(
             "- Le préchargement du contexte de `cag` est facturé à chaque Exécution au Poste "
@@ -155,12 +161,14 @@ def section_couts(ex: Execution, couts: Couts) -> list[str]:
         ]
         for x in couts.latences
     ]  # fmt: skip
+    source = ex.manifeste.get("rejudged_from")
+    copie = f" (copiés de `{source}`)" if source else ""
     return [
         "## Coûts, énergie et latence",
         "",
         *_parametres(ex, couts),
         "",
-        "### Coût total par Configuration",
+        f"### Coût total par Configuration{copie}",
         "",
         "Indexation + mise à jour + requête, possession comprise ; `judging` et `evalset` sont "
         "hors coût d'une Configuration.",
@@ -179,13 +187,13 @@ def section_couts(ex: Execution, couts: Couts) -> list[str]:
                 for k in cles
             ],
         ),
-        "### Coûts et énergie par Poste",
+        f"### Coûts et énergie par Poste{copie}",
         "",
         *_table(ENTETE_POSTES, [_ligne_poste(x) for x in cfg]),
         "### Postes hors Configuration (`judging`, `evalset`)",
         "",
         *(_table(ENTETE_POSTES, [_ligne_poste(x) for x in a_part]) if a_part else ["Aucun.", ""]),
-        "### Latence, débit et coût par requête",
+        f"### Latence, débit et coût par requête{copie}",
         "",
         "Latence des Réponses `ok` (somme des spans `query`, hors reprise) ; débit = Réponses ÷ "
         "durée murale de la phase query ; coût par requête = Poste `query` (appels des Réponses "

@@ -36,9 +36,16 @@ from wavelibrarian.report.paquet import exporter_paquet
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.calibrer import calibrer as calibration
 from wavelibrarian.runner.context import Context
-from wavelibrarian.runner.execute import load_questions, run_experiment, verifier_paliers
+from wavelibrarian.runner.execute import (
+    RunOutcome,
+    load_questions,
+    run_experiment,
+    verifier_paliers,
+)
+from wavelibrarian.runner.rejuger import rejuger as rejugement
+from wavelibrarian.runner.rejuger import verifier_reprise_rejugement, verifier_source
 from wavelibrarian.runner.resume import deja_terminee, verifier_reprise
-from wavelibrarian.runner.rundir import RUN_ID
+from wavelibrarian.runner.rundir import RUN_ID, resolve_parsers
 
 app = typer.Typer(
     name="wl",
@@ -157,6 +164,19 @@ def run(
         f"Exécution {issue.run_id} : {issue.status}, {issue.n_answers} Réponse(s) "
         f"dans {issue.run_dir}"
     )
+    _conclure(
+        issue,
+        wl_home,
+        resultat.resolved.max_error_rate,
+        f"wl run {experience} --reprendre {issue.run_id}",
+        tolerer_erreurs,
+    )
+
+
+def _conclure(
+    issue: RunOutcome, wl_home: Path, max_error_rate: float, reprise: str, tolerer_erreurs: bool
+) -> None:
+    """Rapport puis code de sortie d'une Exécution, communs à `wl run` et `wl rejuger`."""
     # Le Rapport se génère aussi sur les résultats partiels d'un arrêt au plafond (AD-1 : c'est
     # la CLI qui enchaîne le runner puis `report/`, le runner n'importe jamais `report`).
     rapport_ok = _ecrire_rapport(issue.run_dir, wl_home)
@@ -166,11 +186,8 @@ def run(
     if issue.status == "completed_with_errors":
         typer.echo("Exécution terminée avec erreurs (completed_with_errors) :", err=True)
         for cause in issue.causes:
-            typer.echo(
-                f"  - {decrire_cause(cause, resultat.resolved.max_error_rate).replace('`', '')}",
-                err=True,
-            )
-        typer.echo(f"Reprise : wl run {experience} --reprendre {issue.run_id}", err=True)
+            typer.echo(f"  - {decrire_cause(cause, max_error_rate).replace('`', '')}", err=True)
+        typer.echo(f"Reprise : {reprise}", err=True)
     if issue.all_failed:  # toujours `completed_with_errors` : code 1 même avec --tolerer-erreurs
         typer.echo("Aucune Réponse valide : toutes les Questions sont en erreur.", err=True)
     if not rapport_ok:
@@ -179,6 +196,96 @@ def run(
         raise typer.Exit(1)
     if issue.status == "completed_with_errors" and not tolerer_erreurs:
         raise typer.Exit(1)
+
+
+@app.command("rejuger")
+def rejuger(
+    run_id: Annotated[str, typer.Argument(help="run_id de l'Exécution terminée à rejuger.")],
+    experience: Annotated[
+        Path,
+        typer.Argument(
+            help="Expérience de la source dont seuls `judges`, `budget` et `max_error_rate` "
+            "changent."
+        ),
+    ],
+    reprendre: Annotated[
+        str | None,
+        typer.Option(
+            "--reprendre",
+            help="run_id d'un rejugement arrêté à reprendre : seuls les Critères sans verdict "
+            "sont redemandés.",
+        ),
+    ] = None,
+    tolerer_erreurs: Annotated[
+        bool,
+        typer.Option(
+            "--tolerer-erreurs",
+            help="Sort en code 0 pour un rejugement `completed_with_errors`, sauf `all_failed`.",
+        ),
+    ] = False,
+) -> None:
+    """Rejuge les Réponses d'une Exécution terminée avec le Panel d'une Expérience, sans les
+    regénérer (story 9.6) : nouvelle Exécution `rejudged_from: <run_id>`, puis Rapport.
+
+    Codes de sortie : ceux de `wl run` ; 2 si l'Expérience diffère de la source ailleurs que
+    dans `judges`, `budget` ou `max_error_rate`, ou si la source n'est pas terminée.
+    """
+    try:
+        resultat = validate_file(experience)
+    except ValidationFailed as echec:
+        typer.echo(f"Expérience invalide : {len(echec.errors)} erreur(s).", err=True)
+        for e in echec.errors:
+            typer.echo(f"  - {e.path} : {e.message}", err=True)
+        raise typer.Exit(2) from echec
+    typer.echo("Validation réussie.")
+    wl_home = Path(os.environ.get("WL_HOME") or ".wl")
+    resolue = resultat.resolved
+    termine = False
+    try:  # Gel courant vérifié, Expérience comparée à la source, avant tout appel
+        questions = load_questions(resolue)
+        avec_parsers = resolve_parsers(resolue, declare(Path(resolue.corpus)))
+        verifier_source(avec_parsers, wl_home, run_id)
+        if reprendre is not None:
+            verifier_reprise_rejugement(
+                resolue, wl_home, run_id, reprendre, questions.freeze_sha256
+            )
+            termine = deja_terminee(wl_home, reprendre)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    if reprendre is not None and termine:
+        typer.echo(f"Exécution {reprendre} déjà terminée : rien à reprendre.")
+        raise typer.Exit(0)
+    modeles = set(resolue.judges.pool or ())  # aucune génération : seuls les Juges sont appelés
+    verdict = preflight(modeles, resultat.catalog, resolue.profile_settings)
+    if not verdict.ok:
+        typer.echo(
+            f"Préflight échoué : {len(verdict.errors)} dépendance(s) manquante(s).", err=True
+        )
+        for e in verdict.errors:
+            typer.echo(f"  - {e}", err=True)
+        raise typer.Exit(4)
+    typer.echo("Préflight réussi.")
+    try:
+        fait = rejugement(resolue, questions, wl_home=wl_home, source=run_id, reprendre=reprendre)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except WlError as erreur:  # dont « Exécution <run_id> en cours » (run.lock)
+        typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    if fait.excluded_questions:
+        typer.echo(
+            f"Questions de {run_id} hors du split {resolue.split} courant, écartées : "
+            + ", ".join(fait.excluded_questions)
+        )
+    issue = fait.outcome
+    typer.echo(
+        f"Exécution {issue.run_id} (rejugement de {run_id}) : {issue.status}, "
+        f"{issue.n_answers} Réponse(s) dans {issue.run_dir}"
+    )
+    reprise = f"wl rejuger {run_id} {experience} --reprendre {issue.run_id}"
+    _conclure(issue, wl_home, resolue.max_error_rate, reprise, tolerer_erreurs)
 
 
 def _ecrire_rapport(run_dir: Path, wl_home: Path) -> bool:

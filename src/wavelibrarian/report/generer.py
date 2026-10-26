@@ -167,6 +167,27 @@ def _bandeau(ex: Execution) -> list[str]:
     return [f"> **Exécution non terminée (statut `{statut}`) : résultats partiels.**", ""]
 
 
+def _rejugement(m: dict[str, Any]) -> list[str]:
+    """Rejugement (story 9.6) : la source et les Questions écartées hors du split courant."""
+    source = m.get("rejudged_from")
+    if not source:
+        return []
+    ecartees = m.get("excluded_questions") or []
+    lignes = [
+        f"Rejugement de l'Exécution `{source}` : Réponses, Passages et mesures de génération "
+        "copiés de la source ; seuls les Critères automatiques et le Panel sont recalculés.",
+        "",
+    ]
+    if ecartees:
+        lignes += [
+            "Questions de la source hors du split courant, écartées : "
+            + ", ".join(f"`{q}`" for q in ecartees)
+            + ".",
+            "",
+        ]
+    return lignes
+
+
 def _entete(ex: Execution) -> list[str]:
     e = ex.experience
     m = ex.manifeste
@@ -178,6 +199,7 @@ def _entete(ex: Execution) -> list[str]:
         *_bandeau(ex),
         f"Exécution `{run_id}`, statut `{m.get('status', 'inconnu')}`.",
         "",
+        *_rejugement(m),
         "## Expérience",
         "",
         "- Expérience résolue : [experiment.resolved.yaml](../experiment.resolved.yaml), "
