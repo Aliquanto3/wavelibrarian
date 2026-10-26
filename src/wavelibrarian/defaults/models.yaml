@@ -1,5 +1,5 @@
 # Catalogue de modèles (contracts.md §4.2). Un modèle d'API sans `pricing` est refusé.
-catalog_date: 2026-10-17
+catalog_date: 2026-10-26
 models:
   - id: claude-haiku-5-5
     provider: anthropic
@@ -22,6 +22,26 @@ models:
       tiers: [{above_prompt_tokens: 100000, multiplier: "5"}]
       # Le palier s'applique à toute la requête (tous les postes, cache compris) dès que
       # le prompt (entrée + lecture + écriture de cache) dépasse 100 000 tokens.
+  - id: claude-opus-5-5
+    provider: anthropic
+    family: claude
+    kind: api
+    modality: llm
+    context_window: 1000000            # page Modèles Anthropic, relevée le 2026-10-26
+    max_output_tokens: 128000
+    tokenizer: reference
+    token_factor: "1.5"                # SUPPOSÉ, non relevé : repris de Haiku 5.5 (majorant prudent)
+    prompt_cache: true
+    accepts_temperature: false         # SUPPOSÉ, non vérifié en réel : les modèles 5.x la refusent (cf. Haiku 5.5)
+    min_cacheable_tokens: 4096         # SUPPOSÉ, non relevé : seuil des Opus récents ; sans effet sur les Juges
+    pricing:
+      date: 2026-10-26                 # platform.claude.com/docs/en/about-claude/pricing
+      currency: USD
+      per_mtok: {input: "4", output: "20", cache_read: "0.20",
+                 cache_write: "5", cache_write_1h: "8"}
+      batch_per_mtok: {input: "2", output: "10"}
+      # Aucun palier : contexte de 1M tokens au tarif standard (hors Haiku 5.5). Le thinking
+      # adaptatif, toujours actif, est facturé en sortie (20 $/Mtok) et compte dans `max_tokens`.
   - {id: "minicpm5:1b-q4_k_m", provider: ollama, family: minicpm, kind: local, modality: llm,
      context_window: 32768, max_output_tokens: 2048, tokenizer: reference, prompt_cache: false}
   - {id: "minicpm5:2b-q4_k_m", provider: ollama, family: minicpm, kind: local, modality: llm,

@@ -1,0 +1,38 @@
+# Calibration des Juges Claude (story 8.11) : `claude-haiku-5-5` et `claude-opus-5-5` notent les
+# 92 lignes Réponse × Critère annotées par Anaël sur l'Exécution de mini-cpu, en 2 passes, via
+# `wl calibrer` (qui n'utilise de l'Expérience que le Corpus, les Questions, les Configurations,
+# le Panel et le budget). Generator minicpm, Juges claude : Familles distinctes (AD-14). Seule
+# l'API Anthropic est sollicitée, plafond de 10,00 USD ; ne pas lancer `wl run` sur ce fichier.
+experiment_id: calibration-claude
+seed: 42
+profile: cpu
+corpus: ../corpora/minicorpus/corpus.yaml
+questions: ../corpora/minicorpus/questions.yaml
+split: dev
+conditions: [standard]
+judges:
+  pool: ["claude-haiku-5-5", "claude-opus-5-5"]
+  panel_size: 2
+  calibration_passes: 2
+budget:
+  per_run: {anthropic: {amount: "10.00", currency: USD}}
+configurations:
+  - id: bm25
+    architecture: bm25_only
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: rag-naif
+    architecture: naive_rag
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: raptor
+    architecture: raptor
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: pageindex
+    architecture: pageindex
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      select_model: "granite4.2:3b"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
