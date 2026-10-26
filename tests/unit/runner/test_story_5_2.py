@@ -181,7 +181,9 @@ def test_calibration_json_kappa_instabilite_items_et_inter_annotateurs(
     assert b["excluded"] is False and c["excluded"] is True
     for f in b["criteria"].values():
         assert f["instability"] == 0.0 and f["n_items"] > 0
-    assert b["criteria"]["completeness"]["n_items"] == 19 + 6  # chaque annotateur compte
+    assert (
+        b["criteria"]["completeness"]["n_items"] == 18 + 6
+    )  # 18 Questions dev (Gel b2), chaque annotateur compte
     assert b["criteria"]["completeness"]["kappa"] < 1.0  # bruno contredit b sur completeness
     assert b["criteria"]["faithfulness"]["kappa"] is None  # humains tous `yes` : indéfini
     assert c["criteria"]["completeness"]["instability"] == 1.0  # la passe 2 s'inverse

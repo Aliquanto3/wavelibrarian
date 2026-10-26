@@ -303,3 +303,10 @@ def test_regel_qui_ferait_basculer_une_question_a_scenario_target_refuse_sans_fo
         freeze.geler(doc, 0.4, 42)
     regele = freeze.geler(doc, 0.4, 42, forcer=True)
     assert _splits(regele)[en_dev["id"]] == "test"
+
+
+def test_question_rejected_a_scenario_target_garde_un_split_vide() -> None:
+    qs = _cinquante()
+    qs[0].update(status="rejected", scenario_target=dict(_CIBLE))
+    gele = freeze.geler(_doc(qs), 0.4, 42)
+    assert _splits(gele)["q-000"] is None

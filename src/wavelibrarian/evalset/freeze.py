@@ -59,7 +59,9 @@ def geler(
     Le tirage stratifié porte sur toutes les Questions participantes ; toute Question dont
     `scenario_target` est renseigné est ensuite forcée en `test` (son Ancrage n'existe pas en phase
     `base`, la seule jouée par les Expériences dev). Seules ces Questions peuvent changer de partie
-    par rapport au tirage seul.
+    par rapport au tirage seul. La part dev effective d'un Type qui en contient passe donc sous
+    `dev_ratio` (Mini-corpus : factual 7 sur 20, soit 35 % pour 40 %). Une Question `rejected`
+    garde `split` vide, même avec `scenario_target`.
 
     Refus (`ConfigError`) tant qu'il reste des Questions `generated`. Les Questions `rejected`
     ne participent pas : leur `split` reste vide. Un nouveau Gel sur le même contenu avec la même

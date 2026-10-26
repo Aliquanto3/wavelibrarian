@@ -3,7 +3,7 @@
 import json
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 import yaml
@@ -72,8 +72,12 @@ def _apres_scenario() -> set[str]:
     return {q.id for q in _dev() if q.scenario_target is not None}
 
 
+def _partie(split: Literal["dev", "test"]) -> list[Question]:
+    return sorted(select_questions(io.load(RACINE / "questions.yaml"), split), key=lambda q: q.id)
+
+
 def _dev() -> list[Question]:
-    return sorted(select_questions(io.load(RACINE / "questions.yaml"), "dev"), key=lambda q: q.id)
+    return _partie("dev")
 
 
 @pytest.fixture
@@ -115,16 +119,20 @@ def espion(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
 def test_contexte_parfait_passages_de_reference_et_aucune_reference_a_l_architecture(
     tmp_path: Path, wl_home: Path, espion: dict[str, list[Any]]
 ) -> None:
-    dossier = _wl_run(_experience(tmp_path, conditions=["standard", "perfect_context"]), wl_home)
+    # Partie `test` : depuis le Gel b2, les Questions de Scénario (Ancrage créé par le Scénario)
+    # n'y sont plus qu'en test ; elles portent le chemin `inapplicable` vérifié ici.
+    exp = _experience(tmp_path, split="test", conditions=["standard", "perfect_context"])
+    dossier = _wl_run(exp, wl_home)
     assert dossier is not None
     reponses = _jsonl(dossier / "answers.jsonl")
-    dev = _dev()
+    dev = _partie("test")
     ids = [q.id for q in dev]
     parfait = [a for a in reponses if a["condition"] == "perfect_context"]
     standard = [a for a in reponses if a["condition"] == "standard"]
     assert len(parfait) == len(standard) == 3 * len(dev)
-    apres = _apres_scenario()
-    assert apres  # le Jeu de dev contient au moins une Question de Scénario
+    presents = set(_documents())
+    apres = {q.id for q in dev if any(r.doc not in presents for r in q.reference_anchors)}
+    assert apres  # au moins une Question dont l'Ancrage est un Document créé par le Scénario
     # Ancrage créé par le Scénario : absent du Corpus de base, non-applicabilité structurelle.
     for a in parfait:
         assert a["retrieval_method"] == "provided"
@@ -289,7 +297,10 @@ def test_paliers_all_sous_corpus_index_et_lignes_distincts(tmp_path: Path, wl_ho
 def test_required_paths_sont_les_documents_des_ancrages_de_reference() -> None:
     dev = _dev()
     attendus = {a.doc for q in dev for a in q.reference_anchors}
-    assert "chronique-1415.md" in attendus  # créé par le Scénario, absent du Corpus de base
+    assert "chronique-1415.md" not in attendus  # Gel b2 : Questions de Scénario en test
+    test = _partie("test")
+    assert "chronique-1415.md" in {a.doc for q in test for a in q.reference_anchors}
+    assert "chronique-1415.md" not in chemins_requis(test, _documents())  # absent du Corpus
     requis = chemins_requis(dev, _documents())
     assert set(requis) == attendus & set(_documents())
     assert list(requis) == sorted(requis) and len(requis) == 12

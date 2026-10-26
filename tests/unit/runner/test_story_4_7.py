@@ -23,7 +23,7 @@ BASELINES = [
     {"id": "bm25", "architecture": "bm25_only"},
 ]
 LIEES_TEST = {"q-045", "q-046", "q-047"}  # Questions de Scénario du split `test`
-N_TEST = 28  # Questions du split `test`, toutes reposées en `after_update`
+N_TEST = 29  # Questions du split `test` (q-044 comprise, Gel b2), reposées en `after_update`
 
 
 def _experience(tmp_path: Path, numero: int = 1, **champs: Any) -> Path:

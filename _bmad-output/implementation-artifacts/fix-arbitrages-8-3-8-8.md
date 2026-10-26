@@ -43,6 +43,8 @@ Source : `RUN-STATUS-v0.2.0.md`, journal 2026-10-19. Exigences : FR-1, FR-40, FR
 - Tests : `tests/unit/evalset/test_freeze.py` (3 tests b2), `test_minicorpus_questions.py` réaligné.
 - Mention (i) : q-044 a déjà été jouée en dev (run 8.8 `20261018-115941-a2a512`) et annotée par Anaël : légère contamination de la partie test, sans optimisation faite sur elle (aucune réponse possible en phase `base`).
 - Mention (ii) : les runs dev postérieurs ont 18 Questions contre 19 pour ceux de la 8.8 ; comparer sur les 18 Questions communes.
+- Limite (iii) : `wl run --reprendre` d'une Exécution faite avec l'ancien Gel (ex. `20261018-115941-a2a512`) est refusé (`runner/resume.py`, « empreinte différente ») ; relancer un run neuf. Le Cache LLM ne contient pas l'empreinte du Gel : les appels des 18 Questions communes y restent servis.
+- Limite (iv) : `wl calibrer` résout l'Expérience depuis son YAML et relit le Jeu **courant** (`load_questions`, filtré sur `split: dev`). Sur le run `20261018-115941-a2a512`, les 4 annotations de q-044 (rag-naif et raptor, completeness et faithfulness) sont alors ignorées avec un avertissement « Réponse … ignorée » : rien n'échoue, mais la calibration porte sur 88 verdicts au lieu de 92 et ses kappa peuvent changer. Cohérent avec AD-15 (q-044 est en test), mais une calibration lancée avant la fusion (8.10) et une lancée après (8.11) ne portent pas sur le même ensemble : fusionner après la 8.11, ou relancer la 8.10 après la fusion. Le Rapport (`report/lecture.py::lire_jeu`) lit le Jeu sans filtre de partie : inchangé.
 
 ## AC 5 : 8.8 passe en `done`
 
@@ -70,3 +72,15 @@ Revue Opus du 2026-10-23, branche rebasée sur `origin/main` (e1b50aa) avant jug
 - low · second avis · corrigé · `sprint-status.yaml` : commentaire « B3 (q-044) reporté » ajouté sur 8-8 (décision de l'orchestrateur : 8-8 reste `done`).
 - low · second avis · corrigé · `contracts.md` (ligne `max_error_rate` et §5 `manifest.json`) : relevable à la reprise, consigné dans `resumptions[i]`.
 - Complexité : 0 constat (aucune structure qui grossit n'est parcourue par événement dans le diff ; `resumptions[-1]` est en O(1)).
+
+### Passe 2 (2026-10-26, SHA revu 9f3c1df)
+
+Revue Opus du correctif b2 (`fix/gel-scenario-target-q044`), base `main` 56b7855 (à jour, pas de rebase).
+
+- Important · medium · reviewer · reporté (décision d'ordre de fusion pour Anaël / l'orchestrateur) · `wl calibrer` relit le Jeu courant filtré sur dev : après fusion, les 4 annotations de q-044 sur `20261018-115941-a2a512` sont ignorées (vérifié : `load_questions` sur `experiments/mini-cpu.yaml` rend 18 Questions sans q-044, contre 19 sur `main`). Pas d'échec ; consigné en limite (iv) d'AC 4. Le Rapport n'est pas touché (`lire_jeu` sans filtre de partie, vérifié).
+- Important · medium · reviewer · corrigé · le re-Gel cassait 7 tests hors `tests/unit/evalset` que le correctif n'avait pas lancés : `test_story_5_2` (n_items 19 + 6 → 18 + 6), `test_story_4_7` (`N_TEST` 28 → 29, 4 tests), `test_story_4_6` (2 tests supposaient une Question à Ancrage créé par le Scénario en dev : le chemin `inapplicable` du contexte parfait est désormais vérifié sur la partie test, où q-044 a son Document `chronique-1415.md` absent du Corpus de base ; `required_paths` vérifie que dev n'en a plus).
+- Nit · low · second avis · corrigé · test `test_question_rejected_a_scenario_target_garde_un_split_vide`.
+- Nit · low · second avis · corrigé · docstring de `geler` : part dev effective sous `dev_ratio` pour un Type à `scenario_target` (factual 7 sur 20).
+- Nit · low · second avis · corrigé · limite `--reprendre` consignée (limite (iii) d'AC 4).
+- Nit · low · second avis · rejeté · « 19 Questions dev » dans `epics.md` et `sprint-change-proposal-2026-10-18.md` : documents historiques, laissés tels quels.
+- Complexité : 0 constat (un test d'appartenance O(1) de plus par Question).
