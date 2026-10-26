@@ -1,10 +1,11 @@
 # Expérience réelle locale (story 4.14) : profil `cpu` (Ollama sans couche GPU, embedder
-# multilingual-e5-small sur CPU), sans aucun appel d'API. Le profil `cpu` met
+# multilingual-e5-small sur CPU). Depuis la v0.3.0 (story 9.5), le seul appel d'API est celui du
+# Juge `claude-opus-5-5` (plafond Anthropic de 3,00 USD). Le profil `cpu` met
 # `claude-haiku-5-5` en tête de `generator_models` : chaque modèle est donc nommé ici.
 # Prérequis : `uv sync --extra local` et `wl installer --profil cpu`.
 # Story 8.7 (option c, décision d'Anaël) : la sélection PageIndex utilise granite4.2:3b, car
 # minicpm5:1b dégénère jusqu'à select_max_tokens et un repeat_penalty au profil dégradait le
-# Generator de PageIndex. granite4.2:3b est de la Famille d'un Juge (AD-14) : le Panel ne change pas.
+# Generator de PageIndex. select_model n'est pas un answer_producer (AD-14) : le Panel ne change pas.
 experiment_id: mini-cpu
 seed: 42
 profile: cpu
@@ -14,10 +15,13 @@ split: dev
 # Story 8.8 : sans max_questions, tout le split dev (18 Questions depuis le Gel du 2026-10-26 ; 19 à la 8.8).
 conditions: [standard]
 judges:
-  pool: ["granite4.2:3b", "qwen3.5:4b"]  # Familles distinctes du Generator minicpm (AD-14)
-  panel_size: 2
+  # Story 9.5 : Juge unique calibré (AD-14 amendé, décision d'Anaël du 2026-10-26) ; Famille claude,
+  # distincte du Generator minicpm. Calibration de la story 9.9 : kappas 1,00 / 0,72 / 0,76.
+  pool: [claude-opus-5-5]
+  panel_size: 1
+  excluded_from: ../corpora/minicorpus/calibration/opus.json
 budget:
-  per_run: {anthropic: {amount: "0.00", currency: USD}}
+  per_run: {anthropic: {amount: "3.00", currency: USD}}
 configurations:
   - id: bm25
     architecture: bm25_only

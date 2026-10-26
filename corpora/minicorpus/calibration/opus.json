@@ -1,0 +1,69 @@
+{
+  "run_id": "20261018-115941-a2a512",
+  "experiment_id": "calibration-opus",
+  "created_at": "2026-10-26T09:35:24+00:00",
+  "kappa_threshold": 0.6,
+  "passes": 5,
+  "annotators": [
+    "anael"
+  ],
+  "judges": {
+    "claude-opus-5-5": {
+      "excluded": false,
+      "reason": null,
+      "warnings": [],
+      "criteria": {
+        "correctness": {
+          "kappa": 1.0,
+          "instability": 0.0,
+          "n_items": 12,
+          "na_agreements": 0,
+          "na_disagreements": 0
+        },
+        "completeness": {
+          "kappa": 0.7246376811594203,
+          "instability": 0.0,
+          "n_items": 38,
+          "na_agreements": 0,
+          "na_disagreements": 0
+        },
+        "faithfulness": {
+          "kappa": 0.7640449438202248,
+          "instability": 0.02631578947368421,
+          "n_items": 28,
+          "na_agreements": 5,
+          "na_disagreements": 5
+        }
+      }
+    },
+    "claude-haiku-5-5": {
+      "excluded": false,
+      "reason": null,
+      "warnings": [],
+      "criteria": {
+        "correctness": {
+          "kappa": 1.0,
+          "instability": 0.0,
+          "n_items": 9,
+          "na_agreements": 0,
+          "na_disagreements": 0
+        },
+        "completeness": {
+          "kappa": 0.6118721461187214,
+          "instability": 0.13157894736842105,
+          "n_items": 34,
+          "na_agreements": 0,
+          "na_disagreements": 0
+        },
+        "faithfulness": {
+          "kappa": 0.6428571428571428,
+          "instability": 0.3157894736842105,
+          "n_items": 25,
+          "na_agreements": 5,
+          "na_disagreements": 4
+        }
+      }
+    }
+  },
+  "inter_annotator": []
+}

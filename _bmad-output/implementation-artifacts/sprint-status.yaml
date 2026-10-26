@@ -131,12 +131,12 @@ development_status:
   9-2-justification-courte-des-juges: done
   9-3-modalité-sans-objet: done
   9-4-paquet-et-page-d-annotation-dans-le-code: review
-  9-5-juge-unique-calibré-et-opus-juge-principal-des-expériences-l: review
+  9-5-juge-unique-calibré-et-opus-juge-principal-des-expériences-l: done
   9-6-commande-wl-rejuger: done
   9-7-decider-de-lazygraphrag-et-cache-isolé-par-configuration: done
   9-8-énergie-méthode-mixte-poste-judging-et-gpu-du-profil-gpu: done
-  9-9-calibration-réelle-d-opus-avec-le-prompt-du-lot: in-progress
-  9-10-rejugement-réel-du-run-mini-cpu-par-opus: backlog
+  9-9-calibration-réelle-d-opus-avec-le-prompt-du-lot: done
+  9-10-rejugement-réel-du-run-mini-cpu-par-opus: in-progress
   9-11-balayage-réel-de-relevance_threshold: backlog
   9-12-double-annotation-partielle-humaine-hors-run: backlog
   epic-9-retrospective: optional

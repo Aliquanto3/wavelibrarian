@@ -30,10 +30,18 @@ def test_experience_livree_valide_sans_reseau(nom: str, wl_home: Path) -> None:
         assert res.resolved.max_questions is not None
 
 
-def test_mini_cpu_profil_cpu_sans_api(wl_home: Path) -> None:
+def test_mini_cpu_profil_cpu_juge_unique_opus(wl_home: Path) -> None:
+    # Story 9.5 (bascule après la calibration réelle 9.9) : génération locale, Juge unique calibré
+    # `claude-opus-5-5`, seul appel d'API, sous un plafond Anthropic de 3,00 USD.
     res = _valider("mini-cpu", wl_home)
-    assert res.resolved.profile == "cpu"
-    assert _fournisseurs(res) <= {"ollama", "sentence_transformers"}
+    r = res.resolved
+    assert r.profile == "cpu"
+    assert _fournisseurs(res) <= {"ollama", "sentence_transformers", "anthropic"}
+    assert tuple(r.judges.pool or ()) == ("claude-opus-5-5",)
+    assert r.judges.panel_size == 1
+    plafond = r.budget.per_run["anthropic"]
+    assert (plafond.amount, plafond.currency) == (3, "USD")
+    assert {p for c in r.configurations for p in c.answer_producers} == {"minicpm5:1b-q4_k_m"}
 
 
 def test_mini_real_haiku_api_seule(wl_home: Path) -> None:

@@ -26,8 +26,16 @@ def test_mini_cpu_selectionne_avec_granite() -> None:
     assert _pageindex(brut)["params"]["select_model"] == "granite4.2:3b"
 
 
-def test_select_model_de_la_famille_d_un_juge_ne_change_pas_le_panel() -> None:
-    res = validate_file(MINI_CPU)
+def test_select_model_de_la_famille_d_un_juge_ne_change_pas_le_panel(tmp_path: Path) -> None:
+    # Depuis la story 9.5, mini-cpu est jugée par Opus seul : on rétablit ici le réservoir local de
+    # la 8.7 (granite4.2:3b, qwen3.5:4b) sur une copie, pour garder la règle AD-14 sous test.
+    brut = yaml.safe_load(MINI_CPU.read_text(encoding="utf-8"))
+    brut["judges"] = {"pool": ["granite4.2:3b", "qwen3.5:4b"], "panel_size": 2}
+    for cle in ("corpus", "questions"):
+        brut[cle] = str((MINI_CPU.parent / brut[cle]).resolve())
+    copie = tmp_path / "mini-cpu.yaml"
+    copie.write_text(yaml.safe_dump(brut, allow_unicode=True), encoding="utf-8")
+    res = validate_file(copie)
 
     def conf(exp):  # type: ignore[no-untyped-def]
         return next(c for c in exp.configurations if c.id == "pageindex")

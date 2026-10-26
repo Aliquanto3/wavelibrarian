@@ -23,7 +23,8 @@ Au plus 2 stories en développement à la fois.
 
 | Étape | Dépense |
 | --- | --- |
-| Total | 0 $ / 10 $ |
+| 9.9 calibration d'Opus (354 appels) | 3,32 $ |
+| Total | 3,32 $ / 10 $ |
 
 ## Sprint 1 — Epic 9 (v0.3.0)
 
@@ -103,3 +104,11 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 10:11 · 9.5 · review · 2 low corrigés (exclu en tête sauté, mention par Configuration), 3 Critères toujours exigés (validation sans Questions), contrats §4.4 · 251ff1b
 - 2026-10-26 10:19 · 9.3 · fusion · suite complète 1348 passed (7 min 55), fast-forward · 2ed872c
 - 2026-10-26 10:19 · 9.9 · décision · calibration-opus.yaml : Opus + Haiku (wl calibrer exige 2 Juges ; Haiku ~0,05 $), 5 passes, plafond 5 $ au lieu de 4 $ (A2) d'après le coût mesuré en 8.11 · 
+- 2026-10-26 10:19 · 9.9 · dev · calibration réelle lancée (Opus + Haiku, 5 passes, run 20261018-115941-a2a512, sortie calibration-opus.json) · 
+- 2026-10-26 10:25 · 9.4 · review · 3 Important corrigés (table de Passages : -56,2 % sur le run réel, cible atteinte ; verdict vidé signalé ; importer qui reportait sur la mauvaise ligne) · 4f3e029
+- 2026-10-26 10:25 · 9.4 · review · passe 2 lancée (format du paquet changé) · 
+- 2026-10-26 10:28 · 9.5 · fusion · suite complète 1368 passed (8 min 27), fast-forward ; bascule YAML après 9.9 · e3a2264
+- 2026-10-26 10:32 · 9.4 · review · passe 2 : aucun Important, 2 Nit corrigés · f9327f8
+- 2026-10-26 10:37 · 9.9 · décision · relancée avec uv run --extra energy (1er lancement arrêté au démarrage, sans appel : extra energy absent) · 
+- 2026-10-26 10:37 · 9.9 · dev · fini : Opus 1,00 / 0,72 / 0,76 au-dessus du seuil ; 354 appels ; 3,32 $ · 
+- 2026-10-26 10:37 · 9.5 · décision · bascule appliquée : mini-cpu et lazy-seuil-cpu en Juge unique Opus (opus.json), tests e2e et 8.7 réalignés · 
