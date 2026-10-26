@@ -11,7 +11,7 @@ profile: cpu
 corpus: ../corpora/minicorpus/corpus.yaml
 questions: ../corpora/minicorpus/questions.yaml
 split: dev
-# Story 8.8 : sans max_questions, tout le split dev (19 Questions).
+# Story 8.8 : sans max_questions, tout le split dev (18 Questions depuis le Gel du 2026-10-26 ; 19 à la 8.8).
 conditions: [standard]
 judges:
   pool: ["granite4.2:3b", "qwen3.5:4b"]  # Familles distinctes du Generator minicpm (AD-14)

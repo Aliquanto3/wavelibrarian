@@ -1,6 +1,8 @@
 """Gel du Jeu d'évaluation et séparation dev / test (FR-13, AD-15, AD-20, contracts §4.5).
 
-`geler` attribue `split` (stratifié par `type`, déterministe par la graine) et écrit `freeze`.
+`geler` attribue `split` (stratifié par `type`, déterministe par la graine) et écrit `freeze` ;
+une Question à `scenario_target` est ensuite forcée en `test` (les Expériences dev ne jouent que la
+phase `base`, où son Ancrage n'existe pas).
 `verify_frozen` (appelée par le runner) refuse un jeu non gelé ou modifié. `select_questions`
 ne rend que les Questions `validated` ou `corrected` de la partie demandée.
 Rien n'est écrit ici : l'écriture reste à `io.save`.
@@ -54,6 +56,11 @@ def geler(
 ) -> QuestionsFile:
     """Répartit les Questions `validated` / `corrected` en dev et test, puis écrit `freeze`.
 
+    Le tirage stratifié porte sur toutes les Questions participantes ; toute Question dont
+    `scenario_target` est renseigné est ensuite forcée en `test` (son Ancrage n'existe pas en phase
+    `base`, la seule jouée par les Expériences dev). Seules ces Questions peuvent changer de partie
+    par rapport au tirage seul.
+
     Refus (`ConfigError`) tant qu'il reste des Questions `generated`. Les Questions `rejected`
     ne participent pas : leur `split` reste vide. Un nouveau Gel sur le même contenu avec la même
     graine redonne la même répartition, quel que soit l'ordre des Questions. Re-geler un jeu déjà
@@ -82,7 +89,9 @@ def geler(
     for type_, ids in par_type.items():
         dev |= _partager(ids, type_, dev_ratio, seed)
     questions = tuple(
-        q.model_copy(update={"split": ("dev" if q.id in dev else "test")})
+        q.model_copy(
+            update={"split": ("dev" if q.id in dev and q.scenario_target is None else "test")}
+        )
         if q.status in PARTICIPANTES
         else q.model_copy(update={"split": None})
         for q in doc.questions

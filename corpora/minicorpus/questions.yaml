@@ -1,8 +1,8 @@
 corpus_id: minicorpus
 target_count: 40
 freeze:
-  sha256: 76fa20b7cecd248d543ee1bb2765fde73b34a5e05b4229139d7a07854c1bcc07
-  at: '2026-10-17T23:44:19Z'
+  sha256: 39c22fdf6583229a3758dbb3830c40c5ffed48737fdb0e4e1e21447b7daa24e2
+  at: '2026-10-26T04:55:51Z'
   seed: 42
   dev_ratio: 0.4
 questions:
@@ -980,7 +980,7 @@ questions:
     - Chronique de l'an 1415
     - La Compagnie
   status: validated
-  split: dev
+  split: test
   contaminated_by: []
   history: []
   origin:

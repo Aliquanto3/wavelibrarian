@@ -29,12 +29,20 @@ Source : `RUN-STATUS-v0.2.0.md`, journal 2026-10-19. Exigences : FR-1, FR-40, FR
 - Sans modification de l'Expérience, le comportement est inchangé (même valeur stockée que relevée).
 - Tests : `tests/unit/runner/test_fix_arbitrages_8_3_8_8.py::test_max_error_rate_relevable_a_la_reprise` (erreur déterministe sur la 2e Question distincte : rate 0,5 > 0,2 par défaut → `completed_with_errors`, code 1 ; `max_error_rate: 0.6` à la reprise → `completed`, code 0, `resumptions[0]["max_error_rate"] == 0.6`) et `test_max_error_rate_non_releve_refuse_un_autre_ecart` (un autre écart, ex. `seed`, reste refusé en code 2).
 
-## AC 4 : q-044 en phase `update` — bloqué
+## AC 4 : q-044 en phase `update` — bloqué, puis réalisé le 2026-10-26 (option b2)
 
 - Constat : q-044 a déjà `scenario_target: {operation: op-1, state: after}` (comme q-045, q-046, q-047, les 3 autres Questions « phase update » du Mini-corpus, cf. story 3.7). Ce qui diffère : q-044 est en `split: dev`, les 3 autres en `split: test`. C'est cet écart qui cause l'Ancrage non résolu observé au run 8.8 (`experiments/mini-cpu.yaml` a `split: dev` et ne déclare aucun `scenario:` ; q-044 est donc posée en phase `base` seule, sur un Corpus qui n'a pas encore le Document `chronique-1415.md` ajouté par `op-1`).
 - Blocage : `split` n'est pas un champ libre du Jeu gelé, il est **recalculé en entier** par `wl questions geler` à partir de `(type, dev_ratio, graine)` seul (`evalset/freeze.py::geler` → `_partager`), sans tenir compte de `scenario_target`. Un re-Gel avec la même graine (42) et le même ratio (0,4) — y compris avec `--forcer` — redonne la même répartition pour toutes les Questions `factual`, donc `dev` pour q-044, qu'on ait ou non édité son `split` à la main au préalable (vérifié : `freeze.geler(doc, 0.4, 42, forcer=True)` redonne `q-044.split == "dev"` et la même empreinte que le Gel actuel). Changer la graine ou le ratio pour faire basculer q-044 rebrasserait toutes les autres Questions `factual` (dev ↔ test), bien au-delà du périmètre de ce correctif.
 - Pas réalisé : déplacer q-044 en `test` demanderait soit une nouvelle exigence (un mécanisme de Gel qui respecte `scenario_target` ou une exception explicite par Question, hors périmètre, à faire arbitrer), soit de casser à la main l'empreinte du Gel (contraire à la contrainte « respecter le mécanisme de gel » de ce correctif). `wl questions controler --scenario` reste vert (0 signalement) : le Jeu n'est pas modifié.
 - Report à Anaël : comment traiter une Question `scenario_target` tombée en `dev` par le tirage stratifié (le Gel ne connaît pas `scenario_target`) ? Options possibles pour un prochain lot : (a) étendre `_partager` pour stratifier aussi par présence de `scenario_target` ; (b) exclure les Questions `scenario_target` du tirage aléatoire et les assigner à `test` par construction ; (c) ajouter `scenario:` à `experiments/mini-cpu.yaml` pour que la phase `after_update` soit jouée (mais la story 8.8 ne demandait que la phase `base`, et un Corpus mis à jour changerait aussi les Réponses des 3 autres Configurations).
+
+### Décision d'Anaël du 2026-10-26 : option b2, réalisée
+
+- `evalset/freeze.py::geler` garde le tirage stratifié inchangé (mêmes ids participants, mêmes graines), puis force en `test` toute Question participante dont `scenario_target` est renseigné. La variante b1 (retrait du tirage) est écartée : elle aurait fait basculer q-008, q-009, q-014, q-016 et q-036 (SM-C2).
+- Re-Gel du Mini-corpus (`wl questions geler … --graine 42 --dev-ratio 0.4 --forcer`) : seule bascule q-044 dev -> test ; dev passe de 19 à 18 (factual 8 -> 7). Empreinte `76fa20b7…` -> `39c22fdf…`. `wl questions controler --scenario` vert.
+- Tests : `tests/unit/evalset/test_freeze.py` (3 tests b2), `test_minicorpus_questions.py` réaligné.
+- Mention (i) : q-044 a déjà été jouée en dev (run 8.8 `20261018-115941-a2a512`) et annotée par Anaël : légère contamination de la partie test, sans optimisation faite sur elle (aucune réponse possible en phase `base`).
+- Mention (ii) : les runs dev postérieurs ont 18 Questions contre 19 pour ceux de la 8.8 ; comparer sur les 18 Questions communes.
 
 ## AC 5 : 8.8 passe en `done`
 

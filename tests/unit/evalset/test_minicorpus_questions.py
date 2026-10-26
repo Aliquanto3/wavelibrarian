@@ -150,7 +150,11 @@ def test_jeu_gele_graine_42_ratio_04(jeu: io.QuestionsFile) -> None:
     for type_ in TYPES_ATTENDUS:
         n = sum(q.type == type_ for q in jeu.questions)
         dev = sum(q.type == type_ and q.split == "dev" for q in jeu.questions)
-        assert dev == freeze.nb_dev(n, 0.4), type_
+        # Les Questions à `scenario_target` sont forcées en test (q-044 : factual 8 -> 7 en dev).
+        attendu = freeze.nb_dev(n, 0.4) - (1 if type_ == "factual" else 0)
+        assert dev == attendu, type_
+    assert sum(q.split == "dev" for q in jeu.questions) == 18
+    assert all(q.split == "test" for q in jeu.questions if q.scenario_target is not None)
 
 
 def test_regel_identique_ne_change_aucune_partie(jeu: io.QuestionsFile) -> None:

@@ -253,3 +253,53 @@ def test_gel_refuse_les_ids_en_double_et_l_instant_naif() -> None:
         freeze.geler(_doc([_q(0), _q(0, text="b ?")]))
     with pytest.raises(ConfigError, match="fuseau"):
         freeze.geler(_doc([_q(0)]), at=datetime(2026, 10, 18, 12, 0))
+
+
+_CIBLE = {"operation": "op-1", "state": "after"}
+
+
+def _cinquante_avec_cible() -> list[dict[str, Any]]:
+    """Cinquante Questions dont toutes celles à `scenario_target` sont du Type `factual`."""
+    qs = _cinquante()
+    for q in qs:
+        if q["type"] == "factual" and q["id"] in {"q-000", "q-005", "q-010", "q-015"}:
+            q["scenario_target"] = dict(_CIBLE)
+    return qs
+
+
+def test_question_a_scenario_target_tiree_dev_sort_en_test() -> None:
+    sans = freeze.geler(_doc(_cinquante()), 0.4, 42)
+    avec = freeze.geler(_doc(_cinquante_avec_cible()), 0.4, 42)
+    cibles = {"q-000", "q-005", "q-010", "q-015"}
+    # le tirage seul met au moins une de ces Questions en dev (sinon le test ne prouve rien)
+    basculees = {q.id for q in sans.questions if q.id in cibles and q.split == "dev"}
+    assert basculees
+    for q in avec.questions:
+        if q.id in cibles:
+            assert q.split == "test"
+    # b2 ne change que les Questions à scenario_target : le reste garde la répartition du tirage
+    assert {i for i, s in _splits(sans).items() if s != _splits(avec)[i]} == basculees
+
+
+def test_gel_avec_scenario_target_est_deterministe() -> None:
+    from datetime import UTC, datetime
+
+    at = datetime(2026, 10, 26, tzinfo=UTC)
+    a = freeze.geler(_doc(_cinquante_avec_cible()), 0.4, 42, at=at)
+    b = freeze.geler(_doc(list(reversed(_cinquante_avec_cible()))), 0.4, 42, at=at)
+    assert _splits(a) == _splits(b)
+    assert a.freeze is not None and b.freeze is not None
+    assert a.freeze.sha256 != freeze.geler(_doc(_cinquante()), 0.4, 42, at=at).freeze.sha256  # type: ignore[union-attr]
+
+
+def test_regel_qui_ferait_basculer_une_question_a_scenario_target_refuse_sans_forcer() -> None:
+    # jeu gelé à l'ancienne : toutes les Questions à scenario_target restent dans le tirage seul
+    ancien = freeze.geler(_doc(_cinquante()), 0.4, 42)
+    qs = [q.model_dump(mode="json") for q in ancien.questions]
+    en_dev = next(q for q in qs if q["split"] == "dev" and q["type"] == "factual")
+    en_dev["scenario_target"] = dict(_CIBLE)
+    doc = io.QuestionsFile.model_validate({**ancien.model_dump(mode="json"), "questions": qs})
+    with pytest.raises(ConfigError, match=rf"1 Question.*{en_dev['id']}.*forcer"):
+        freeze.geler(doc, 0.4, 42)
+    regele = freeze.geler(doc, 0.4, 42, forcer=True)
+    assert _splits(regele)[en_dev["id"]] == "test"
