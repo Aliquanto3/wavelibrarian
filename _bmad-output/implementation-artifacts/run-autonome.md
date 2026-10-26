@@ -116,3 +116,6 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 10:38 · 9.10 · dev · rejugement réel lancé (wl rejuger 20261018-115941-a2a512, mini-cpu, Opus seul, plafond 3 $) · 
 - 2026-10-26 10:38 · 9.11 · attente humaine · feu vert Ollama CPU demandé à Anaël (notification) · 
 - 2026-10-26 10:41 · 9.10 · dev · fini : rejugement 20261026-093758-1afc6b completed, 72 Réponses, 0,43 $ (47 verdicts du Cache) ; IC recouvrants · 
+- 2026-10-26 10:51 · 9.4 · fusion · suite complète 1406 passed (7 min 53) après rebase sur 9.9 et 9.10, fast-forward · 5d375a0
+- 2026-10-26 10:51 · 9.12 · décision · préparée : paquet de 25 lignes (--depuis anael.yaml, graine 9), page, Expérience de calibration à 2 passes (minimum du schéma), consigne · 
+- 2026-10-26 10:51 · 9.12 · attente humaine · second annotateur · 

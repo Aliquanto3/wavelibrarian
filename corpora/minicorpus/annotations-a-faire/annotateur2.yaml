@@ -1,0 +1,1139 @@
+# Paquet d'annotation (contracts.md §4.6) : remplacer chaque verdict '' par yes, no ou
+# na (sans objet : le Critère ne s'applique pas, p. ex. fidélité d'une Réponse vide).
+# Les clés question, reference_answer, answer, cited_anchors, reference_passages et
+# context_passages aident à annoter (ce que reçoivent les Juges) ; elles sont ignorées au
+# chargement et ne figurent que sur la première ligne de chaque Réponse. Les Passages sont
+# dans la table `passages` en tête : `S1 <clé>` se lit `[S1] (anchor) text`.
+annotator: annotateur2
+passages:
+  8fd28ad4:
+    anchor: a478953867401217#h/charte-du-conseil-des-quais, a478953867401217#h/charte-du-conseil-des-quais/composition,
+      a478953867401217#h/charte-du-conseil-des-quais/mandat, a478953867401217#h/charte-du-conseil-des-quais/quorum-et-decisions,
+      a478953867401217#h/charte-du-conseil-des-quais/seances
+    text: Charte du Conseil des Quais Version révisée de l'an 1413, qui remplace la charte de l'an 1290.
+      Composition Le Conseil des Quais de Port-Ysel compte neuf sièges. Aux sept corporations d'origine
+      s'ajoutent un siège pour les îles extérieures (Keld et Brumeval) et un siège pour Sarnoux. Mandat
+      Les conseillers sont élus pour un mandat de six ans. Un conseiller peut être réélu deux fois. Le
+      maître de port est élu directement par les conseillers pour trois ans et préside les séances. Quorum
+      et décisions Le Conseil délibère valablement lorsque six conseillers sont présents. Les décisions
+      importantes exigent la majorité des deux tiers. En cas d'égalité, le vote est reporté à la séance
+      suivante. Séances Le Conseil se réunit le quinze de chaque mois dans la Halle des Cordages. Toutes
+      les séances sont publiques, y compris celles qui concernent la quarantaine.
+  b549909b:
+    anchor: 2e662a86a652e22c#h/charte-du-conseil-des-quais, 2e662a86a652e22c#h/charte-du-conseil-des-quais/composition,
+      2e662a86a652e22c#h/charte-du-conseil-des-quais/mandat, 2e662a86a652e22c#h/charte-du-conseil-des-quais/quorum-et-decisions,
+      2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
+    text: 'Charte du Conseil des Quais Version de l''an 1290, applicable jusqu''à la révision de l''an
+      1413. Composition Le Conseil des Quais de Port-Ysel compte sept sièges. Chaque siège est attribué
+      à un représentant d''une corporation : pêcheurs, passeurs, charpentiers de marine, sauniers, marchands,
+      pilotes et gens de phare. Mandat Les conseillers sont élus pour un mandat de quatre ans. Un conseiller
+      peut être réélu une seule fois. Le maître de port est choisi parmi les conseillers et préside les
+      séances. Quorum et décisions Le Conseil délibère valablement lorsque cinq conseillers sont présents.
+      Les décisions sont prises à la majorité simple. En cas d''égalité, la voix du maître de port compte
+      double. Séances Le Conseil se réunit le premier jour de chaque mois dans la Halle des Cordages.
+      Les séances sont publiques, sauf pour les questions de quarantaine.'
+  09403b4d:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-hareng-argente,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+    text: Compagnie des Marées Grises | Port-Ysel Le Conseil des Quais Le Conseil des Quais gouverne Port-Ysel
+      et arbitre les différends entre les îles. Sa charte, qui date de l'an 1290, fixe le nombre de sièges
+      et la durée des mandats ; une révision est en préparation. Oswin Dacrel en est le maître de port
+      depuis l'an 1405. Économie Le hareng argenté Les pêcheurs de Brumeval rapportent chaque année environ
+      deux cents tonnes de hareng argenté. Le poisson est fumé à Brumeval, puis expédié à Port-Ysel dans
+      des caisses de bois de pin. La Compagnie des Marées Grises détient le monopole du transport depuis
+      l'an 1388. Le sel de Sarnoux Les salines de Sarnoux produisent un sel gris très recherché. Le traité
+      de Brumeval en limite la production à six cents mesures par saison. Les vanniers de l'île fabriquent
+      les paniers qui servent à le transporter. Navigation Les passes Deux chenaux mènent à la rade de
+      Port-Ysel. La passe de l'Ouest, étroite et profonde, sépare Ormesse de Keld ; elle est la route
+      la plus
+  336cd6fb:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales
+    text: Atlas de l'Archipel de Vaelmor Cet atlas fictif décrit l'Archipel de Vaelmor tel que le connaissent
+      les navigateurs de l'an 1412 de l'Ère de la Lanterne. Il a été compilé par la cartographe Maëlis
+      Torvane pour le compte du Conseil des Quais de Port-Ysel. Aucun lieu, aucune personne ni aucune
+      date de ce texte n'existe dans le monde réel. Géographie Les îles principales L'archipel compte
+      quatre îles habitées et une quarantaine d'îlots rocheux. Port-Ysel, sur l'île d'Ormesse, est la
+      seule ville portuaire de plus de dix mille habitants. L'île de Keld, au nord, porte le phare du
+      même nom. Brumeval, à l'est, est une île de pêcheurs entourée de brouillards presque permanents.
+      Sarnoux, au sud, est réputée pour ses salines. Île | Superficie (km²) | Habitants (an 1412) | Activité
+      principale Ormesse | 310 | 14 200 | Commerce et chantiers navals Keld | 85 | 640 | Phare et élevage
+      de moutons Brumeval | 120 | 2 900 | Pêche au hareng
+  65881e0b:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
+    text: décrit en détail dans son journal. Histoire La fondation de Port-Ysel Port-Ysel fut fondé en
+      l'an 1203 par des marins de la vallée de la Sève, qui cherchaient un abri contre les tempêtes d'hiver.
+      Le premier quai, long de trente pas, existe encore sous le nom de Vieux Môle. La ville reçut sa
+      première charte en l'an 1290. Les guerres du sel Entre l'an 1340 et l'an 1371, Sarnoux et Ormesse
+      se sont disputé le contrôle du commerce du sel. Ces conflits, appelés les guerres du sel, se sont
+      terminés par le traité de Brumeval, qui fixe encore aujourd'hui le prix plafond du sel à neuf deniers
+      la mesure. Année | Événement | Lieu 1340 | Premier blocus des salines | Sarnoux 1355 | Bataille
+      des Barques Plates | Passe de l'Ouest 1371 | Traité de Brumeval | Brumeval 1388 | Création de la
+      Compagnie des Marées Grises | Port-Ysel Le Conseil des Quais Le Conseil des Quais gouverne Port-Ysel
+      et arbitre les différends entre les îles. Sa charte, qui date de l'an
+  f4c0fd09:
+    text: |-
+      Composition
+
+      Le Conseil des Quais de Port-Ysel compte sept sièges. Chaque siège est attribué à un représentant d'une corporation : pêcheurs, passeurs, charpentiers de marine, sauniers, marchands, pilotes et gens de phare.
+  28834f01:
+    text: |-
+      Composition
+
+      Le Conseil des Quais de Port-Ysel compte neuf sièges. Aux sept corporations d'origine s'ajoutent un siège pour les îles extérieures (Keld et Brumeval) et un siège pour Sarnoux.
+  c149e808:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+    text: transporter. Navigation Les passes Deux chenaux mènent à la rade de Port-Ysel. La passe de l'Ouest,
+      étroite et profonde, sépare Ormesse de Keld ; elle est la route la plus courte vers le nord, mais
+      elle se ferme aux navires de plus de quarante tonneaux pendant la Haute Eau. La passe du Sud, plus
+      large mais peu profonde, longe l'îlot de la Mouette ; seules les barques de moins de vingt tonneaux
+      peuvent l'emprunter. Les grands navires qui ne peuvent pas franchir la passe de l'Ouest contournent
+      l'île de Keld par le nord, ce qui allonge le voyage d'une journée environ. Les feux et les signaux
+      Le phare de Keld, construit en l'an 1297, est le seul grand feu de l'archipel. Un feu fixe annonce
+      la passe de l'Ouest ouverte, un feu à éclats la Haute Eau. Par temps de brouillard, la cloche du
+      phare sonne toutes les deux minutes, et celle du port de Brumeval guide les barques qui rentrent
+      de la pêche. Au Vieux Môle, un feu rouge hissé au
+  c2d82f33:
+    anchor: 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor, 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-navigation,
+      840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-commerce, 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-la-vie-a-bord
+    text: 'Glossaire maritime de Vaelmor Termes employés par les marins de l''archipel. Termes de navigation
+      Haute Eau : saison des grandes marées, de la mi-automne au début de l''hiver. Gorge Pâle : courant
+      qui traverse l''archipel du nord-ouest vers le sud-est. Passe de l''Ouest : chenal étroit entre
+      Ormesse et Keld, fermé aux grands navires pendant la Haute Eau. Longueur de câble : unité de distance
+      valant environ cent quatre-vingts pas. Termes de commerce Denier : monnaie de compte du Conseil
+      des Quais. Mesure : unité de volume du sel, fixée par le traité de Brumeval. Quai numéro trois :
+      quai réservé à la Compagnie des Marées Grises. Termes de la vie à bord Ère de la Lanterne : calendrier
+      de l''archipel, dont l''an 1 correspond à la première lanterne allumée à Port-Ysel. Fête de la Lanterne
+      : premier jour de l''an, célébré par une soupe d''algues.'
+  ac40d7b9:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-distances,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+    text: 'la cloche du phare sonne toutes les deux minutes, et celle du port de Brumeval guide les barques
+      qui rentrent de la pêche. Au Vieux Môle, un feu rouge hissé au mât signale qu''un navire est retenu
+      en quarantaine. Les distances Les marins de l''archipel comptent les distances en longueurs de câble,
+      d''environ cent quatre-vingts pas chacune, et les traversées en jours de mer. Les durées ci-dessous
+      valent par beau temps, hors Haute Eau, pour une goélette chargée. Traversée | Durée habituelle |
+      Route Port-Ysel – Keld | Un jour | Passe de l''Ouest Port-Ysel – Brumeval | Deux jours | Passe de
+      l''Ouest, puis cap à l''est Port-Ysel – Sarnoux | Un jour et demi | Passe du Sud pour les barques,
+      passe de l''Ouest sinon Keld – Sarnoux | Quatre jours, deux avec la Gorge Pâle | Au large d''Ormesse
+      Société Les corporations La vie de Port-Ysel s''organise autour de sept corporations : les pêcheurs,
+      les passeurs, les charpentiers de marine, les sauniers, les marchands, les pilotes et les gens de'
+  bfceecb7:
+    anchor: 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel, 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/hauteurs,
+      6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
+    text: Bulletin des marées de Port-Ysel Bulletin du mois de Haute Eau, an 1412, publié par le maître
+      de port Oswin Dacrel. Hauteurs La grande marée du dixième jour atteindra quatre mètres vingt au
+      Vieux Môle. La passe de l'Ouest est fermée aux navires de plus de quarante tonneaux. Le feu à éclats
+      du phare de Keld est allumé. Consignes Les navires de la Compagnie des Marées Grises restent à quai
+      jusqu'au douzième jour. Les pêcheurs de Brumeval sont invités à ne pas sortir sans pilote.
+  1cfa4d30:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/le-climat,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+    text: Activité principale Ormesse | 310 | 14 200 | Commerce et chantiers navals Keld | 85 | 640 |
+      Phare et élevage de moutons Brumeval | 120 | 2 900 | Pêche au hareng argenté Sarnoux | 200 | 3 100
+      | Sel et vannerie Le climat Le climat est océanique et humide. Les brumes de Brumeval se lèvent
+      rarement avant midi. La saison des grandes marées, appelée la Haute Eau, dure de la mi-automne au
+      début de l'hiver. Pendant cette période, la passe de l'Ouest est fermée aux navires de plus de quarante
+      tonneaux. Les courants Le courant de la Gorge Pâle traverse l'archipel du nord-ouest vers le sud-est.
+      Les pilotes de la Compagnie des Marées Grises l'utilisent pour gagner deux jours sur la traversée
+      entre Keld et Sarnoux. Le courant s'inverse tous les quarante-deux jours, un phénomène que Maëlis
+      Torvane a décrit en détail dans son journal. Histoire La fondation de Port-Ysel Port-Ysel fut fondé
+      en l'an 1203 par des marins de la vallée de la Sève, qui cherchaient un abri
+  156fbba4:
+    text: |-
+      Les passes
+
+      Deux chenaux mènent à la rade de Port-Ysel. La passe de l'Ouest, étroite et profonde, sépare Ormesse de Keld ; elle est la route la plus courte vers le nord, mais elle se ferme aux navires de plus de quarante tonneaux pendant la Haute Eau. La passe du Sud, plus large mais peu profonde, longe l'îlot de la Mouette ; seules les barques de moins de vingt tonneaux peuvent l'emprunter. Les grands navires qui ne peuvent pas franchir la passe de l'Ouest contournent l'île de Keld par le nord, ce qui allonge le voyage d'une journée environ.
+  bf82c339:
+    anchor: d589158ae4043017#p1
+    text: 'Tarifs des passeurs de l''Archipel Tarifs en vigueur pour la saison de l''an 1412, fixés par
+      la corporation des passeurs de Port-Ysel. Traversées de passagers Port-Ysel – Keld : quatre deniers.
+      Port-Ysel – Brumeval : six deniers. Port-Ysel – Sarnoux : cinq deniers. Un enfant de moins de dix
+      ans voyage pour la moitié du prix. Bagages et bêtes Un bagage de plus de vingt livres coûte un denier
+      de plus. Un mouton de Keld paie deux deniers, un cheval huit deniers. Les paniers de sel de Sarnoux
+      sont transportés au tarif de la Compagnie des Marées Grises. Haute Eau Pendant la Haute Eau, les
+      tarifs sont majorés d''un tiers. Les passeurs ne sortent pas lorsque le feu à éclats du phare de
+      Keld est allumé.'
+  211812b5:
+    anchor: e68bdc24912e7af7#h/journal-de-maelis-torvane, e68bdc24912e7af7#h/journal-de-maelis-torvane/premier-jour,
+      e68bdc24912e7af7#h/journal-de-maelis-torvane/quatrieme-jour, e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+    text: 'Journal de Maëlis Torvane Extraits du journal de bord de la cartographe Maëlis Torvane, saison
+      de la Haute Eau, an 1411. Premier jour Nous avons quitté Port-Ysel à l''aube à bord de la Grande
+      Sève. Le capitaine Hadrien Velquor a refusé de passer par la passe de l''Ouest, trop agitée. Nous
+      avons donc contourné l''île de Keld par le nord. J''ai noté que le courant de la Gorge Pâle portait
+      vers le sud-est à près de trois nœuds. Quatrième jour Arrivée à Brumeval dans un brouillard si dense
+      que nous avons dû suivre le son de la cloche du port. Les pêcheurs nous ont offert du hareng fumé.
+      Tamsin Orrelle, qui voyageait avec nous pour inspecter les entrepôts de la Compagnie des Marées
+      Grises, a trouvé les caisses mal étiquetées. Neuvième jour J''ai mesuré le renversement du courant
+      : il s''est produit le quarante-deuxième jour après le dernier relevé, exactement comme prévu. Cette
+      régularité permettra aux pilotes de planifier les traversées. Je transmettrai ma table au'
+  948815ed:
+    text: |-
+      Le climat
+
+      Le climat est océanique et humide. Les brumes de Brumeval se lèvent rarement avant midi. La saison des grandes marées, appelée la Haute Eau, dure de la mi-automne au début de l'hiver. Pendant cette période, la passe de l'Ouest est fermée aux navires de plus de quarante tonneaux.
+  37003df1:
+    text: |-
+      Tarifs des passeurs de l'Archipel
+      Tarifs en vigueur pour la saison de l'an 1412, fixés par la corporation des passeurs de
+      Port-Ysel.
+      Traversées de passagers
+      Port-Ysel – Keld : quatre deniers. Port-Ysel – Brumeval : six deniers. Port-Ysel –
+      Sarnoux : cinq deniers. Un enfant de moins de dix ans voyage pour la moitié du prix.
+      Bagages et bêtes
+      Un bagage de plus de vingt livres coûte un denier de plus. Un mouton de Keld paie
+      deux deniers, un cheval huit deniers. Les paniers de sel de Sarnoux sont transportés
+      au tarif de la Compagnie des Marées Grises.
+      Haute Eau
+      Pendant la Haute Eau, les tarifs sont majorés d'un tiers. Les passeurs ne sortent pas
+      lorsque le feu à éclats du phare de Keld est allumé.
+  41809ca7:
+    anchor: c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel, c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/navires-construits,
+      c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/reparations, c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/difficultes,
+      c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
+    text: 'Rapport du chantier naval de Port-Ysel Rapport annuel de l''an 1412 adressé au Conseil des
+      Quais par le chantier naval d''Ormesse. Navires construits Le chantier a lancé deux navires cette
+      année : la Brume Dorée, un caboteur de trente tonneaux commandé par la Compagnie des Marées Grises,
+      et le Petit Sarnoux, une barque à fond plat destinée aux sauniers. La construction de la Brume Dorée
+      a duré neuf mois et occupé vingt-deux charpentiers. Réparations Quatre navires ont été carénés,
+      dont la Grande Sève. Maëlis Torvane a demandé que sa coque soit renforcée avant la prochaine saison
+      de relevés. Le coût total des réparations s''élève à mille huit cents deniers. Difficultés Le bois
+      de pin de la vallée de la Sève est devenu rare. Hadrien Velquor, capitaine de la Grande Sève, a
+      proposé d''importer du chêne de Sarnoux. Oswin Dacrel a refusé tant que le traité de Brumeval ne
+      le permettrait pas explicitement. Perspectives Le chantier demande au Conseil des Quais la création
+      d''une seconde'
+  94f7b02e:
+    anchor: b690931e2d4ff220#h/registre-des-navires-de-port-ysel, b690931e2d4ff220#h/registre-des-navires-de-port-ysel/regles
+    text: Registre des navires de Port-Ysel Registre arrêté à la fin de l'an 1412 pour les navires de
+      la Compagnie des Marées Grises et du Conseil des Quais. Navire | Type | Tonnage | Lancement | Capitaine
+      Grande Sève | Goélette | 45 | 1391 | Hadrien Velquor Brume Dorée | Caboteur | 30 | 1412 | Ilsa Marenne
+      Écume Bleue | Barque | 18 | 1398 | Corvin Hasle Cormoran Gris | Goélette | 38 | 1402 | Tamsin Orrelle
+      Veilleuse | Bateau-pilote | 12 | 1405 | Oswin Dacrel Règles Un navire de plus de quarante tonneaux
+      ne peut pas franchir la passe de l'Ouest pendant la Haute Eau. Tout changement de capitaine doit
+      être déclaré au maître de port dans les huit jours. La Grande Sève est le seul navire autorisé à
+      transporter le courrier du Conseil des Quais.
+  c659e93b:
+    anchor: 2e662a86a652e22c#h/charte-du-conseil-des-quais
+    text: |-
+      Charte du Conseil des Quais
+
+      Version de l'an 1290, applicable jusqu'à la révision de l'an 1413.
+  8085e2b6:
+    anchor: a478953867401217#h/charte-du-conseil-des-quais
+    text: |-
+      Charte du Conseil des Quais
+
+      Version révisée de l'an 1413, qui remplace la charte de l'an 1290.
+  c485e444:
+    anchor: 9c1249855783a0ca#h/la-compagnie-des-marees-grises
+    text: |-
+      La Compagnie des Marées Grises
+
+      La Compagnie des Marées Grises a été créée à Port-Ysel en l'an 1388 par douze armateurs qui voulaient mettre fin aux pillages dans la passe de l'Ouest. Elle détient depuis cette date le monopole du transport du hareng argenté entre Brumeval et Ormesse.
+  37e46e15:
+    anchor: df071d2eff588750#p1
+    text: |-
+      Convention de douane de Port-Ysel
+      Convention conclue en l'an 1412 entre le Conseil des Quais et la Compagnie des
+      Marées Grises, relative aux droits perçus sur les marchandises débarquées à
+      Port-Ysel.
+      Article premier – Objet
+      La présente convention fixe les droits de douane sur les marchandises qui entrent
+      dans le port de Port-Ysel. Elle s'applique à tous les navires inscrits au registre, qu'ils
+      appartiennent ou non à la Compagnie des Marées Grises. Le maître de port Oswin
+      Dacrel veille à son application.
+      Article 2 – Droits sur le hareng et le sel
+      Le hareng argenté fumé paie un droit de deux deniers par caisse. Le sel de Sarnoux
+      paie un droit d'un denier par mesure, conformément au traité de Brumeval. Les œufs
+      de hareng, considérés comme une denrée de luxe, paient un droit de cinq deniers par
+      pot.
+  4dcddeea:
+    anchor: df071d2eff588750#p2
+    text: |-
+      Article 3 – Exemptions
+      Sont exemptés de droits : le courrier du Conseil des Quais, les vivres destinés au
+      phare de Keld et les secours envoyés aux îles touchées par la fièvre grise. Les
+      marchandises de la Grande Sève ne bénéficient d'aucune autre exemption que celles
+      de cet article.
+      Article 4 – Contrôle
+      Les caisses sont contrôlées au quai numéro trois par deux agents du Conseil. En cas
+      de désaccord sur le contenu d'une caisse, le directeur de la Compagnie, Tamsin
+      Orrelle, peut demander un second contrôle. Le coût de ce second contrôle est de trois
+      deniers, à la charge du demandeur.
+      Article 5 – Amendes
+      Toute fausse déclaration est punie d'une amende égale au triple du droit éludé. Une
+      seconde infraction dans la même saison entraîne la suspension du navire pendant
+      vingt jours. Cette règle est qualifiée de « sévère mais juste » par les armateurs.
+  4e420136:
+    anchor: 985e6703a945e9e6#h/note-sur-le-quai-numero-quatre
+    text: |-
+      Note sur le quai numéro quatre
+
+      Note de service de l'an 1398, devenue obsolète.
+
+      Le quai numéro quatre du port de Port-Ysel est réservé à la barque Écume Bleue. Le Conseil des Quais en décidera l'affectation définitive à la prochaine séance. Cette note sera retirée des archives dès que le quai sera attribué.
+  0565a068:
+    anchor: 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites
+    text: |-
+      Activités
+
+      Les navires de la Compagnie transportent le hareng fumé et le sel de Sarnoux ; la Grande Sève est la seule à porter aussi le courrier du Conseil des Quais. Maëlis Torvane a navigué sur la Grande Sève pendant six saisons, ce qui lui a permis de relever les courants décrits dans son atlas.
+  0caad792:
+    anchor: 9c1249855783a0ca#h/la-compagnie-des-marees-grises/relations-avec-le-conseil
+    text: |-
+      Relations avec le Conseil
+
+      La Compagnie verse chaque année au Conseil des Quais une redevance de quatre cents deniers. En échange, le Conseil lui garantit l'usage exclusif du quai numéro trois du port de Port-Ysel. Oswin Dacrel a rappelé en l'an 1411 que ce privilège pouvait être révisé.
+  2303b07a:
+    text: |-
+      Règles
+
+      Un navire de plus de quarante tonneaux ne peut pas franchir la passe de l'Ouest pendant la Haute Eau. Tout changement de capitaine doit être déclaré au maître de port dans les huit jours. La Grande Sève est le seul navire autorisé à transporter le courrier du Conseil des Quais.
+  dbe556c9:
+    text: |-
+      Arriving
+
+      Ships dock at the Old Mole, the first quay of the town, built in the year 1203. During the High Water season, the Western Pass is closed to ships of more than forty tons, so large vessels must go around the island of Keld. The harbour master, Oswin Dacrel, can be found in the Hall of Ropes every morning.
+  099357a0:
+    text: |-
+      Durée
+
+      Tout navire suspect reste au mouillage pendant onze jours. L'équipage ne descend pas à terre. Les vivres sont livrés par le bateau-pilote Veilleuse, qui reste à distance de deux longueurs de câble.
+  549584b7:
+    anchor: 750a0563faf1fe1f#p1
+    text: |-
+      Grande régate de la Lanterne
+      Le Conseil des Quais invite tous les équipages à la grande régate de la Lanterne, qui
+      se tiendra le premier jour de l'an 1413 dans la rade de Port-Ysel.
+      Programme
+      - Départ à midi, depuis le Vieux Môle.
+      - Parcours : tour de l'îlot de la Mouette, puis retour par la passe du Sud.
+      - Remise des prix à la Halle des Cordages, au coucher du soleil.
+      Règlement
+      Les barques de moins de vingt tonneaux sont seules admises. Chaque équipage
+      compte quatre marins au plus. La Brume Dorée, navire de la Compagnie des Marées
+      Grises, ne concourt pas : elle servira de bateau du jury.
+      Récompenses
+      Le vainqueur reçoit une lanterne de cuivre et vingt deniers. Le maître de port Oswin
+      Dacrel remettra les prix. Une soupe d'algues sera servie à tous les participants.
+  b82495ef:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor
+    text: |-
+      Atlas de l'Archipel de Vaelmor
+
+      Cet atlas fictif décrit l'Archipel de Vaelmor tel que le connaissent les navigateurs de l'an 1412 de l'Ère de la Lanterne. Il a été compilé par la cartographe Maëlis Torvane pour le compte du Conseil des Quais de Port-Ysel. Aucun lieu, aucune personne ni aucune date de ce texte n'existe dans le monde réel.
+  278db3a7:
+    anchor: df071d2eff588750#p3
+    text: |-
+      Article 6 – Durée et révision
+      La convention est conclue pour dix ans à compter du premier jour de l'an 1413. Elle
+      peut être révisée à la demande de l'une des parties, après un préavis de six mois.
+      Toute révision exige l'accord des deux tiers du Conseil des Quais.
+      Article 7 – Signatures
+      Fait à Port-Ysel, dans la Halle des Cordages, le quinzième jour du mois de la Haute
+      Eau. Signé : Oswin Dacrel, maître de port ; Tamsin Orrelle, directeur de la Compagnie
+      des Marées Grises.
+  d35a6502:
+    anchor: e5dff5325d93c812#h/visitor-s-guide-to-port-ysel, e5dff5325d93c812#h/visitor-s-guide-to-port-ysel/arriving,
+      e5dff5325d93c812#h/visitor-s-guide-to-port-ysel/what-to-see, e5dff5325d93c812#h/visitor-s-guide-to-port-ysel/what-to-eat,
+      e5dff5325d93c812#h/visitor-s-guide-to-port-ysel/practical-advice
+    text: Visitor's Guide to Port-Ysel Port-Ysel is the only large town of the fictional Archipelago of
+      Vaelmor. This short guide was written for travellers arriving in the year 1412 of the Lantern Era.
+      Arriving Ships dock at the Old Mole, the first quay of the town, built in the year 1203. During
+      the High Water season, the Western Pass is closed to ships of more than forty tons, so large vessels
+      must go around the island of Keld. The harbour master, Oswin Dacrel, can be found in the Hall of
+      Ropes every morning. What to see The Lighthouse of Keld can be visited by boat on clear days. The
+      keeper, Bram Oskelle, welcomes guests and offers tea. In town, do not miss the shipyard of Ormesse,
+      where the coaster Misty Gold was launched this year for the Grey Tides Company. What to eat Try
+      the seaweed soup of Brumeval, served with black bread and smoked silver herring. Visitors should
+      avoid the salt cakes of Sarnoux, which are very strong. Practical advice The council meets on the
+      first day of each month in the Hall of Ropes, and most of its sessions are open to the public. Money
+      is counted in deniers. A night in an inn costs about six deniers. If a ship arrives from
+  f62d86a0:
+    anchor: e5dff5325d93c812#h/visitor-s-guide-to-port-ysel/practical-advice
+    text: the first day of each month in the Hall of Ropes, and most of its sessions are open to the public.
+      Money is counted in deniers. A night in an inn costs about six deniers. If a ship arrives from an
+      island hit by the grey fever, passengers must wait eleven days at anchor before landing.
+  702c8cfc:
+    anchor: 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac, 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/the-forty-two-day-cycle,
+      0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/reading-the-almanac, 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/known-errors
+    text: 'Notes on the Vaelmor Tide Almanac Working notes by the cartographer Maëlis Torvane on how to
+      read the tide almanac of the archipelago. The forty-two day cycle The Pale Gorge current reverses
+      every forty-two days. Pilots of the Grey Tides Company use the almanac to know in advance which
+      direction the current will run. A reversal in the middle of a crossing can add a full day to the
+      journey between Keld and Sarnoux. Reading the almanac Each page covers one week. The left column
+      gives the height of the high tide at the Old Mole in Port-Ysel, and the right column gives the direction
+      of the current. A small lantern symbol marks the days when the lighthouse of Keld shows its flashing
+      light. Known errors The edition of the year 1409 contains a mistake: it places the great tide of
+      the autumn three days too early. Harbour master Oswin Dacrel ordered the printing house to correct
+      the later editions.'
+  a95cedc2:
+    anchor: add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel, add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/declenchement,
+      add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/duree, add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/levee,
+      add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/confidentialite
+    text: Procédure de quarantaine du port de Port-Ysel Procédure interne du Conseil des Quais, applicable
+      à tout navire arrivant d'une île touchée par la fièvre grise. Déclenchement Le maître de port Oswin
+      Dacrel déclare la quarantaine après avis du médecin du port, Isaure Pellan. Le feu rouge est alors
+      hissé au Vieux Môle. Durée Tout navire suspect reste au mouillage pendant onze jours. L'équipage
+      ne descend pas à terre. Les vivres sont livrés par le bateau-pilote Veilleuse, qui reste à distance
+      de deux longueurs de câble. Levée La quarantaine est levée si aucun cas n'est déclaré pendant onze
+      jours. Le Conseil des Quais en est informé par écrit. Un navire de la Compagnie des Marées Grises
+      ne peut pas être exempté de cette règle. Confidentialité Les noms des malades ne figurent jamais
+      dans les registres publics. Seul le médecin du port conserve la liste, qu'il détruit à la fin de
+      la saison.
+  8f9b6b05:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/le-calendrier, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-sante,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/voir-aussi
+    text: '1 correspond à la première lanterne allumée à Port-Ysel. L''année commence par la fête de la
+      Lanterne, où l''on sert une soupe d''algues. Les mois n''ont pas de nom : on dit le mois de la Haute
+      Eau pour le premier mois de la saison des grandes marées, et l''on désigne les autres par leur rang.
+      La santé Le médecin du port veille sur la santé des équipages. La fièvre grise, qui touche parfois
+      les îles extérieures, oblige les navires suspects à rester onze jours au mouillage avant de débarquer.
+      Le bateau-pilote Veilleuse leur livre les vivres à distance. Voir aussi Le registre des navires,
+      le journal de Maëlis Torvane et l''histoire de la Compagnie des Marées Grises complètent cet atlas.'
+  4483a0ff:
+    anchor: 750a0563faf1fe1f#p1
+    text: 'Grande régate de la Lanterne Le Conseil des Quais invite tous les équipages à la grande régate
+      de la Lanterne, qui se tiendra le premier jour de l''an 1413 dans la rade de Port-Ysel. Programme
+      - Départ à midi, depuis le Vieux Môle. - Parcours : tour de l''îlot de la Mouette, puis retour par
+      la passe du Sud. - Remise des prix à la Halle des Cordages, au coucher du soleil. Règlement Les
+      barques de moins de vingt tonneaux sont seules admises. Chaque équipage compte quatre marins au
+      plus. La Brume Dorée, navire de la Compagnie des Marées Grises, ne concourt pas : elle servira de
+      bateau du jury. Récompenses Le vainqueur reçoit une lanterne de cuivre et vingt deniers. Le maître
+      de port Oswin Dacrel remettra les prix. Une soupe d''algues sera servie à tous les participants.'
+  6cb4b758:
+    anchor: 0d5e0a0ad541270b#h/les-legendes-des-brumes, 0d5e0a0ad541270b#h/les-legendes-des-brumes/la-dame-de-la-cloche,
+      0d5e0a0ad541270b#h/les-legendes-des-brumes/le-hareng-d-argent, 0d5e0a0ad541270b#h/les-legendes-des-brumes/les-lanternes-de-sarnoux
+    text: Les légendes des brumes Recueil de trois légendes de Brumeval, racontées par les anciens et
+      notées au fil des saisons. La dame de la cloche On raconte qu'une femme, Elwenn Marsac, sonne la
+      cloche du port les nuits de brouillard pour guider les barques perdues. Les pêcheurs affirment qu'elle
+      ne vieillit pas et que sa cloche ne sonne jamais deux fois de la même manière. Le hareng d'argent
+      Un hareng plus grand qu'une barque vivrait dans la fosse située au large de Brumeval. Quiconque
+      le voit doit rejeter à l'eau sa première prise de la saison. Les marins de la Compagnie des Marées
+      Grises ne croient pas à cette histoire, mais ils respectent l'usage. Les lanternes de Sarnoux Certains
+      soirs, de petites lumières dansent sur les marais salants de Sarnoux. Les sauniers disent qu'il
+      s'agit des âmes des marins morts pendant les guerres du sel. Maëlis Torvane a consigné cette légende
+      dans ses carnets sans y ajouter de commentaire.
+  aa16ea35:
+    anchor: 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations, 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures,
+      1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/le-calendrier
+    text: 'corporations La vie de Port-Ysel s''organise autour de sept corporations : les pêcheurs, les
+      passeurs, les charpentiers de marine, les sauniers, les marchands, les pilotes et les gens de phare.
+      Chacune élit un représentant au Conseil des Quais. Les corporations fixent leurs propres tarifs
+      ; celle des passeurs publie chaque saison la liste des prix des traversées de passagers. La monnaie
+      et les mesures Le denier est la monnaie de compte du Conseil des Quais. Une nuit dans une auberge
+      de Port-Ysel coûte environ six deniers, une caisse de hareng fumé se vend une trentaine de deniers
+      au marché du Vieux Môle. Le sel se compte en mesures, unité de volume fixée par le traité de Brumeval.
+      Les poids se comptent en livres et les cargaisons en tonneaux. Le calendrier L''archipel compte
+      les années selon l''Ère de la Lanterne, dont l''an 1 correspond à la première lanterne allumée à
+      Port-Ysel. L''année commence par la fête de la Lanterne, où l''on sert une soupe d''algues. Les
+      mois n''ont pas de'
+  4ec8a5e8:
+    text: |-
+      Reading the almanac
+
+      Each page covers one week. The left column gives the height of the high tide at the Old Mole in Port-Ysel, and the right column gives the direction of the current. A small lantern symbol marks the days when the lighthouse of Keld shows its flashing light.
+  561809ff:
+    anchor: c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/difficultes, c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
+    text: Sarnoux. Oswin Dacrel a refusé tant que le traité de Brumeval ne le permettrait pas explicitement.
+      Perspectives Le chantier demande au Conseil des Quais la création d'une seconde cale sèche. Le projet
+      coûterait quatre mille deniers et serait financé à moitié par la Compagnie des Marées Grises.
+  e44de565:
+    anchor: e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour, e68bdc24912e7af7#h/journal-de-maelis-torvane/dernier-jour
+    text: produit le quarante-deuxième jour après le dernier relevé, exactement comme prévu. Cette régularité
+      permettra aux pilotes de planifier les traversées. Je transmettrai ma table au Conseil des Quais.
+      Dernier jour Retour à Port-Ysel. Oswin Dacrel m'a reçue au Vieux Môle et a promis de faire imprimer
+      l'atlas. Je n'ai pas osé lui avouer que j'ai perdu mon compas de laiton dans la baie de Sarnoux.
+  2f505d4b:
+    anchor: 31ee0b4995fad0d1#p1
+    text: 'Port-Ysel, le troisième jour de la Haute Eau, an 1412. Cher Hadrien, Je vous écris depuis le
+      Vieux Môle, où j''attends le retour de la Grande Sève. Mon atlas est enfin terminé et Oswin Dacrel
+      m''a promis de le faire imprimer avant la fin de l''hiver. J''ai ajouté en dernière page une table
+      des renversements du courant de la Gorge Pâle, que je vous prie de vérifier lors de votre prochaine
+      traversée. Vous avez raison au sujet du bois : le chêne de Sarnoux est plus dur que le pin de la
+      Sève, et la coque y gagnera. Je soutiendrai votre demande devant le Conseil des Quais. Tamsin Orrelle
+      m''a laissé entendre que la Compagnie des Marées Grises financerait la moitié de la seconde cale
+      sèche. Avez-vous retrouvé mon compas de laiton ? Je l''ai perdu dans la baie de Sarnoux, par un
+      matin de brume, et je n''ose plus en parler à personne. Les pêcheurs de Brumeval prétendent qu''il
+      est tombé dans la fosse du grand hareng d''argent. Je préfère croire qu''un'
+  6570c192:
+    text: |-
+      Difficultés
+
+      Le bois de pin de la vallée de la Sève est devenu rare. Hadrien Velquor, capitaine de la Grande Sève, a proposé d'importer du chêne de Sarnoux. Oswin Dacrel a refusé tant que le traité de Brumeval ne le permettrait pas explicitement.
+  c73ac704:
+    text: |-
+      Port-Ysel, le troisième jour de la Haute Eau, an 1412.
+      Cher Hadrien,
+      Je vous écris depuis le Vieux Môle, où j'attends le retour de la Grande Sève. Mon atlas
+      est enfin terminé et Oswin Dacrel m'a promis de le faire imprimer avant la fin de
+      l'hiver. J'ai ajouté en dernière page une table des renversements du courant de la
+      Gorge Pâle, que je vous prie de vérifier lors de votre prochaine traversée.
+      Vous avez raison au sujet du bois : le chêne de Sarnoux est plus dur que le pin de la
+      Sève, et la coque y gagnera. Je soutiendrai votre demande devant le Conseil des
+      Quais. Tamsin Orrelle m'a laissé entendre que la Compagnie des Marées Grises
+      financerait la moitié de la seconde cale sèche.
+      Avez-vous retrouvé mon compas de laiton ? Je l'ai perdu dans la baie de Sarnoux, par
+      un matin de brume, et je n'ose plus en parler à personne. Les pêcheurs de Brumeval
+      prétendent qu'il est tombé dans la fosse du grand hareng d'argent. Je préfère croire
+      qu'un saunier l'a ramassé.
+      Je vous remercie pour le hareng fumé, qui était excellent. Embrassez Ilsa Marenne de
+      ma part, et dites-lui que la Brume Dorée est un très beau navire.
+      Votre amie,
+      Maëlis Torvane
+  47a4c0eb:
+    anchor: 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites, 9c1249855783a0ca#h/la-compagnie-des-marees-grises/relations-avec-le-conseil
+    text: décrits dans son atlas. Relations avec le Conseil La Compagnie verse chaque année au Conseil
+      des Quais une redevance de quatre cents deniers. En échange, le Conseil lui garantit l'usage exclusif
+      du quai numéro trois du port de Port-Ysel. Oswin Dacrel a rappelé en l'an 1411 que ce privilège
+      pouvait être révisé.
+  924a2b5f:
+    text: |-
+      Perspectives
+
+      Le chantier demande au Conseil des Quais la création d'une seconde cale sèche. Le projet coûterait quatre mille deniers et serait financé à moitié par la Compagnie des Marées Grises.
+  45a5e458:
+    anchor: df071d2eff588750#p2, df071d2eff588750#p3
+    text: Conseil des Quais, les vivres destinés au phare de Keld et les secours envoyés aux îles touchées
+      par la fièvre grise. Les marchandises de la Grande Sève ne bénéficient d'aucune autre exemption
+      que celles de cet article. Article 4 – Contrôle Les caisses sont contrôlées au quai numéro trois
+      par deux agents du Conseil. En cas de désaccord sur le contenu d'une caisse, le directeur de la
+      Compagnie, Tamsin Orrelle, peut demander un second contrôle. Le coût de ce second contrôle est de
+      trois deniers, à la charge du demandeur. Article 5 – Amendes Toute fausse déclaration est punie
+      d'une amende égale au triple du droit éludé. Une seconde infraction dans la même saison entraîne
+      la suspension du navire pendant vingt jours. Cette règle est qualifiée de « sévère mais juste »
+      par les armateurs. Article 6 – Durée et révision La convention est conclue pour dix ans à compter
+      du premier jour de l'an 1413. Elle peut être révisée à la demande de l'une des parties, après un
+      préavis de six mois. Toute révision exige l'accord des
+  6e33c49c:
+    text: |-
+      Known errors
+
+      The edition of the year 1409 contains a mistake: it places the great tide of the autumn three days too early. Harbour master Oswin Dacrel ordered the printing house to correct the later editions.
+  0a06af84:
+    anchor: 4f70a5c462fa4b04#h/le-phare-de-keld, 4f70a5c462fa4b04#h/le-phare-de-keld/le-gardien, 4f70a5c462fa4b04#h/le-phare-de-keld/les-signaux,
+      4f70a5c462fa4b04#h/le-phare-de-keld/entretien
+    text: Le phare de Keld Le phare de Keld se dresse à la pointe nord de l'île du même nom. Construit
+      en l'an 1297, il mesure trente-quatre mètres. Sa lanterne a brûlé de l'huile de phoque jusqu'en
+      l'an 1380, puis de l'huile de colza. Le gardien Le gardien actuel est Bram Oskelle, en poste depuis
+      l'an 1398. Il vit au pied du phare avec sa famille et un troupeau de vingt-sept moutons. Il allume
+      la lanterne au coucher du soleil et la maintient jusqu'à l'aube. Les signaux Un feu fixe signale
+      la passe de l'Ouest ouverte. Un feu à éclats annonce la Haute Eau et la fermeture de la passe aux
+      navires de plus de quarante tonneaux. En cas de brouillard, une cloche sonne toutes les deux minutes,
+      ce qui est essentiel pour les pêcheurs de Brumeval. Entretien Le Conseil des Quais finance l'entretien
+      du phare à hauteur de trois cents deniers par an. En l'an 1412, la lanterne a été remplacée par
+      un modèle plus lumineux fabriqué par les verriers de Port-Ysel.
+  fc16c2a9:
+    text: |-
+      Le phare de Keld
+
+      Le phare de Keld se dresse à la pointe nord de l'île du même nom. Construit en l'an 1297, il mesure trente-quatre mètres. Sa lanterne a brûlé de l'huile de phoque jusqu'en l'an 1380, puis de l'huile de colza.
+annotations:
+- answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-025
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
+    celle de 1290 ?
+  reference_answer: Deux sièges de plus
+  answer: '7'
+  cited_anchors:
+  - a478953867401217#h/charte-du-conseil-des-quais
+  - a478953867401217#h/charte-du-conseil-des-quais/composition
+  - a478953867401217#h/charte-du-conseil-des-quais/mandat
+  - a478953867401217#h/charte-du-conseil-des-quais/quorum-et-decisions
+  - a478953867401217#h/charte-du-conseil-des-quais/seances
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/composition
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/mandat
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/quorum-et-decisions
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-hareng-argente
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+  reference_passages:
+  - f4c0fd09
+  - 28834f01
+  context_passages:
+  - S1 8fd28ad4
+  - S2 b549909b
+  - S3 09403b4d
+  - S4 336cd6fb
+  - S5 65881e0b
+- answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-025
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+- answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-028
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
+  reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
+    du Sud n'accepte que des barques de moins de vingt tonneaux.
+  answer: Passe de l'Ouest
+  cited_anchors:
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-navigation
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-commerce
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-la-vie-a-bord
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-distances
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/hauteurs
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/le-climat
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+  reference_passages:
+  - 156fbba4
+  context_passages:
+  - S1 c149e808
+  - S2 c2d82f33
+  - S3 ac40d7b9
+  - S4 bfceecb7
+  - S5 1cfa4d30
+- answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-039
+  criterion: correctness
+  verdict: ''
+  note: ''
+  question: Quelles contraintes la saison de la Haute Eau impose-t-elle à la navigation et aux traversées
+    ?
+  reference_answer: La passe de l'Ouest est fermée aux navires de plus de quarante tonneaux, les tarifs
+    des passeurs sont majorés d'un tiers et les passeurs ne sortent pas quand le feu à éclats est allumé.
+  answer: Le temps de brouillard, la cloche du phare et la cloche du port sont des contraintes spécifiques
+    à la navigation pendant la Haute Eau.
+  cited_anchors:
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-navigation
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-commerce
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-la-vie-a-bord
+  - d589158ae4043017#p1
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/premier-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/quatrieme-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-hareng-argente
+  reference_passages:
+  - 948815ed
+  - 37003df1
+  context_passages:
+  - S1 c149e808
+  - S2 c2d82f33
+  - S3 bf82c339
+  - S4 211812b5
+  - S5 09403b4d
+- answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-039
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+- answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-040
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: Quel est le nom du capitaine du Petit Sarnoux ?
+  reference_answer: Le Corpus ne le dit pas.
+  answer: Maëlis Torvane
+  cited_anchors:
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/navires-construits
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/reparations
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/difficultes
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
+  - b690931e2d4ff220#h/registre-des-navires-de-port-ysel
+  - b690931e2d4ff220#h/registre-des-navires-de-port-ysel/regles
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/premier-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/quatrieme-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+  reference_passages: []
+  context_passages:
+  - S1 41809ca7
+  - S2 94f7b02e
+  - S3 336cd6fb
+  - S4 65881e0b
+  - S5 211812b5
+- answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-011
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: Quel navire est le seul autorisé à transporter le courrier du Conseil des Quais ?
+  reference_answer: La Grande Sève
+  answer: La Grande Sève
+  cited_anchors:
+  - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites
+  reference_passages:
+  - 2303b07a
+  context_passages:
+  - S1 c659e93b
+  - S2 8085e2b6
+  - S3 c485e444
+  - S4 37e46e15
+  - S5 4dcddeea
+  - S6 4e420136
+  - S7 0565a068
+  - S8 0caad792
+- answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-014
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Où trouve-t-on le maître de port Oswin Dacrel chaque matin ?
+  reference_answer: Dans la Halle des Cordages
+  answer: ''
+  cited_anchors: []
+  reference_passages:
+  - dbe556c9
+  context_passages: []
+- answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-016
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: For how many days must a suspect ship stay at anchor in Port-Ysel?
+  reference_answer: Eleven days
+  answer: ''
+  cited_anchors: []
+  reference_passages:
+  - 099357a0
+  context_passages: []
+- answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-028
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
+  reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
+    du Sud n'accepte que des barques de moins de vingt tonneaux.
+  answer: passe du Sud
+  cited_anchors:
+  - 750a0563faf1fe1f#p1
+  reference_passages:
+  - 156fbba4
+  context_passages:
+  - S1 549584b7
+- answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-036
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Et avant cette révision ?
+  reference_answer: Sept sièges
+  answer: '0'
+  cited_anchors: []
+  reference_passages:
+  - f4c0fd09
+  context_passages:
+  - S1 549584b7
+  - S2 b82495ef
+  - S3 c659e93b
+  - S4 8085e2b6
+  - S5 c485e444
+  - S6 37e46e15
+  - S7 4dcddeea
+  - S8 278db3a7
+- answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-040
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: Quel est le nom du capitaine du Petit Sarnoux ?
+  reference_answer: Le Corpus ne le dit pas.
+  answer: ''
+  cited_anchors: []
+  reference_passages: []
+  context_passages: []
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-016
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: For how many days must a suspect ship stay at anchor in Port-Ysel?
+  reference_answer: Eleven days
+  answer: '11'
+  cited_anchors:
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/the-forty-two-day-cycle
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/reading-the-almanac
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/known-errors
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/declenchement
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/duree
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/levee
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/confidentialite
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-distances
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+  reference_passages:
+  - 099357a0
+  context_passages:
+  - S1 d35a6502
+  - S2 f62d86a0
+  - S3 702c8cfc
+  - S4 a95cedc2
+  - S5 ac40d7b9
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-017
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Que marque le symbole de lanterne dans l'almanach des marées ?
+  reference_answer: Les jours où le phare de Keld montre son feu à éclats.
+  answer: lanterne
+  cited_anchors:
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/le-calendrier
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-sante
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/voir-aussi
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-navigation
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-commerce
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-la-vie-a-bord
+  - 750a0563faf1fe1f#p1
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes/la-dame-de-la-cloche
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes/le-hareng-d-argent
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes/les-lanternes-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures
+  reference_passages:
+  - 4ec8a5e8
+  context_passages:
+  - S1 8f9b6b05
+  - S2 c2d82f33
+  - S3 4483a0ff
+  - S4 6cb4b758
+  - S5 aa16ea35
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-019
+  criterion: correctness
+  verdict: ''
+  note: ''
+  question: Quel capitaine a proposé d'importer du chêne de Sarnoux, et qui lui a écrit à ce sujet ?
+  reference_answer: Hadrien Velquor ; la cartographe Maëlis Torvane lui a écrit.
+  answer: Maëlis Torvane
+  cited_anchors:
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/navires-construits
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/reparations
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/difficultes
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/dernier-jour
+  - 31ee0b4995fad0d1#p1
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-hareng-argente
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+  reference_passages:
+  - 6570c192
+  - c73ac704
+  context_passages:
+  - S1 561809ff
+  - S2 41809ca7
+  - S3 e44de565
+  - S4 2f505d4b
+  - S5 09403b4d
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-021
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Qui a laissé entendre à Maëlis Torvane que la Compagnie financerait la moitié de la seconde
+    cale sèche, et combien coûterait ce projet ?
+  reference_answer: Tamsin Orrelle ; le projet coûterait quatre mille deniers.
+  answer: Tamsin Orrelle
+  cited_anchors:
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/premier-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/quatrieme-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+  - 31ee0b4995fad0d1#p1
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/navires-construits
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/reparations
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/difficultes
+  - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
+  - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites
+  - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/relations-avec-le-conseil
+  reference_passages:
+  - 924a2b5f
+  - c73ac704
+  context_passages:
+  - S1 561809ff
+  - S2 211812b5
+  - S3 2f505d4b
+  - S4 41809ca7
+  - S5 47a4c0eb
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-025
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+  question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
+    celle de 1290 ?
+  reference_answer: Deux sièges de plus
+  answer: '4'
+  cited_anchors:
+  - a478953867401217#h/charte-du-conseil-des-quais
+  - a478953867401217#h/charte-du-conseil-des-quais/composition
+  - a478953867401217#h/charte-du-conseil-des-quais/mandat
+  - a478953867401217#h/charte-du-conseil-des-quais/quorum-et-decisions
+  - a478953867401217#h/charte-du-conseil-des-quais/seances
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/composition
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/mandat
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/quorum-et-decisions
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
+  - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites
+  - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/relations-avec-le-conseil
+  - df071d2eff588750#p2
+  - df071d2eff588750#p3
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/les-guerres-du-sel
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
+  reference_passages:
+  - f4c0fd09
+  - 28834f01
+  context_passages:
+  - S1 8fd28ad4
+  - S2 b549909b
+  - S3 47a4c0eb
+  - S4 45a5e458
+  - S5 65881e0b
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-028
+  criterion: correctness
+  verdict: ''
+  note: ''
+  question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
+  reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
+    du Sud n'accepte que des barques de moins de vingt tonneaux.
+  answer: Passe de l'Ouest
+  cited_anchors:
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-distances
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/hauteurs
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
+  - b690931e2d4ff220#h/registre-des-navires-de-port-ysel
+  - b690931e2d4ff220#h/registre-des-navires-de-port-ysel/regles
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/le-climat
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+  reference_passages:
+  - 156fbba4
+  context_passages:
+  - S1 c149e808
+  - S2 ac40d7b9
+  - S3 bfceecb7
+  - S4 94f7b02e
+  - S5 1cfa4d30
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-028
+  criterion: completeness
+  verdict: ''
+  note: ''
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-033
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne
+    ?
+  reference_answer: L'édition de l'an 1409
+  answer: S4
+  cited_anchors:
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/the-forty-two-day-cycle
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/reading-the-almanac
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/known-errors
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/le-calendrier
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-sante
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/voir-aussi
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/hauteurs
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
+  - 750a0563faf1fe1f#p1
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/dernier-jour
+  reference_passages:
+  - 6e33c49c
+  context_passages:
+  - S1 702c8cfc
+  - S2 8f9b6b05
+  - S3 bfceecb7
+  - S4 4483a0ff
+  - S5 e44de565
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-042
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
+  reference_answer: Onze jours (et non quarante).
+  answer: 12 jours
+  cited_anchors:
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/declenchement
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/duree
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/levee
+  - add51e9f5b0e469e#h/procedure-de-quarantaine-du-port-de-port-ysel/confidentialite
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-distances
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+  - a478953867401217#h/charte-du-conseil-des-quais
+  - a478953867401217#h/charte-du-conseil-des-quais/composition
+  - a478953867401217#h/charte-du-conseil-des-quais/mandat
+  - a478953867401217#h/charte-du-conseil-des-quais/quorum-et-decisions
+  - a478953867401217#h/charte-du-conseil-des-quais/seances
+  - b690931e2d4ff220#h/registre-des-navires-de-port-ysel
+  - b690931e2d4ff220#h/registre-des-navires-de-port-ysel/regles
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/composition
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/mandat
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/quorum-et-decisions
+  - 2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
+  reference_passages:
+  - 099357a0
+  context_passages:
+  - S1 a95cedc2
+  - S2 ac40d7b9
+  - S3 8fd28ad4
+  - S4 94f7b02e
+  - S5 b549909b
+- answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-042
+  criterion: faithfulness
+  verdict: ''
+  note: ''
+- answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-002
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: En quelle année le phare de Keld a-t-il été construit ?
+  reference_answer: '1297'
+  answer: '1297'
+  cited_anchors:
+  - 4f70a5c462fa4b04#h/le-phare-de-keld
+  - 4f70a5c462fa4b04#h/le-phare-de-keld/le-gardien
+  - 4f70a5c462fa4b04#h/le-phare-de-keld/les-signaux
+  - 4f70a5c462fa4b04#h/le-phare-de-keld/entretien
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-sel-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-feux-et-les-signaux
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/hauteurs
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-iles-principales
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/le-climat
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/geographie/les-courants
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
+  reference_passages:
+  - fc16c2a9
+  context_passages:
+  - S1 0a06af84
+  - S2 c149e808
+  - S3 bfceecb7
+  - S4 336cd6fb
+  - S5 1cfa4d30
+- answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-017
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Que marque le symbole de lanterne dans l'almanach des marées ?
+  reference_answer: Les jours où le phare de Keld montre son feu à éclats.
+  answer: lanterne
+  cited_anchors:
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/le-calendrier
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-sante
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/voir-aussi
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-navigation
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-commerce
+  - 840ccabb06434f5e#h/glossaire-maritime-de-vaelmor/termes-de-la-vie-a-bord
+  - 750a0563faf1fe1f#p1
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes/la-dame-de-la-cloche
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes/le-hareng-d-argent
+  - 0d5e0a0ad541270b#h/les-legendes-des-brumes/les-lanternes-de-sarnoux
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures
+  reference_passages:
+  - 4ec8a5e8
+  context_passages:
+  - S1 8f9b6b05
+  - S2 c2d82f33
+  - S3 4483a0ff
+  - S4 6cb4b758
+  - S5 aa16ea35
+- answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-033
+  criterion: completeness
+  verdict: ''
+  note: ''
+  question: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne
+    ?
+  reference_answer: L'édition de l'an 1409
+  answer: S4
+  cited_anchors:
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/the-forty-two-day-cycle
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/reading-the-almanac
+  - 0f1c6e54c5f3c5f4#h/notes-on-the-vaelmor-tide-almanac/known-errors
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/le-calendrier
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-sante
+  - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/voir-aussi
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/hauteurs
+  - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
+  - 750a0563faf1fe1f#p1
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
+  - e68bdc24912e7af7#h/journal-de-maelis-torvane/dernier-jour
+  reference_passages:
+  - 6e33c49c
+  context_passages:
+  - S1 702c8cfc
+  - S2 8f9b6b05
+  - S3 bfceecb7
+  - S4 4483a0ff
+  - S5 e44de565

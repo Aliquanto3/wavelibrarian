@@ -1,0 +1,37 @@
+# Story 9.12 : calibration pour le kappa inter-annotateurs, après import des verdicts du second
+# annotateur. Deux passes, le minimum : la passe 0 des deux Juges est servie par le Cache de la
+# story 9.9 (mêmes requêtes), seule la passe 1 est payée (~0,70 USD). Plafond de 1,00 USD. Kappas
+# juge-humain de référence : ceux de corpora/minicorpus/calibration/opus.json (5 passes).
+experiment_id: calibration-inter-annotateurs
+seed: 42
+profile: cpu
+corpus: ../corpus.yaml
+questions: ../questions.yaml
+split: dev
+conditions: [standard]
+judges:
+  pool: ["claude-opus-5-5", "claude-haiku-5-5"]
+  panel_size: 2
+  calibration_passes: 2
+budget:
+  per_run: {anthropic: {amount: "1.00", currency: USD}}
+configurations:
+  - id: bm25
+    architecture: bm25_only
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: rag-naif
+    architecture: naive_rag
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: raptor
+    architecture: raptor
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: pageindex
+    architecture: pageindex
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      select_model: "granite4.2:3b"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
