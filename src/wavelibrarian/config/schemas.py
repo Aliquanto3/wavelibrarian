@@ -51,6 +51,12 @@ class ModelEntry(_Schema):
     # Ollama : valeur du champ `think` envoyé ; `None` = champ non envoyé (modèle qui l'ignore
     # mal). Entre dans la clé du Cache de réponses via la requête effective (v0.2.0, P7).
     think: bool | None = False
+    # Anthropic : `false` pour un modèle à thinking adaptatif toujours actif (Opus 5.5), qui
+    # refuse `tool_choice` imposé (HTTP 400 relevé le 2026-10-26, story 8.11) : l'outil de sortie
+    # part en `tool_choice: auto` avec une consigne de l'appeler.
+    forced_tool_choice: bool = True
+    # Tokens de sortie ajoutés au budget d'un Juge pour le thinking, compté dans `max_tokens`.
+    thinking_reserve_tokens: int = Field(default=0, ge=0)
     # `validate_default` : l'absence de `pricing` d'un modèle d'API est signalée à `...pricing`.
     pricing: Pricing | None = Field(default=None, validate_default=True)
     dim: int | None = None

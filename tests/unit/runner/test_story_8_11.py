@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import anthropic
+import httpx2
 import pytest
 import yaml
 from typer.testing import CliRunner
@@ -16,8 +18,12 @@ from wavelibrarian.config.validate import validate_file
 from wavelibrarian.core.errors import BudgetExceeded
 from wavelibrarian.evalset import io
 from wavelibrarian.evalset.freeze import select_questions
-from wavelibrarian.llm.providers.anthropic import OUTIL_SORTIE, AnthropicProvider
-from wavelibrarian.runner.calibrer import calibrer
+from wavelibrarian.llm.providers.anthropic import (
+    CONSIGNE_OUTIL,
+    OUTIL_SORTIE,
+    AnthropicProvider,
+)
+from wavelibrarian.runner.calibrer import calibrer, fichier_verdicts
 from wavelibrarian.runner.rundir import read_answers
 from wavelibrarian.scoring.panel import criteres_juges
 
@@ -56,25 +62,45 @@ def _annoter(dossier: Path, cible: Path) -> None:
     (cible / "anael.yaml").write_text(texte, encoding="utf-8")
 
 
-class _SdkFactice:
-    """Remplace `anthropic.Anthropic` : répond par l'outil imposé, `yes` à tout Critère."""
+def _http_400(message: str) -> anthropic.BadRequestError:
+    requete = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    return anthropic.BadRequestError(
+        message, response=httpx2.Response(400, request=requete), body=None
+    )
 
-    def __init__(self) -> None:
+
+class _SdkFactice:
+    """Remplace `anthropic.Anthropic` : répond par l'outil, `yes` à tout Critère.
+
+    Reprend les refus réels relevés le 2026-10-26 sur `claude-opus-5-5` (HTTP 400) : `tool_choice`
+    tool/any et `temperature`. `tronquer` : Réponses (par `answer`) pour lesquelles Opus rend un
+    bloc `thinking` seul (`stop_reason: max_tokens`), sans outil.
+    """
+
+    def __init__(self, tronquer: frozenset[str] = frozenset()) -> None:
         self.appels: list[dict[str, Any]] = []
         self.messages = SimpleNamespace(create=self._create)
+        self._tronquer = tronquer
 
     def _create(self, **corps: Any) -> Any:
         self.appels.append(corps)
-        criteres = json.loads(corps["messages"][0]["content"])["criteria"]
-        verdicts = {c: {"verdict": "yes", "justification": "ok"} for c in criteres}
+        if "temperature" in corps.get("extra_body", {}):
+            raise _http_400("`temperature` is deprecated for this model.")
+        if corps["model"] == "claude-opus-5-5" and corps["tool_choice"]["type"] in ("tool", "any"):
+            raise _http_400('tool_choice: type "tool" and "any" are not supported for this model.')
+        entree = json.loads(corps["messages"][0]["content"])
+        verdicts = {c: {"verdict": "yes", "justification": "ok"} for c in entree["criteria"]}
         usage = SimpleNamespace(
             input_tokens=1000,
             output_tokens=300,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
         )
+        if corps["model"] == "claude-opus-5-5" and entree["answer"] in self._tronquer:
+            bloc = SimpleNamespace(type="thinking", thinking="...")
+            return SimpleNamespace(content=[bloc], usage=usage, stop_reason="max_tokens")
         bloc = SimpleNamespace(type="tool_use", input={"verdicts": verdicts})
-        return SimpleNamespace(content=[bloc], usage=usage)
+        return SimpleNamespace(content=[bloc], usage=usage, stop_reason="tool_use")
 
 
 @pytest.fixture
@@ -100,6 +126,9 @@ def test_catalogue_opus_5_5_tarifs_et_absence_de_palier() -> None:
     assert (e.provider, e.family, e.kind) == ("anthropic", "claude", "api")
     assert (e.context_window, e.max_output_tokens) == (1_000_000, 128_000)
     assert e.accepts_temperature is False
+    assert (e.forced_tool_choice, e.thinking_reserve_tokens) == (False, 4000)
+    haiku = load_catalog(None).get("claude-haiku-5-5")
+    assert (haiku.forced_tool_choice, haiku.thinking_reserve_tokens) == (True, 0)
     assert e.pricing is not None and e.pricing.tiers == ()
     assert e.pricing.per_mtok == {
         "input": Decimal("4"),
@@ -130,11 +159,21 @@ def test_calibration_claude_sortie_structuree_cout_par_appel_et_pas_de_temperatu
     assert set(res.donnees["judges"]) == set(JUGES)
     assert res.donnees["passes"] == 2
     assert chemin == dossier / "calibration.json"
-    # Sortie structurée par l'outil imposé, sans `temperature` (modèles 5.x).
+    # Sortie structurée par l'outil, sans `temperature` (modèles 5.x) : imposé pour Haiku,
+    # `auto` avec consigne pour Opus (thinking adaptatif), budget de sortie relevé de 4000.
     for corps in sdk.appels:
-        assert corps["tool_choice"] == {"type": "tool", "name": OUTIL_SORTIE}
         assert "verdicts" in corps["tools"][0]["input_schema"]["properties"]
         assert "extra_body" not in corps
+        if corps["model"] == "claude-haiku-5-5":
+            assert corps["tool_choice"] == {"type": "tool", "name": OUTIL_SORTIE}
+            assert CONSIGNE_OUTIL not in corps["system"]
+        else:
+            assert corps["tool_choice"] == {"type": "auto"}
+            assert corps["system"].endswith(CONSIGNE_OUTIL)
+    budgets = {(c["model"], c["messages"][0]["content"]): c["max_tokens"] for c in sdk.appels}
+    for (modele, contenu), budget in budgets.items():
+        if modele == "claude-opus-5-5":
+            assert budget == budgets[("claude-haiku-5-5", contenu)] + 4000
     assert {c["model"] for c in sdk.appels} == set(JUGES)
     # Coût par appel : 1000 entrée + 300 sortie ; Haiku 0,00025 $, Opus 0,010 $.
     n = n_reponses * 2
@@ -182,3 +221,55 @@ def test_experience_livree_calibration_claude() -> None:
         "minicpm5:1b-q4_k_m",
         "granite4.2:3b",
     }
+
+
+def test_reponse_opus_sans_outil_verdict_manquant_cout_trace_calibration_ecrite(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path
+) -> None:
+    """Troncature ou refus (aucun bloc d'outil) : nouvel essai puis verdict manquant et
+    avertissement pour cette Réponse ; les appels payés sont tracés ; le reste est écrit."""
+    _, dossier = execution
+    _annoter(dossier, tmp_path / "ann")
+    reponses = sorted(read_answers(dossier).values(), key=lambda a: a.answer_id)
+    cible = reponses[0]
+    sdk = _SdkFactice(tronquer=frozenset({cible.text}))
+    exp = validate_file(_exp_claude(tmp_path, "10.00")).resolved
+    res, chemin = calibrer(
+        exp,
+        tmp_path / "ann",
+        dossier.name,
+        wl_home=wl_home,
+        providers={"anthropic": AnthropicProvider(client=sdk)},  # type: ignore[arg-type]
+    )
+    assert chemin.is_file() and fichier_verdicts(chemin).is_file()
+    echecs = [a for a in res.avertissements if "claude-opus-5-5 en échec" in a]
+    assert len(echecs) == 2 and all(cible.answer_id in a for a in echecs)  # 2 passes
+    lignes = [json.loads(x) for x in fichier_verdicts(chemin).read_text("utf-8").splitlines()]
+    par_juge = {(x["judge_model"], x["answer_id"]) for x in lignes}
+    assert ("claude-opus-5-5", cible.answer_id) not in par_juge
+    assert ("claude-haiku-5-5", cible.answer_id) in par_juge
+    # Appels sans outil payés et comptés : 2 passes x (essai + nouvel essai) au lieu de 2.
+    n = len(reponses) * 2
+    attendu = n * Decimal("0.00025") + (n + 2) * Decimal("0.010")
+    assert res.cout == {"USD": attendu}
+
+
+def test_sorties_distinctes_ne_s_ecrasent_pas_et_dossier_cree(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path
+) -> None:
+    """Deux calibrations de la même Exécution (Ollama par défaut, Claude avec `--sortie`) :
+    chacune garde ses verdicts ; un dossier de sortie absent est créé avant les appels."""
+    _, dossier = execution
+    _annoter(dossier, tmp_path / "ann")
+    exp = validate_file(_exp_claude(tmp_path, "10.00")).resolved
+    providers = {"anthropic": AnthropicProvider(client=_SdkFactice())}  # type: ignore[arg-type]
+    _, defaut = calibrer(exp, tmp_path / "ann", dossier.name, wl_home=wl_home, providers=providers)
+    assert fichier_verdicts(defaut) == dossier / "calibration_verdicts.jsonl"
+    avant = (dossier / "calibration_verdicts.jsonl").read_bytes()
+    sortie = tmp_path / "absent" / "calibration-claude.json"
+    _, chemin = calibrer(
+        exp, tmp_path / "ann", dossier.name, wl_home=wl_home, sortie=sortie, providers=providers
+    )
+    assert chemin == sortie and sortie.is_file()
+    assert (sortie.parent / "calibration-claude_verdicts.jsonl").is_file()
+    assert (dossier / "calibration_verdicts.jsonl").read_bytes() == avant

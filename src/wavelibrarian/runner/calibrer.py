@@ -2,8 +2,9 @@
 
 Chaque Juge du réservoir admissible note chaque Réponse annotée `passes` fois (`pass_id` 0 à
 `passes - 1`, les passes au-delà de 0 contournent le Cache de réponses), au Poste `judging`. Les
-verdicts vont dans `calibration_verdicts.jsonl` de l'Exécution ; `verdicts.jsonl` n'est pas
-touché. `calibration.json` résume kappa juge-humain, instabilité et exclusion par Juge.
+verdicts vont dans `<sortie>_verdicts.jsonl` (`calibration_verdicts.jsonl` de l'Exécution par
+défaut) ; `verdicts.jsonl` n'est pas touché. `calibration.json` résume kappa juge-humain,
+instabilité et exclusion par Juge.
 """
 
 import json
@@ -34,7 +35,6 @@ from wavelibrarian.scoring.panel import construire_juges, criteres_juges
 
 log = logging.getLogger(__name__)
 
-FICHIER_VERDICTS = "calibration_verdicts.jsonl"
 FICHIER_CALIBRATION = "calibration.json"
 
 
@@ -64,10 +64,11 @@ def calibrer(
     sortie: Path | None = None,
     providers: Any = None,
 ) -> tuple[Calibration, Path]:
-    """Calibre les Juges ; écrit `calibration_verdicts.jsonl` et `calibration.json` (par défaut
-    dans le dossier de l'Exécution). `ConfigError` (code 2) : Exécution inconnue, dossier sans
-    annotation valide, aucune annotation sur une Réponse de l'Exécution. `BudgetExceeded`
-    (code 3) : rien n'est écrit."""
+    """Calibre les Juges ; écrit `calibration.json` (par défaut dans le dossier de l'Exécution,
+    sinon `sortie`) et ses verdicts bruts à côté (`fichier_verdicts`). `ConfigError` (code 2) :
+    Exécution inconnue, dossier sans annotation valide, aucune annotation sur une Réponse de
+    l'Exécution, dossier de `sortie` impossible à créer. `BudgetExceeded` (code 3) : rien n'est
+    écrit."""
     dossier = wl_home / "runs" / run_id
     if not dossier.is_dir() or not (dossier / "answers.jsonl").is_file():
         raise ConfigError("--run", f"Exécution {run_id} introuvable dans {wl_home / 'runs'}")
@@ -97,6 +98,14 @@ def calibrer(
         cibles[aid] = (a, q, conf)
     if not cibles:
         raise ConfigError(str(annotations_dir), "aucune Réponse annotée n'est notable (statut ok)")
+    chemin = sortie or dossier / FICHIER_CALIBRATION
+    chemin_verdicts = fichier_verdicts(chemin)
+    try:  # avant tout appel payé : un dossier de sortie impossible ne perd pas la calibration
+        chemin.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as erreur:
+        raise ConfigError(
+            "--sortie", f"dossier {chemin.parent} impossible à créer : {erreur}"
+        ) from None
 
     j = experience.judges
     pool = tuple(j.pool or experience.profile_settings.defaults.judge_pool)
@@ -210,10 +219,16 @@ def calibrer(
     avertissements.extend(
         avertissements_closed_book(experience, resultat.exclus, jeu.questions, catalogue)
     )
-    chemin = sortie or dossier / FICHIER_CALIBRATION
-    _ecrire(dossier / FICHIER_VERDICTS, "".join(_ligne(x) for x in lignes))
+    _ecrire(chemin_verdicts, "".join(_ligne(x) for x in lignes))
     _ecrire(chemin, json.dumps(donnees, ensure_ascii=False, indent=2) + "\n")
     return resultat, chemin
+
+
+def fichier_verdicts(calibration: Path) -> Path:
+    """Verdicts bruts à côté de `calibration` : `<nom>_verdicts.jsonl` (`calibration.json` donne
+    `calibration_verdicts.jsonl`). Deux calibrations de la même Exécution avec des `--sortie`
+    distinctes (Juges Ollama et Claude en parallèle, story 8.11) ne s'écrasent pas."""
+    return calibration.with_name(f"{calibration.stem}_verdicts.jsonl")
 
 
 def _assembler(

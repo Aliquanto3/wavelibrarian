@@ -389,6 +389,8 @@ class LLMRequest(BaseModel):
     seed: int | None = None
     think: bool | None = False             # Ollama seul : posé par la passerelle depuis `ModelEntry.think` ;
                                            # None = champ non envoyé ; dans la clé de cache pour ollama seul
+    forced_tool: bool = True               # Anthropic seul : posé depuis `ModelEntry.forced_tool_choice` ;
+                                           # False = outil en `tool_choice: auto` (dans la clé si False)
     cache_system: bool = False             # met le system en cache de prompt
     pass_id: int = 0                       # entre dans la clé du Cache de réponses (FR-34)
     timeout_s: float | None = None
@@ -447,6 +449,8 @@ class ModelEntry(BaseModel):               # une entrée de models.yaml (§4.2)
     tokenizer: Literal["reference", "approx"] = "reference"; token_factor: Decimal = Decimal("1.2")
     prompt_cache: bool = False; accepts_temperature: bool = True; min_cacheable_tokens: int | None = None
     think: bool | None = False             # Ollama : valeur envoyée ; None = champ non envoyé (v0.2.0, P7)
+    forced_tool_choice: bool = True        # Anthropic : False si `tool_choice` imposé refusé (Opus 5.5, 8.11)
+    thinking_reserve_tokens: int = 0       # ajouté au `max_tokens` des Juges (thinking compté en sortie)
     pricing: Pricing | None = None; dim: int | None = None; hf_repo: str | None = None
     query_prefix: str = ""; passage_prefix: str = ""
 

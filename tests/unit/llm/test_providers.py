@@ -197,11 +197,38 @@ def test_anthropic_sortie_structuree_par_outil_impose() -> None:
     assert Sortie.model_validate_json(rep.text).reponse == "Paris"
 
 
-def test_anthropic_sortie_structuree_sans_outil_dans_la_reponse() -> None:
-    with pytest.raises(ProviderError, match="aucune sortie d'outil"):
-        _anthropic(Transport(_ok())).complete(
-            _req(), timeout_s=30, output_schema=Sortie.model_json_schema()
-        )
+def test_anthropic_sortie_structuree_sans_outil_rend_le_texte_et_l_usage() -> None:
+    # Story 8.11 : troncature ou refus sans bloc d'outil. La réponse est payée : son texte et son
+    # usage remontent, la passerelle la juge non conforme (coût tracé) au lieu d'un échec global.
+    corps = {**REPONSE_ANTHROPIC, "stop_reason": "max_tokens"}
+    rep = _anthropic(Transport(_ok(corps))).complete(
+        _req(), timeout_s=30, output_schema=Sortie.model_json_schema()
+    )
+    assert rep.text == "Bonjour"
+    assert (rep.usage.input_tokens, rep.usage.output_tokens) == (
+        REPONSE_ANTHROPIC["usage"]["input_tokens"],
+        REPONSE_ANTHROPIC["usage"]["output_tokens"],
+    )
+
+
+def test_anthropic_outil_non_impose_tool_choice_auto_et_consigne() -> None:
+    # Opus 5.5 : `tool_choice` tool/any refusé (HTTP 400 relevé le 2026-10-26).
+    bloc = {"type": "tool_use", "id": "tu_1", "name": "emit_output", "input": {"reponse": "Paris"}}
+    t = Transport(_ok({**REPONSE_ANTHROPIC, "content": [bloc], "stop_reason": "tool_use"}))
+    schema = Sortie.model_json_schema()
+    rep = _anthropic(t).complete(_req(forced_tool=False), timeout_s=30, output_schema=schema)
+    corps = t.body()
+    assert corps["tool_choice"] == {"type": "auto"}
+    assert corps["system"].startswith("Réponds en français.")
+    assert corps["system"].endswith(ant_mod.CONSIGNE_OUTIL)
+    assert Sortie.model_validate_json(rep.text).reponse == "Paris"
+    cache = AnthropicProvider.native_request(_req(forced_tool=False, cache_system=True), schema)[
+        "system"
+    ]
+    assert cache[0]["cache_control"] and cache[-1] == {
+        "type": "text",
+        "text": ant_mod.CONSIGNE_OUTIL,
+    }
 
 
 def test_anthropic_delai_applique_et_pas_d_essai_du_sdk() -> None:

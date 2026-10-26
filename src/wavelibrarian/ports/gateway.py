@@ -46,6 +46,9 @@ class LLMRequest(BaseModel):
     # Ollama : `think` envoyé tel quel, `None` = champ omis. La passerelle y pose la valeur du
     # Catalogue (`ModelEntry.think`) ; les autres providers l'ignorent.
     think: bool | None = False
+    # Anthropic : `False` envoie l'outil de sortie en `tool_choice: auto` (posé par la passerelle
+    # depuis `ModelEntry.forced_tool_choice`) ; les autres providers l'ignorent.
+    forced_tool: bool = True
     cache_system: bool = False  # met le system en cache de prompt
     pass_id: int = 0  # entre dans la clé du Cache de réponses (FR-34)
     timeout_s: float | None = None

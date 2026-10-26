@@ -229,6 +229,9 @@ class MeteredGateway:
         if nom == "ollama" and marquee.think != entry.think:
             # Story 8.4 : `think` effectif du Catalogue, repris dans la clé de cache.
             marquee = marquee.model_copy(update={"think": entry.think})
+        if nom == "anthropic" and marquee.forced_tool != entry.forced_tool_choice:
+            # Story 8.11 : Opus 5.5 refuse l'outil imposé ; effectif du Catalogue, dans la clé.
+            marquee = marquee.model_copy(update={"forced_tool": entry.forced_tool_choice})
         schema_json = schema.model_json_schema() if schema is not None else None
         # Après le marquage : le rôle entre dans la clé ; le schéma aussi (il change la requête).
         # Story 8.7 : options Ollama du profil (`repeat_penalty`…) dans la clé, comme `think`.

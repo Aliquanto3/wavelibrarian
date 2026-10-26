@@ -26,10 +26,13 @@ _MAX_TOKENS_PAR_CRITERE = 200
 _MAX_TOKENS_FIXE = 100
 
 
-def budget_sortie(n_criteres: int, max_output_tokens: int | None = None) -> int:
+def budget_sortie(
+    n_criteres: int, max_output_tokens: int | None = None, thinking_reserve: int = 0
+) -> int:
     """`max_tokens` d'un appel de Juge, borné par `max_output_tokens` du Catalogue s'il existe.
+    `thinking_reserve` (`ModelEntry.thinking_reserve_tokens`) : thinking compté dans la sortie.
     Il entre dans la clé du Cache (cache.py) et dans l'estimation de la passerelle (sortie)."""
-    budget = _MAX_TOKENS_PAR_CRITERE * max(n_criteres, 1) + _MAX_TOKENS_FIXE
+    budget = _MAX_TOKENS_PAR_CRITERE * max(n_criteres, 1) + _MAX_TOKENS_FIXE + thinking_reserve
     return min(budget, max_output_tokens) if max_output_tokens else budget
 
 
@@ -72,6 +75,7 @@ class LLMJudge:
         if "faithfulness" in criteres:  # AD-6 : les textes réellement fournis au Generator
             corps["context_texts"] = list(item.context_texts)
             inputs["context_texts"] = list(item.context_texts)
+        entree = self._ctx.catalog.get(self.model_id)
         requete = LLMRequest(
             model_id=self.model_id,
             role="judge",
@@ -79,7 +83,7 @@ class LLMJudge:
             system=_SYSTEM,
             messages=(Message(role="user", content=json.dumps(corps, ensure_ascii=False)),),
             max_tokens=budget_sortie(
-                len(criteres), self._ctx.catalog.get(self.model_id).max_output_tokens
+                len(criteres), entree.max_output_tokens, entree.thinking_reserve_tokens
             ),
             seed=self._ctx.seed,
             pass_id=pass_id,

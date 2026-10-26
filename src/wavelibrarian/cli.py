@@ -246,7 +246,9 @@ def calibrer(
     sortie: Annotated[
         Path | None,
         typer.Option(
-            "--sortie", help="Chemin de calibration.json (défaut : dossier de l'Exécution)."
+            "--sortie",
+            help="Chemin de calibration.json (défaut : dossier de l'Exécution) ; verdicts "
+            "bruts à côté, dans `<nom>_verdicts.jsonl`.",
         ),
     ] = None,
 ) -> None:

@@ -358,7 +358,9 @@ def test_le_panel_de_wl_run_garde_le_cache_des_passes_suivantes() -> None:
     class _Ctx:
         seed = 1
         gateway = _Passerelle()
-        catalog = SimpleNamespace(get=lambda _m: SimpleNamespace(max_output_tokens=None))
+        catalog = SimpleNamespace(
+            get=lambda _m: SimpleNamespace(max_output_tokens=None, thinking_reserve_tokens=0)
+        )
 
     item = JudgeInput(
         question="q", reference_answer="r", reference_texts=(), answer_text="a", context_texts=()

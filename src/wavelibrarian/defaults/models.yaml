@@ -32,7 +32,9 @@ models:
     tokenizer: reference
     token_factor: "1.5"                # SUPPOSÉ, non relevé : repris de Haiku 5.5 (majorant prudent)
     prompt_cache: true
-    accepts_temperature: false         # SUPPOSÉ, non vérifié en réel : les modèles 5.x la refusent (cf. Haiku 5.5)
+    accepts_temperature: false         # relevé le 2026-10-26 : HTTP 400 « `temperature` is deprecated »
+    forced_tool_choice: false          # relevé le 2026-10-26 : HTTP 400 sur `tool_choice` tool/any
+    thinking_reserve_tokens: 4000      # thinking adaptatif compté dans `max_tokens` (Juges)
     min_cacheable_tokens: 4096         # SUPPOSÉ, non relevé : seuil des Opus récents ; sans effet sur les Juges
     pricing:
       date: 2026-10-26                 # platform.claude.com/docs/en/about-claude/pricing

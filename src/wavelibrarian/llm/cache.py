@@ -61,6 +61,8 @@ def cache_key(
     if provider == "ollama":
         contenu["params"]["think"] = request.think  # None (omis) distinct de False
         contenu["params"]["options"] = dict(provider_options or {})
+    if provider == "anthropic" and not request.forced_tool:  # clés inchangées sinon (Haiku)
+        contenu["params"]["forced_tool"] = False
     if provider == "fake":
         contenu["inputs"] = request.inputs
         contenu["step"] = request.step  # `script(role, step_glob, …)` : sortie selon l'étape

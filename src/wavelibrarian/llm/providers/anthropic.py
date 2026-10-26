@@ -23,6 +23,7 @@ from wavelibrarian.ports.gateway import LLMRequest
 CLE_ENV = "ANTHROPIC_API_KEY"
 OUTIL_SORTIE = "emit_output"
 _CACHE = {"type": "ephemeral"}
+CONSIGNE_OUTIL = f"Réponds uniquement en appelant l'outil `{OUTIL_SORTIE}`, sans autre texte."
 
 
 def _energie_kwh(response: object) -> float | None:
@@ -114,7 +115,20 @@ class AnthropicProvider:
                     "input_schema": output_schema,
                 }
             ]
-            corps["tool_choice"] = {"type": "tool", "name": OUTIL_SORTIE}
+            if request.forced_tool:
+                corps["tool_choice"] = {"type": "tool", "name": OUTIL_SORTIE}
+            else:
+                # Thinking adaptatif (Opus 5.5) : outil imposé refusé (HTTP 400), d'où `auto` et
+                # une consigne explicite d'appeler l'outil.
+                corps["tool_choice"] = {"type": "auto"}
+                consigne = {"type": "text", "text": CONSIGNE_OUTIL}
+                systeme = corps.get("system")
+                if isinstance(systeme, list):
+                    corps["system"] = [*systeme, consigne]
+                else:
+                    corps["system"] = (
+                        f"{systeme}\n\n{CONSIGNE_OUTIL}" if systeme else CONSIGNE_OUTIL
+                    )
         # `temperature` n'est plus un paramètre typé du SDK 1.15 : corps additionnel. `None` : le
         # modèle la refuse (`accepts_temperature: false`, HTTP 400 pour Haiku 5.5, story 4.15).
         if request.temperature is not None:
@@ -135,9 +149,15 @@ class AnthropicProvider:
             raise _traduire(exc) from None
         if output_schema is not None:
             sortie = [b.input for b in reponse.content if b.type == "tool_use"]
-            if not sortie:
-                raise ProviderError("Anthropic : aucune sortie d'outil dans la réponse")
-            texte = json.dumps(sortie[0], ensure_ascii=False)
+            # Sans bloc d'outil (troncature `max_tokens`, refus, texte libre) : la réponse est
+            # payée, son texte part à la validation de schéma de la passerelle, qui trace le coût
+            # et lève `NonConformantOutput` (nouvel essai puis verdict manquant), jamais un échec
+            # global sans coût tracé.
+            texte = (
+                json.dumps(sortie[0], ensure_ascii=False)
+                if sortie
+                else "".join(b.text for b in reponse.content if b.type == "text")
+            )
         else:
             texte = "".join(b.text for b in reponse.content if b.type == "text")
         u = reponse.usage
