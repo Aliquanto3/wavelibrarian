@@ -704,3 +704,83 @@ def test_import_entree_sans_answer_id_en_tete_refusee(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="non reconnues"):
         importer_verdicts(paquet, v)
     assert paquet.read_bytes() == avant
+
+
+def test_table_collision_de_cle_courte_deterministe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deux Passages dont les empreintes partagent 8 caractères : le second prend 16 caractères,
+    dans l'ordre d'insertion, et chacun se relit à l'identique."""
+    import wavelibrarian.report.paquet as mod
+
+    empreintes = {"un": "abcdef0011111111", "deux": "abcdef0022222222"}
+    monkeypatch.setattr(mod, "sha16", lambda _p, _a, texte: empreintes[texte])
+    cles = []
+    for _ in range(2):
+        t = mod.TablePassages()
+        cles.append((t.contexte("[S1] (d#1) un"), t.reference("deux"), t.reference("un", "d#1")))
+        assert t.entrees == {
+            "abcdef00": {"anchor": "d#1", "text": "un"},
+            "abcdef0022222222": {"text": "deux"},
+        }
+        doc = {
+            "passages": t.entrees,
+            "annotations": [
+                {"context_passages": [cles[-1][0]], "reference_passages": [cles[-1][1]]}
+            ],
+        }
+        relu = mod.resoudre_passages(doc)["annotations"][0]
+        assert relu == {"context_passages": ["[S1] (d#1) un"], "reference_passages": ["deux"]}
+    assert cles[0] == cles[1] == ("S1 abcdef00", "abcdef0022222222", "abcdef00")
+
+
+def test_import_aller_retour_table_multiligne(tmp_path: Path) -> None:
+    """Table `passages` à textes multilignes et caractères YAML spéciaux (y compris des lignes
+    qui ressemblent à `- answer_id:` ou `verdict:`) : seules les lignes verdict et note changent,
+    les Passages se relisent à l'identique."""
+    from wavelibrarian.report.paquet import ENTETE, TablePassages, _Dumper
+
+    t = TablePassages()
+    ctx = [
+        t.contexte("[S1] (doc#a) l1  \n  verdict: no\n- answer_id: zz\n\ttab"),
+        t.contexte("[S2] (doc#b) " + "mot " * 40 + "criterion: faithfulness " + "x " * 40),
+        t.contexte("brut: # pas un commentaire \"q\" 'q'   fin"),
+    ]
+    ref = [t.reference("ref\n- answer_id: r/q-1\n  criterion: correctness", "doc#r")]
+    lignes: list[dict[str, Any]] = [
+        {"answer_id": "r/q-1", "criterion": "correctness", "verdict": "", "note": ""},
+        {"answer_id": "r/q-1", "criterion": "faithfulness", "verdict": "", "note": ""},
+    ]
+    lignes[0].update(context_passages=ctx, reference_passages=ref)
+    corps = yaml.dump(
+        {"annotator": "ana", "passages": t.entrees, "annotations": lignes},
+        Dumper=_Dumper,
+        allow_unicode=True,
+        sort_keys=False,
+        width=100,
+    )
+    paquet = tmp_path / "ana.yaml"
+    paquet.write_text(ENTETE + corps, encoding="utf-8", newline="\n")
+    avant_txt, avant = paquet.read_text(encoding="utf-8"), lire_paquet(paquet)
+    v = _json(
+        tmp_path / "v.json",
+        {
+            "r/q-1|correctness": {"verdict": "yes", "note": "a\nb: #c"},
+            "r/q-1|faithfulness": {"verdict": "na"},
+        },
+    )
+    importer_verdicts(paquet, v)
+    apres = lire_paquet(paquet)
+    assert (
+        apres["annotations"][0]["context_passages"] == avant["annotations"][0]["context_passages"]
+    )
+    assert (
+        apres["annotations"][0]["reference_passages"]
+        == avant["annotations"][0]["reference_passages"]
+    )
+    assert [(x["verdict"], x["note"]) for x in apres["annotations"]] == [
+        ("yes", "a\nb: #c"),
+        ("na", ""),
+    ]
+    a, b = avant_txt.split("\n"), paquet.read_text(encoding="utf-8").split("\n")
+    assert len(a) == len(b)
+    assert sum(x != y for x, y in zip(a, b, strict=True)) == 3
+    assert len(charger_fichier(paquet)) == 2

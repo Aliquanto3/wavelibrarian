@@ -63,3 +63,12 @@ Branche rebasée sur `story/9-3` revue (2ed872c) : `main` ne contient pas encore
 - **Nit**, low, revue : `--part-double` passé avec `--depuis` est ignoré sans message. Non corrigé (sans effet sur les données).
 - **Nit**, low, revue : la progression de la page est rangée sous `wl-annot-<annotateur>` : deux paquets du même annotateur ouverts dans le même navigateur partagent leurs verdicts (les clés étrangères sortent en « absents du paquet » à l'import). Non corrigé.
 - Complexité : 0 constat (table de Passages en dictionnaire, import en un passage linéaire).
+
+### Passe 2 (2026-10-26, SHA revu 947ae11)
+
+Base : `main` f259a80 (rebase sans conflit). Relu : `git diff 2479490..HEAD` (correctifs de la passe 1).
+- Vérifié, sans constat : le chargeur 5.1 (`charger_fichier`, donc `wl calibrer`) ignore la table `passages` ; `anael.yaml` reste chargeable ; l'import repart à zéro à chaque `- ` de colonne 0, relit le fichier temporaire (squelette, verdicts et notes attendus) avant `os.replace` ; aller-retour exécuté sur une table à textes multilignes, repliés à 100 colonnes et contenant `- answer_id:`, `verdict:`, `#`, guillemets, tabulation et U+2028 : seules les lignes verdict et note changent ; la page résout `S<n> <clé>` et refuse une clé absente (`ConfigError`, code 2) ; `--depuis` recopie la table utile ; `contracts.md` §4.6 et §8 conformes au code.
+- **Nit**, low, revue : la branche de collision (clé de 16 caractères) n'était pas testée. Corrigé : `test_table_collision_de_cle_courte_deterministe` (empreintes forcées, clés identiques d'un tirage à l'autre, relecture exacte).
+- **Nit**, low, revue : pas de test d'aller-retour d'import sur une table `passages` à texte multiligne et caractères YAML spéciaux. Corrigé : `test_import_aller_retour_table_multiligne`.
+- **Nit**, low, revue : `--depuis` retrouve l'Ancrage d'un Passage de référence par son texte (`_ancrages_de_reference`) ; deux Ancrages de même texte gardent le premier. Non corrigé (affichage seul, cas improbable).
+- Complexité : 0 constat.
