@@ -338,7 +338,7 @@ def _verdict(qid: str, oui: bool) -> dict[str, PanelVerdict]:
         "correctness": PanelVerdict(
             answer_id=f"r/bm25/standard/all/after_update/{qid}",
             criterion="correctness",
-            verdict=oui,
+            verdict="yes" if oui else "no",
         )
     }
 

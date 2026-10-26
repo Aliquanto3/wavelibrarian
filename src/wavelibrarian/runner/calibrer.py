@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.experiment import ResolvedConfiguration, ResolvedExperiment
@@ -33,7 +33,15 @@ from wavelibrarian.core.errors import (
     ProviderError,
     WlError,
 )
-from wavelibrarian.core.types import Answer, Criterion, ParsedCorpus, Question
+from wavelibrarian.core.types import (
+    NA,
+    Answer,
+    Criterion,
+    ParsedCorpus,
+    Question,
+    VerdictValue,
+    verdict_depuis_bool,
+)
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest
 from wavelibrarian.corpus.scenario import corpus_apres
@@ -139,7 +147,7 @@ def calibrer(
     # Reprise : même Registre (plafond `per_run`) et mêmes Traces que la tentative interrompue.
     id_cal = lu.id_cal or f"calibration-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
     corpus = _Corpus(experience, wl_home)
-    verdicts_de: dict[str, dict[cal.Passe, bool]] = {m: {} for m in modeles}
+    verdicts_de: dict[str, dict[cal.Passe, VerdictValue]] = {m: {} for m in modeles}
     admises: dict[str, set[str]] = {m: set() for m in modeles}
     tentes: set[str] = set()  # Juges appelés au moins une fois
     appels = 0
@@ -151,13 +159,16 @@ def calibrer(
         plan: list[tuple[str, Answer, Question, JudgeInput, list[Criterion], list[str]]] = []
         for aid, (a, q, conf) in cibles.items():
             familles = {catalogue.get(m).family for m in conf.answer_producers}
-            criteres: list[Criterion] = [
+            annotes: list[Criterion] = [
                 c
                 for c in criteres_juges(q)
                 if any(k[1] == aid and k[2] == c for k in annotations.verdicts)
             ]
-            if not criteres:
+            if not annotes:
                 continue
+            # Réponse vide ou abstention : `faithfulness` vaut `na` sans appel (story 9.3).
+            criteres: list[Criterion] = [c for c in criteres_juges(q, a) if c in annotes]
+            sans_objet = [c for c in annotes if c not in criteres]
             parse = corpus.de(conf, a)
             if parse is None:
                 avertissements.append(f"Réponse {aid} ignorée : Corpus de sa phase indisponible")
@@ -183,7 +194,11 @@ def calibrer(
                 notants.append(modele)
                 if est_pool:
                     admises[modele].add(aid)
-            plan.append((aid, a, q, item, criteres, notants))
+                for c in sans_objet:
+                    for passe in range(passes):
+                        verdicts_de[modele][(aid, c, passe)] = NA
+            if criteres:
+                plan.append((aid, a, q, item, criteres, notants))
         requetes = {
             f"{m}|{aid}": _empreinte_requete(juges[m], ctx.catalog, item, criteres)
             for aid, _, _, item, criteres, notants in plan
@@ -284,7 +299,7 @@ def _assembler(
     modeles: tuple[str, ...],
     pool: tuple[str, ...],
     juge_cal: str | None,
-    verdicts_de: Mapping[str, Mapping[cal.Passe, bool]],
+    verdicts_de: Mapping[str, Mapping[cal.Passe, VerdictValue]],
     admises: Mapping[str, set[str]],
     doubles: set[str],
     avertissements: list[str],
@@ -475,7 +490,7 @@ def _lire_verdicts(chemin: Path, reprendre: bool, ecraser: bool) -> _Lu:
                 _ = (str(x["judge_model"]), str(x["answer_id"]), int(x["pass_id"]))
                 ident, _ = str(x["calibration_id"]), str(x["empreinte"])
                 if not x.get("missing"):
-                    _ = [bool(v["verdict"]) for v in x["verdicts"].values()]
+                    _ = [_verdict_lu(v["verdict"]) for v in x["verdicts"].values()]
         except (ValueError, KeyError, TypeError, AttributeError):
             raise ConfigError("--reprendre", f"{chemin} ligne {i} illisible") from None
         if ancien:
@@ -491,10 +506,20 @@ def _lire_verdicts(chemin: Path, reprendre: bool, ecraser: bool) -> _Lu:
     return lu
 
 
-def _faits(lu: _Lu, chemin: Path, empreinte: str) -> dict[Triplet, dict[str, tuple[bool, str]]]:
+def _verdict_lu(valeur: Any) -> VerdictValue:
+    """Verdict d'une ligne relue : `yes`, `no`, `na`, ou booléen d'un fichier de la 9.1."""
+    v = verdict_depuis_bool(valeur)
+    if v not in cal.VERDICTS:
+        raise ValueError(f"verdict inconnu {valeur!r}")
+    return cast(VerdictValue, v)
+
+
+def _faits(
+    lu: _Lu, chemin: Path, empreinte: str
+) -> dict[Triplet, dict[str, tuple[VerdictValue, str]]]:
     """Triplets déjà notés du fichier relu, après contrôle de l'empreinte de chaque ligne ; un
     triplet `missing` est rappelé."""
-    faits: dict[Triplet, dict[str, tuple[bool, str]]] = {}
+    faits: dict[Triplet, dict[str, tuple[VerdictValue, str]]] = {}
     for i, x in lu.lignes:
         if x["empreinte"] != empreinte:
             raise ConfigError(
@@ -507,7 +532,7 @@ def _faits(lu: _Lu, chemin: Path, empreinte: str) -> dict[Triplet, dict[str, tup
             faits.pop(cle, None)
         else:
             faits[cle] = {
-                c: (bool(v["verdict"]), str(v.get("justification", "")))
+                c: (_verdict_lu(v["verdict"]), str(v.get("justification", "")))
                 for c, v in x["verdicts"].items()
             }
     return faits

@@ -171,7 +171,7 @@ def test_verdicts_ecrits_et_vides_a_chaque_appel(
         "verdicts",
     }
     assert all(
-        set(v) == {"verdict", "justification"} and v["verdict"] is True
+        set(v) == {"verdict", "justification"} and v["verdict"] == "yes"
         for v in premiere["verdicts"].values()
     )
 

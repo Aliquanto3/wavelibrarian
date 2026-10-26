@@ -91,7 +91,7 @@ def filtrer(ctx: ContexteGeneration, fichier: QuestionsFile, modeles: Sequence[s
                     )
                     # la justification n'est pas exigée (contracts §2 : `justification = ""`)
                     note = instances[jm].judge(item, ["correctness"], 0)
-                    contaminee, methode = note["correctness"][0], f"juge:{jm}"
+                    contaminee, methode = note["correctness"][0] == "yes", f"juge:{jm}"
             verdicts.append(Verdict(q.id, modele, contaminee, methode))
     nouveaux = _appliquer(fichier, verdicts, modeles, {q.id for q in retenues})
     return Filtrage(

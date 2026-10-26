@@ -11,7 +11,7 @@ import itertools
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from wavelibrarian.core.types import Answer, Question
+from wavelibrarian.core.types import NA, Answer, Question, oui_non
 from wavelibrarian.report.ancrages import Resolveur
 from wavelibrarian.report.lecture import CleGroupe, Execution, groupe_de
 from wavelibrarian.scoring.retrieval import K_PAR_DEFAUT, retrieval_metrics
@@ -49,7 +49,8 @@ class LigneScore:
     value: float
     ci_low: float
     ci_high: float
-    n: int
+    n: int  # verdicts `yes` ou `no` (n effectif du taux)
+    n_na: int = 0  # verdicts `na` (sans objet), hors du taux (story 9.3)
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,8 @@ class Resultats:
     contaminees: list[LigneScore] = field(default_factory=list)  # Qualité à part (FR-12)
     recherche: list[LigneRecherche] = field(default_factory=list)
     paires: list[LignePaire] = field(default_factory=list)
+    # Verdicts `na` d'un (groupe, Critère) sans aucun `yes` ni `no` : pas de ligne de score.
+    na_seuls: dict[tuple[CleGroupe, str], int] = field(default_factory=dict)
     alertes_recherche: list[str] = field(default_factory=list)  # Ancrages, Corpus modifié
 
 
@@ -110,8 +113,24 @@ def qualite(q: Question, verdicts: dict[str, bool]) -> bool | None:
     return verdicts.get("abstention_correctness" if q.type == "unanswerable" else "correctness")
 
 
+def verdicts_oui_non(ex: Execution, answer_id: str) -> dict[str, bool]:
+    """Verdicts de panel d'une Réponse en booléens ; un `na` est absent (hors des taux et des
+    comparaisons appariées, story 9.3)."""
+    sortie: dict[str, bool] = {}
+    for c, v in ex.verdicts_par_reponse.get(answer_id, {}).items():
+        oui = oui_non(v.verdict)
+        if oui is not None:
+            sortie[c] = oui
+    return sortie
+
+
+def _nombre_na(ex: Execution, a: Answer, critere: str) -> int:
+    v = ex.verdicts_par_reponse.get(a.answer_id, {}).get(critere)
+    return int(v is not None and v.verdict == NA)
+
+
 def _verdicts(ex: Execution, a: Answer) -> dict[str, bool]:
-    return {c: v.verdict for c, v in ex.verdicts_par_reponse.get(a.answer_id, {}).items()}
+    return verdicts_oui_non(ex, a.answer_id)
 
 
 def _graine(ex: Execution, g: CleGroupe, *cles: str) -> int:
@@ -119,15 +138,23 @@ def _graine(ex: Execution, g: CleGroupe, *cles: str) -> int:
 
 
 def _scores_groupe(
-    ex: Execution, g: CleGroupe, reponses: list[tuple[Answer, Question]], *, par_type: bool
+    ex: Execution,
+    g: CleGroupe,
+    reponses: list[tuple[Answer, Question]],
+    *,
+    par_type: bool,
+    na_seuls: dict[tuple[CleGroupe, str], int] | None = None,
 ) -> list[LigneScore]:
-    """Qualité et taux de chaque Critère, par Type de question (si `par_type`) et pour tous."""
+    """Qualité et taux de chaque Critère, par Type de question (si `par_type`) et pour tous. Un
+    verdict `na` sort du taux et se compte dans `n_na` ; `na_seuls` reçoit le nombre de `na` d'un
+    Critère sans aucun `yes` ni `no` (tous Types)."""
     types = sorted({q.type for _, q in reponses}) if par_type else []
     s = ex.experience.stats
     lignes: list[LigneScore] = []
     for critere in (QUALITE, *CRITERES):
         for type_ in (*types, TOUS):
             valeurs: list[float] = []
+            n_na = 0
             for a, q in reponses:
                 if type_ not in (TOUS, q.type):
                     continue
@@ -135,6 +162,8 @@ def _scores_groupe(
                 oui = qualite(q, v) if critere == QUALITE else v.get(critere)
                 if oui is not None:
                     valeurs.append(float(oui))
+                elif critere != QUALITE:
+                    n_na += _nombre_na(ex, a, critere)
             ic = bootstrap_ci(
                 valeurs,
                 seed=_graine(ex, g, type_, critere),
@@ -142,7 +171,9 @@ def _scores_groupe(
                 confidence=s.confidence,
             )
             if ic is not None:
-                lignes.append(LigneScore(g, type_, critere, ic.mean, ic.low, ic.high, ic.n))
+                lignes.append(LigneScore(g, type_, critere, ic.mean, ic.low, ic.high, ic.n, n_na))
+            elif n_na and type_ == TOUS and na_seuls is not None:
+                na_seuls[(g, critere)] = n_na
     return lignes
 
 
@@ -293,7 +324,7 @@ def evaluer(ex: Execution, resoudre: Resolveur) -> Resultats:
     for g in sorted(groupes, key=_ordre):
         principales = [(a, q) for a, q in groupes[g] if not q.contaminated_by]
         contaminees = [(a, q) for a, q in groupes[g] if q.contaminated_by]
-        res.scores += _scores_groupe(ex, g, principales, par_type=True)
+        res.scores += _scores_groupe(ex, g, principales, par_type=True, na_seuls=res.na_seuls)
         res.contaminees += [
             ligne
             for ligne in _scores_groupe(ex, g, contaminees, par_type=False)

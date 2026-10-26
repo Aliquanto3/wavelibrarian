@@ -6,8 +6,13 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, create_model
 
-from wavelibrarian.core.types import Criterion, ModelRefMeta
-from wavelibrarian.llm.roles import JUSTIFICATION_MAX, CriterionVerdict
+from wavelibrarian.core.types import Criterion, ModelRefMeta, VerdictValue
+from wavelibrarian.llm.roles import (
+    CRITERE_NA,
+    JUSTIFICATION_MAX,
+    CriterionVerdict,
+    FaithfulnessVerdict,
+)
 from wavelibrarian.ports.components import JudgeInput
 from wavelibrarian.ports.gateway import LLMRequest, Message
 from wavelibrarian.registry import register
@@ -17,8 +22,9 @@ _SYSTEM = (
     f"puis donne une justification d'une seule phrase de {JUSTIFICATION_MAX} caractères au plus, "
     "sans délibération ni hésitation. correctness : la réponse est exacte au regard de la "
     "référence. completeness : elle couvre tous les points de la référence. faithfulness : tout "
-    "ce qu'elle affirme se trouve dans le contexte fourni au générateur. Réponds en JSON : "
-    '{"verdicts": {"<critère>": {"verdict": "yes"|"no", "justification": "..."}}}.'
+    "ce qu'elle affirme se trouve dans le contexte fourni au générateur ; réponds na si la "
+    "réponse n'affirme rien de vérifiable (na n'est permis que pour faithfulness). Réponds en "
+    'JSON : {"verdicts": {"<critère>": {"verdict": "yes"|"no"|"na", "justification": "..."}}}.'
 )
 # Budget de sortie : 200 tokens par Critère + 100 de structure JSON. Run 8.8 : 48 sorties coupées à
 # 120 × n + 60 (300 ou 420 tokens), alors que les sorties conformes montent à 414 tokens (p95 357)
@@ -38,8 +44,13 @@ def budget_sortie(
 
 
 def _schema(criteres: Sequence[str]) -> type[BaseModel]:
-    """Schéma de sortie qui exige un verdict pour chaque Critère demandé (nouvel essai sinon)."""
-    champs: dict[str, Any] = {str(c): (CriterionVerdict, ...) for c in criteres}
+    """Schéma de sortie qui exige un verdict pour chaque Critère demandé (nouvel essai sinon) ;
+    l'énumération de `faithfulness` admet `na`, celle des autres Critères `yes` et `no` seulement
+    (un `na` ailleurs est une sortie non conforme)."""
+    champs: dict[str, Any] = {
+        str(c): (FaithfulnessVerdict if c == CRITERE_NA else CriterionVerdict, ...)
+        for c in criteres
+    }
     verdicts = create_model("Verdicts", __config__=ConfigDict(extra="ignore"), **champs)
     return create_model("JudgeCriteriaOutput", verdicts=(verdicts, ...))
 
@@ -94,16 +105,17 @@ class LLMJudge:
 
     def judge(
         self, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int
-    ) -> dict[Criterion, tuple[bool, str]]:
-        """Verdict booléen et justification par Critère ; `NonConformantOutput` après un essai."""
+    ) -> dict[Criterion, tuple[VerdictValue, str]]:
+        """Verdict (`yes`, `no`, ou `na` pour `faithfulness`) et justification par Critère ;
+        `NonConformantOutput` après un essai."""
         criteres = list(dict.fromkeys(criteria))
         requete, schema = self.requete(item, criteres, pass_id)
         sortie, _ = self._ctx.gateway.complete_structured(
             requete, schema, use_cache=pass_id == 0 or self._cache_later_passes
         )
         verdicts: Any = getattr(sortie, "verdicts")  # noqa: B009
-        resultat: dict[Criterion, tuple[bool, str]] = {}
+        resultat: dict[Criterion, tuple[VerdictValue, str]] = {}
         for c in criteres:
-            v: CriterionVerdict = getattr(verdicts, c)
-            resultat[c] = (v.verdict == "yes", v.justification)
+            v: CriterionVerdict | FaithfulnessVerdict = getattr(verdicts, c)
+            resultat[c] = (v.verdict, v.justification)
         return resultat

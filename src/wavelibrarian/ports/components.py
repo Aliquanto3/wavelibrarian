@@ -16,6 +16,7 @@ from wavelibrarian.core.types import (
     Passage,
     QuestionInput,
     ScoredPassage,
+    VerdictValue,
 )
 
 if TYPE_CHECKING:
@@ -199,4 +200,4 @@ class Judge(Protocol):
 
     def judge(
         self, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int
-    ) -> dict[Criterion, tuple[bool, str]]: ...
+    ) -> dict[Criterion, tuple[VerdictValue, str]]: ...  # `na` : `faithfulness` seulement

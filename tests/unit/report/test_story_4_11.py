@@ -135,7 +135,7 @@ def test_scores_csv_colonnes_et_valeurs_recalculees(run_complet: Path) -> None:
     lignes = _csv(run_complet / "report" / "scores.csv")
     assert list(lignes[0]) == [
         "config_id", "condition", "tier", "phase", "question_type", "criterion",
-        "value", "ci_low", "ci_high", "n",
+        "value", "ci_low", "ci_high", "n", "n_na",
     ]  # fmt: skip
     ex = charger(run_complet)
     reponses = read_answers(run_complet)
@@ -152,7 +152,7 @@ def test_scores_csv_colonnes_et_valeurs_recalculees(run_complet: Path) -> None:
             and (ligne["question_type"] in ("all", ex.jeu[a.question_id].type))
         ]
         if ligne["criterion"] == "quality":
-            valeurs = [
+            bruts = [
                 panel[
                     (
                         a.answer_id,
@@ -164,7 +164,9 @@ def test_scores_csv_colonnes_et_valeurs_recalculees(run_complet: Path) -> None:
                 for a in choisies
             ]
         else:
-            valeurs = [panel[(a.answer_id, ligne["criterion"])].verdict for a in choisies]
+            bruts = [panel[(a.answer_id, ligne["criterion"])].verdict for a in choisies]
+        valeurs = [v == "yes" for v in bruts if v != "na"]  # taux hors `na` (story 9.3)
+        assert int(ligne["n_na"]) == bruts.count("na")
         assert int(ligne["n"]) == len(valeurs) > 0
         assert float(ligne["value"]) == pytest.approx(sum(valeurs) / len(valeurs), abs=1e-6)
         ic = bootstrap_ci(
@@ -302,7 +304,7 @@ def test_pairs_csv_mcnemar_exact_et_bootstrap_apparie(run_complet: Path) -> None
             if (r.config_id, r.condition, r.question_id) == (config, "standard", qid)
         )
         critere = "abstention_correctness" if ex.jeu[qid].type == "unanswerable" else "correctness"
-        return panel[(a.answer_id, critere)].verdict
+        return panel[(a.answer_id, critere)].verdict == "yes"
 
     ids = sorted({a.question_id for a in ex.reponses.values()})
     b = sum(oui("bm25", q) and not oui("sans-contexte", q) for q in ids)

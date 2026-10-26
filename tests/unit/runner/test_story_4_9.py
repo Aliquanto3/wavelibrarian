@@ -106,8 +106,12 @@ def test_panel_un_appel_par_reponse_et_par_juge_verdicts_et_panel(
     # Un appel par (Réponse, Juge), tous les Critères en une fois, au poste `judging`.
     assert len(appels) == 2 * len(reponses)
     assert {m for m, *_ in appels} == PANEL
-    for _, qid, criteres, passe, _ in appels:
+    abstenues = {a.text for a in reponses.values() if a.abstained}
+    assert abstenues  # `sans-contexte` s'abstient (Faux LLM sans Passage)
+    for _, qid, criteres, passe, item in appels:
         attendus = JUGES if questions[qid].answer_form == "free" else JUGES[1:]
+        if item.answer_text in abstenues:  # abstention : faithfulness `na` sans Juge (9.3)
+            attendus = tuple(c for c in attendus if c != "faithfulness")
         assert criteres == attendus and passe == 0
     spans = [s for s in _spans(dossier) if s["wl.post"] == "judging"]
     assert len(spans) == len(appels) and {s["wl.kind"] for s in spans} == {"llm"}
@@ -120,15 +124,21 @@ def test_panel_un_appel_par_reponse_et_par_juge_verdicts_et_panel(
     for a in reponses.values():
         q = questions[a.question_id]
         attendus = JUGES if q.answer_form == "free" else JUGES[1:]
+        if a.abstained:  # faithfulness `na` sans Juge (story 9.3)
+            attendus = tuple(c for c in attendus if c != "faithfulness")
         juges = sorted(c for (i, m, c, _) in verdicts if i == a.answer_id and m in PANEL)
         assert juges == sorted(attendus * len(PANEL))
         auto = {c: v for (i, m, c, _), v in verdicts.items() if i == a.answer_id and m == "auto"}
         assert set(auto) == {"citation_correctness", "abstention_correctness"} | (
             {"correctness"} if q.answer_form == "short" else set()
-        )
-        assert auto["abstention_correctness"].verdict == (a.abstained == (q.type == "unanswerable"))
+        ) | ({"faithfulness"} if a.abstained else set())
+        bonne = a.abstained == (q.type == "unanswerable")
+        assert auto["abstention_correctness"].verdict == ("yes" if bonne else "no")
+        if a.abstained:
+            assert auto["faithfulness"].verdict == "na"
         if q.answer_form == "short":
-            assert auto["correctness"].verdict == exact_match(q.reference_answer, a.text)
+            oui = exact_match(q.reference_answer, a.text)
+            assert auto["correctness"].verdict == ("yes" if oui else "no")
 
     # panel.jsonl : un verdict majoritaire par (answer_id, criterion), Juges admissibles reportés.
     panel = read_panel(dossier)
@@ -136,7 +146,11 @@ def test_panel_un_appel_par_reponse_et_par_juge_verdicts_et_panel(
     assert len(_lignes(dossier, "panel.jsonl")) == len(panel)
     for (aid, critere), ligne in panel.items():
         votes = [v.verdict for (i, _, c, _), v in verdicts.items() if i == aid and c == critere]
-        assert ligne.verdict == (sum(votes) * 2 > len(votes)) and not ligne.tie
+        if votes == ["na"]:
+            assert ligne.verdict == "na" and not ligne.tie
+        else:
+            oui = sum(v == "yes" for v in votes) * 2 > len(votes)
+            assert ligne.verdict == ("yes" if oui else "no") and not ligne.tie
         auto_seul = all(m == "auto" for (i, m, c, _) in verdicts if i == aid and c == critere)
         assert set(ligne.judges) == (set() if auto_seul else PANEL)
 
@@ -284,7 +298,7 @@ def _juges_scenarises(monkeypatch: pytest.MonkeyPatch, sortie: Callable[[str], A
     """`LLMJudge.judge` remplacé : `sortie(modele)` rend le verdict (bool) ou lève."""
 
     def juge(self: LLMJudge, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int) -> Any:
-        oui = sortie(self.model_id)
+        oui = "yes" if sortie(self.model_id) else "no"
         return {c: (oui, f"{self.model_id} {c}") for c in criteria}
 
     monkeypatch.setattr(LLMJudge, "judge", juge)
@@ -297,7 +311,7 @@ def test_juges_contradictoires_egalite_no_et_tie_dans_panel(
     _wl(str(_experience(tmp_path, max_questions=3)))
     dossier = _un_run(wl_home)
     jugees = [p for p in read_panel(dossier).values() if p.judges]
-    assert jugees and all(p.tie and not p.verdict for p in jugees)
+    assert jugees and all(p.tie and p.verdict == "no" for p in jugees)
     assert all(set(p.judges) == PANEL for p in jugees)
     automatiques = [p for p in read_panel(dossier).values() if not p.judges]
     assert automatiques and not any(p.tie for p in automatiques)

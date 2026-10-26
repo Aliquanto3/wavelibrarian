@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 
 ENTETE_SCORES = [
     "config_id", "condition", "tier", "phase", "question_type", "criterion",
-    "value", "ci_low", "ci_high", "n",
+    "value", "ci_low", "ci_high", "n", "n_na",
 ]  # fmt: skip
 ENTETE_RECHERCHE = [
     "config_id", "condition", "tier", "phase", "question_type", "metric", "k",
@@ -101,7 +101,7 @@ def ecrire_csv(
             [
                 s.groupe[0], s.groupe[1], etiquette_palier(s.groupe[2]), s.groupe[3],
                 s.question_type, s.critere, _flottant(s.value), _flottant(s.ci_low),
-                _flottant(s.ci_high), s.n,
+                _flottant(s.ci_high), s.n, s.n_na,
             ]
             for s in res.scores
         ],
@@ -367,6 +367,14 @@ def _etiquette(g: CleGroupe) -> list[str]:
     return [f"`{g[0]}`", etiquette_palier(g[2]), g[3]]
 
 
+def _cellule(s: LigneScore | None, na_seuls: int) -> str:
+    """Taux et IC ; avec des `na` (sans objet, story 9.3), le `n` effectif et le nombre de `na`."""
+    if s is None:
+        return f"n/a ({na_seuls} na)" if na_seuls else "n/a"
+    texte = _avec_ic(s.value, s.ci_low, s.ci_high)
+    return f"{texte} (n {s.n}, {s.n_na} na)" if s.n_na else texte
+
+
 def _table_scores(res: Resultats, condition: str, titre: str, intro: str) -> list[str]:
     groupes = sorted((g for g in res.comptes if g[1] == condition), key=_ordre)
     if not groupes:
@@ -377,12 +385,7 @@ def _table_scores(res: Resultats, condition: str, titre: str, intro: str) -> lis
     colonnes = (QUALITE, *CRITERES)
     lignes: list[list[str]] = []
     for g in groupes:
-        cellules = [
-            _avec_ic(par[(g, c)].value, par[(g, c)].ci_low, par[(g, c)].ci_high)
-            if (g, c) in par
-            else "n/a"
-            for c in colonnes
-        ]
+        cellules = [_cellule(par.get((g, c)), res.na_seuls.get((g, c), 0)) for c in colonnes]
         lignes.append([*_etiquette(g), str(res.comptes[g].ok), *cellules])
     return [
         f"## {titre}",
@@ -523,8 +526,9 @@ def _paires(res: Resultats) -> list[str]:
         "",
         "Chaque paire de Configurations se compare dans un même groupe (condition, palier, "
         "phase), sur les Questions communes (`n_common`) : McNemar exact pour la Qualité et les "
-        "Critères, bootstrap apparié pour les métriques de recherche. Toutes les lignes sont "
-        "dans `pairs.csv`.",
+        "Critères, bootstrap apparié pour les métriques de recherche. Une paire où l'un des "
+        "deux verdicts est `na` (sans objet) est exclue du test et de `n_common`. Toutes les "
+        "lignes sont dans `pairs.csv`.",
         "",
         *corps,
         f"**Multiplicité.** Aucune correction (Holm, Bonferroni) n'est appliquée aux "
@@ -592,7 +596,9 @@ def construire_markdown(
             "standard",
             "Scores",
             "Taux de oui avec IC bootstrap à 95 % ; aucun score global. Qualité : `correctness` "
-            "oui, ou `abstention_correctness` oui pour une Question `unanswerable`.",
+            "oui, ou `abstention_correctness` oui pour une Question `unanswerable`. Les verdicts "
+            "`na` (sans objet : Réponse vide ou abstention en `faithfulness`) sortent du taux ; "
+            "« (n 12, 3 na) » donne alors le `n` effectif et le nombre de `na`.",
         ),
         *_scores_par_type(res),
         *_table_scores(

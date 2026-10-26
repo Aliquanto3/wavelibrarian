@@ -67,7 +67,7 @@ def test_un_seul_appel_pour_tous_les_criteres(env: Env) -> None:
     assert list(env.requetes[0].inputs["criteria"]) == CRITERES
     assert set(res) == set(CRITERES)
     for verdict, justification in res.values():
-        assert verdict is True
+        assert verdict == "yes"
         assert justification
 
 
@@ -75,7 +75,7 @@ def test_verdict_non_quand_la_reponse_s_ecarte(env: Env) -> None:
     faux = ITEM.model_copy(update={"answer_text": "rien à voir"})
     with env.ctx.scope(post="judging"):
         res = env.juge().judge(faux, ["correctness"], pass_id=0)
-    assert res["correctness"][0] is False
+    assert res["correctness"][0] == "no"
 
 
 def test_sortie_non_conforme_apres_un_nouvel_essai(env: Env) -> None:
@@ -158,7 +158,7 @@ def test_rejeu_8_8_justification_longue_complete_tronquee_et_conforme(
     assert len(env.requetes) == 1  # pas de nouvel essai
     assert set(res) == set(criteres)
     for verdict, justification in res.values():
-        assert verdict is False
+        assert verdict == "no"
         assert len(justification) == 200 and justification.endswith("…")
         assert justification.startswith("Hmm, voyons. Hmm")
     traces = env.ctx.run_dir / "traces.jsonl"
@@ -212,3 +212,57 @@ def test_budget_de_sortie_couvre_les_sorties_observees(env: Env) -> None:
     with env.ctx.scope(post="judging", question_id="q-001"):
         env.juge().judge(ITEM, CRITERES, pass_id=0)
     assert env.requetes[0].max_tokens == 700
+
+
+# --- Story 9.3 : `na` (sans objet) permis en faithfulness seulement ------------------------------
+
+
+def _sortie(verdicts: dict[str, str]) -> str:
+    return json.dumps(
+        {"verdicts": {c: {"verdict": v, "justification": "court"} for c, v in verdicts.items()}}
+    )
+
+
+def test_juge_peut_dire_na_en_faithfulness(env: Env) -> None:
+    env.sortie = _sortie({"correctness": "no", "completeness": "no", "faithfulness": "na"})
+    with env.ctx.scope(post="judging"):
+        res = env.juge().judge(ITEM, CRITERES, pass_id=0)
+    assert res["faithfulness"] == ("na", "court")
+    assert res["correctness"] == ("no", "court")
+    assert len(env.requetes) == 1
+
+
+@pytest.mark.parametrize("critere", ["correctness", "completeness"])
+def test_na_sur_un_autre_critere_est_non_conforme(env: Env, critere: str) -> None:
+    verdicts = {"correctness": "yes", "completeness": "yes", "faithfulness": "yes", critere: "na"}
+    env.sortie = _sortie(verdicts)
+    with env.ctx.scope(post="judging"), pytest.raises(NonConformantOutput):
+        env.juge().judge(ITEM, CRITERES, pass_id=0)
+    assert len(env.requetes) == 2  # l'appel puis un nouvel essai
+
+
+def test_schema_enum_par_critere_et_prompt_na() -> None:
+    from wavelibrarian.components.judges.llm import _SYSTEM, _schema
+
+    schema = _schema(CRITERES).model_json_schema()
+    defs = schema["$defs"]
+    assert defs["CriterionVerdict"]["properties"]["verdict"]["enum"] == ["yes", "no"]
+    assert defs["FaithfulnessVerdict"]["properties"]["verdict"]["enum"] == ["yes", "no", "na"]
+    assert list(defs["FaithfulnessVerdict"]["properties"]) == ["verdict", "justification"]
+    assert defs["FaithfulnessVerdict"]["properties"]["justification"]["maxLength"] == 200
+    proprietes = defs["Verdicts"]["properties"]
+    assert proprietes["faithfulness"]["$ref"].endswith("/FaithfulnessVerdict")
+    assert proprietes["correctness"]["$ref"].endswith("/CriterionVerdict")
+    assert "réponds na si la réponse n'affirme rien de vérifiable" in _SYSTEM
+    assert "na n'est permis que pour faithfulness" in _SYSTEM
+
+
+def test_sortie_generique_du_role_refuse_na_hors_faithfulness() -> None:
+    from pydantic import ValidationError
+
+    from wavelibrarian.llm.roles import JudgeOutput
+
+    ok = JudgeOutput.model_validate_json(_sortie({"faithfulness": "na", "correctness": "yes"}))
+    assert ok.verdicts["faithfulness"].verdict == "na"
+    with pytest.raises(ValidationError, match="permis pour faithfulness seulement : completeness"):
+        JudgeOutput.model_validate_json(_sortie({"completeness": "na"}))

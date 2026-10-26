@@ -4,7 +4,7 @@ import math
 from decimal import Decimal
 from typing import Annotated, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, BeforeValidator, ConfigDict
 
 from wavelibrarian.core.ids import slug
 
@@ -23,6 +23,27 @@ Criterion = Literal[
     "correctness", "completeness", "faithfulness", "citation_correctness", "abstention_correctness"
 ]
 JUDGED_CRITERIA: tuple[Criterion, ...] = ("correctness", "completeness", "faithfulness")
+# Verdict d'un Critère (story 9.3, FR-36) : `na` = sans objet. Seule `faithfulness` peut valoir
+# `na` (calculé pour une Réponse vide ou une abstention, ou dit par un Juge) ; l'humain peut
+# annoter `na` sur les trois Critères.
+VerdictValue = Literal["yes", "no", "na"]
+NA: VerdictValue = "na"
+
+
+def verdict_depuis_bool(valeur: object) -> object:
+    """Relit un verdict booléen (Exécutions antérieures à la v0.3.0) : vrai → `yes`, faux → `no`."""
+    if isinstance(valeur, bool):
+        return "yes" if valeur else "no"
+    return valeur
+
+
+def oui_non(verdict: VerdictValue) -> bool | None:
+    """`yes` → vrai, `no` → faux, `na` → `None` (hors des taux, du kappa et des tests appariés)."""
+    return None if verdict == NA else verdict == "yes"
+
+
+# Champ `verdict` d'un modèle relu des JSONL : chaîne, ou booléen des anciens fichiers.
+VerdictLu = Annotated[VerdictValue, BeforeValidator(verdict_depuis_bool)]
 # judging (Juges, Filtre closed-book en Exécution) et evalset (génération de questions) sont
 # affichés à part et exclus du coût d'une Configuration dans le Rapport.
 CostPost = Literal["indexing", "update", "query", "judging", "evalset"]
@@ -268,5 +289,5 @@ class Verdict(_Modele):
     judge_model: str  # identifiant du Catalogue ; "auto" si calculé sans Juge
     criterion: Criterion
     pass_id: int = 0
-    verdict: bool
+    verdict: VerdictLu
     justification: str = ""

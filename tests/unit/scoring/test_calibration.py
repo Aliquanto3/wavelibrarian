@@ -32,9 +32,9 @@ def test_chargement_deux_annotateurs(tmp_path: Path) -> None:
     _ecrire(tmp_path, "collegue", "collegue", [_ligne(ID1, verdict="no")])
     ann = charger_dossier(tmp_path)
     assert ann.verdicts == {
-        ("anael", ID1, "correctness"): True,
-        ("anael", ID1, "faithfulness"): False,
-        ("collegue", ID1, "correctness"): False,
+        ("anael", ID1, "correctness"): "yes",
+        ("anael", ID1, "faithfulness"): "no",
+        ("collegue", ID1, "correctness"): "no",
     }
     assert ann.annotateurs == ["anael", "collegue"]
 
@@ -59,20 +59,24 @@ ENTETE = "annotator: a\nannotations:\n  - answer_id: x\n    criterion: correctne
 
 
 @pytest.mark.parametrize(
-    ("verdict", "attendu"), [("yes", True), ("no", False), ('"yes"', True), ("'no'", False)]
+    ("verdict", "attendu"),
+    [("yes", "yes"), ("no", "no"), ('"yes"', "yes"), ("'no'", "no"), ("na", "na"), ('"na"', "na")],
 )
-def test_verdict_yes_no_nu_ou_guillemete(tmp_path: Path, verdict: str, attendu: bool) -> None:
+def test_verdict_yes_no_nu_ou_guillemete(tmp_path: Path, verdict: str, attendu: str) -> None:
     (tmp_path / "a.yaml").write_text(ENTETE + f"    verdict: {verdict}\n", encoding="utf-8")
     assert charger_dossier(tmp_path).verdicts == {("a", "x", "correctness"): attendu}
 
 
-@pytest.mark.parametrize("verdict", ["1", "on", "off", "Yes", "NO", "true", '"Yes"', "~"])
+@pytest.mark.parametrize(
+    "verdict", ["1", "on", "off", "Yes", "NO", "true", '"Yes"', "~", "NA", "n/a", "null"]
+)
 def test_verdict_autre_que_yes_no_refuse(tmp_path: Path, verdict: str) -> None:
     (tmp_path / "a.yaml").write_text(ENTETE + f"    verdict: {verdict}\n", encoding="utf-8")
     with pytest.raises(ConfigError) as exc:
         charger_dossier(tmp_path)
     assert exc.value.path == "annotations[0].verdict"
     assert "a.yaml" in exc.value.message
+    assert "permis : yes, no, na" in exc.value.message
 
 
 def test_cle_dupliquee_refusee(tmp_path: Path) -> None:
@@ -96,7 +100,7 @@ def test_fichier_non_utf8(tmp_path: Path) -> None:
 
 def test_extension_yml_acceptee(tmp_path: Path) -> None:
     (tmp_path / "a.yml").write_text(ENTETE + "    verdict: yes\n", encoding="utf-8")
-    assert charger_dossier(tmp_path).verdicts == {("a", "x", "correctness"): True}
+    assert charger_dossier(tmp_path).verdicts == {("a", "x", "correctness"): "yes"}
 
 
 def test_dossier_sans_aucune_annotation(tmp_path: Path) -> None:
@@ -128,3 +132,10 @@ def test_answers_jsonl_illisible(tmp_path: Path) -> None:
     f.write_text("pas du json\n", encoding="utf-8")
     with pytest.raises(ConfigError):
         answer_ids_de_answers_jsonl(f)
+
+
+def test_na_valide_pour_les_trois_criteres(tmp_path: Path) -> None:
+    """Story 9.3 : `na` (sans objet) est une annotation valide pour chaque Critère jugé."""
+    criteres = ("correctness", "completeness", "faithfulness")
+    _ecrire(tmp_path, "a", "anael", [_ligne(ID1, c, "na") for c in criteres])
+    assert charger_dossier(tmp_path).verdicts == {("anael", ID1, c): "na" for c in criteres}

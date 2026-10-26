@@ -11,7 +11,14 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from wavelibrarian.report.lecture import Execution
-from wavelibrarian.report.scores import QUALITE, TOUS, Resultats, etiquette_palier, qualite
+from wavelibrarian.report.scores import (
+    QUALITE,
+    TOUS,
+    Resultats,
+    etiquette_palier,
+    qualite,
+    verdicts_oui_non,
+)
 from wavelibrarian.stats.bootstrap import bootstrap_ci, graine_derivee
 
 CleFraicheur = tuple[str, str, int | None]  # (config_id, condition, tier)
@@ -50,10 +57,7 @@ def calculer_fraicheur(ex: Execution) -> list[LigneFraicheur]:
             continue
         cle = (a.config_id, a.condition, a.tier)
         if a.status == "ok":
-            verdicts = {
-                c: v.verdict for c, v in ex.verdicts_par_reponse.get(a.answer_id, {}).items()
-            }
-            par_cle[cle].append(qualite(q, verdicts))
+            par_cle[cle].append(qualite(q, verdicts_oui_non(ex, a.answer_id)))
         elif a.status == "inapplicable":
             inapplicables[cle] += 1
         else:

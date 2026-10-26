@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
-from wavelibrarian.core.types import Answer, Citation, Criterion, Question, Verdict
+from wavelibrarian.core.types import Answer, Citation, Criterion, Question, Verdict, VerdictValue
 from wavelibrarian.ports.components import JudgeInput
 from wavelibrarian.scoring.panel import (
     PanelVerdict,
@@ -23,19 +23,21 @@ class _Liste:
 
 
 class _Juge:
-    """Juge factice : `reponses` donne son verdict par passe ; compte ses appels."""
+    """Juge factice : `votes` donne son verdict par passe (booléen : `yes` / `no`) ; compte ses
+    appels."""
 
-    def __init__(self, model_id: str, *votes: bool) -> None:
+    def __init__(self, model_id: str, *votes: bool | VerdictValue) -> None:
         self.model_id = model_id
         self.votes = votes
         self.appels: list[tuple[tuple[str, ...], int]] = []
 
     def judge(
         self, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int
-    ) -> dict[Criterion, tuple[bool, str]]:
+    ) -> dict[Criterion, tuple[VerdictValue, str]]:
         self.appels.append((tuple(criteria), pass_id))
-        oui = self.votes[pass_id % len(self.votes)]
-        return {c: (oui, f"{self.model_id}:{c}") for c in criteria}
+        vote = self.votes[pass_id % len(self.votes)]
+        v: VerdictValue = vote if isinstance(vote, str) else ("yes" if vote else "no")
+        return {c: (v, f"{self.model_id}:{c}") for c in criteria}
 
 
 def _question(forme: str = "free", type_: str = "factual") -> Question:
@@ -71,11 +73,14 @@ def _answer(
 
 
 def _juger(
-    juges: list[_Juge], passes: int = 1, question: Question | None = None
+    juges: list[_Juge],
+    passes: int = 1,
+    question: Question | None = None,
+    answer: Answer | None = None,
 ) -> tuple[Any, Any]:
     verdicts, panel = _Liste(), _Liste()
     juger_reponse(
-        _answer(),
+        answer or _answer(),
         question or _question(),
         reference_texts=["texte"],
         reference_anchor_ids={"d#a"},
@@ -91,17 +96,17 @@ def _juger(
 
 
 def test_majorite_et_egalite() -> None:
-    assert majorite("a", "correctness", [True, True, False], ["x", "y", "z"]).verdict
-    egalite = majorite("a", "correctness", [True, False], ["x", "y"])
+    assert majorite("a", "correctness", ["yes", "yes", "no"], ["x", "y", "z"]).verdict == "yes"
+    egalite = majorite("a", "correctness", ["yes", "no"], ["x", "y"])
     assert egalite == PanelVerdict(
-        answer_id="a", criterion="correctness", verdict=False, tie=True, judges=("x", "y")
+        answer_id="a", criterion="correctness", verdict="no", tie=True, judges=("x", "y")
     )
-    assert not majorite("a", "correctness", [False, False], ["x", "y"]).tie
+    assert not majorite("a", "correctness", ["no", "no"], ["x", "y"]).tie
 
 
 def test_panel_de_deux_juges_en_desaccord_egalite_donne_non_et_tie() -> None:
     verdicts, panel = _juger([_Juge("j1", True), _Juge("j2", False)])
-    assert panel["correctness"]["verdict"] is False and panel["correctness"]["tie"] is True
+    assert panel["correctness"]["verdict"] == "no" and panel["correctness"]["tie"] is True
     assert panel["completeness"]["judges"] == ["j1", "j2"]
     # 2 Juges x 3 Critères jugés + 2 Critères automatiques.
     assert len(verdicts) == 8
@@ -109,7 +114,7 @@ def test_panel_de_deux_juges_en_desaccord_egalite_donne_non_et_tie() -> None:
     assert panel["citation_correctness"] == {
         "answer_id": "r/c/standard/all/base/q-1",
         "criterion": "citation_correctness",
-        "verdict": True,
+        "verdict": "yes",
         "tie": False,
         "judges": [],
     }
@@ -118,7 +123,9 @@ def test_panel_de_deux_juges_en_desaccord_egalite_donne_non_et_tie() -> None:
 def test_trois_juges_majorite_un_appel_chacun_tous_les_criteres() -> None:
     juges = [_Juge("j1", True), _Juge("j2", True), _Juge("j3", False)]
     _, panel = _juger(juges)
-    assert all(p["verdict"] for k, p in panel.items() if k in {"correctness", "faithfulness"})
+    assert all(
+        p["verdict"] == "yes" for k, p in panel.items() if k in {"correctness", "faithfulness"}
+    )
     assert [j.appels for j in juges] == [[(("correctness", "completeness", "faithfulness"), 0)]] * 3
 
 
@@ -127,8 +134,8 @@ def test_reponse_courte_correctness_exact_match_et_juges_sur_les_deux_autres() -
     verdicts, panel = _juger([juge, _Juge("j2", False)], question=_question("short"))
     assert juge.appels == [(("completeness", "faithfulness"), 0)]
     auto = [v for v in verdicts if v["criterion"] == "correctness"]
-    assert [(v["judge_model"], v["verdict"]) for v in auto] == [("auto", True)]  # « 42 » ⊂ « 42 »
-    assert panel["correctness"]["verdict"] is True and panel["correctness"]["judges"] == []
+    assert [(v["judge_model"], v["verdict"]) for v in auto] == [("auto", "yes")]  # « 42 » ⊂ « 42 »
+    assert panel["correctness"]["verdict"] == "yes" and panel["correctness"]["judges"] == []
 
 
 def test_passes_multiples_une_voix_par_passe() -> None:
@@ -136,7 +143,7 @@ def test_passes_multiples_une_voix_par_passe() -> None:
     jugees = [v for v in verdicts if v["judge_model"] == "j1"]
     assert sorted({v["pass_id"] for v in jugees}) == [0, 1]
     assert (
-        panel["completeness"]["verdict"] is True and not panel["completeness"]["tie"]
+        panel["completeness"]["verdict"] == "yes" and not panel["completeness"]["tie"]
     )  # 3 oui / 1 non
 
 
@@ -182,8 +189,66 @@ def test_critere_automatique_unanswerable() -> None:
     q = _question(type_="unanswerable")
     muette = _answer("Le Corpus ne le dit pas.", abstained=True, cites=())
     v = {x.criterion: x.verdict for x in verdicts_automatiques(muette, q, set(), {"d#a"})}
-    assert v == {"citation_correctness": True, "abstention_correctness": True}
+    assert v == {
+        "citation_correctness": "yes",
+        "abstention_correctness": "yes",
+        "faithfulness": "na",  # abstention : rien d'affirmé (story 9.3)
+    }
     bavarde = _answer("42", abstained=False, cites=("d#a",))
     v = {x.criterion: x.verdict for x in verdicts_automatiques(bavarde, q, set(), {"d#a"})}
-    assert v == {"citation_correctness": False, "abstention_correctness": False}
+    assert v == {"citation_correctness": "no", "abstention_correctness": "no"}
     assert criteres_juges(q) == ("correctness", "completeness", "faithfulness")
+
+
+# --- Story 9.3 : modalité « sans objet » -------------------------------------------------------
+
+
+def test_majorite_na_seulement_si_plus_de_la_moitie_des_voix() -> None:
+    assert majorite("a", "faithfulness", ["na", "na", "yes"], ["x"]).verdict == "na"
+    # Moitié de `na` seulement : majorité des yes / no restants.
+    assert majorite("a", "faithfulness", ["na", "yes"], ["x"]).verdict == "yes"
+    assert majorite("a", "faithfulness", ["na", "no", "yes", "no"], ["x"]).verdict == "no"
+    egalite = majorite("a", "faithfulness", ["na", "na", "yes", "no"], ["x"])
+    assert (egalite.verdict, egalite.tie) == ("no", True)  # égalité inchangée : no et signalement
+    toutes_na = majorite("a", "faithfulness", ["na", "na"], ["x", "y"])
+    assert (toutes_na.verdict, toutes_na.tie) == ("na", False)
+
+
+def test_reponse_vide_fidelite_na_sans_juge_autres_criteres_juges() -> None:
+    juge = _Juge("j1", True)
+    verdicts, panel = _juger([juge], answer=_answer("   ", cites=()))
+    assert juge.appels == [(("correctness", "completeness"), 0)]  # un Critère de moins
+    fid = [v for v in verdicts if v["criterion"] == "faithfulness"]
+    assert [(v["judge_model"], v["verdict"]) for v in fid] == [("auto", "na")]
+    assert panel["faithfulness"]["verdict"] == "na" and panel["faithfulness"]["judges"] == []
+    assert panel["correctness"]["verdict"] == "yes"
+
+
+def test_abstention_fidelite_na_sans_juge() -> None:
+    juge = _Juge("j1", False)
+    _, panel = _juger([juge], answer=_answer("Je ne sais pas.", abstained=True, cites=()))
+    assert juge.appels == [(("correctness", "completeness"), 0)]
+    assert panel["faithfulness"]["verdict"] == "na"
+    assert criteres_juges(_question(), _answer("", cites=())) == ("correctness", "completeness")
+    assert criteres_juges(_question("short"), _answer("")) == ("completeness",)
+
+
+def test_juge_na_en_fidelite_majorite_et_na_ailleurs_non_conforme() -> None:
+    verdicts, panel = _juger([_Juge("j1", "na"), _Juge("j2", "na"), _Juge("j3", "yes")])
+    assert panel["faithfulness"]["verdict"] == "na"
+    assert panel["faithfulness"]["judges"] == ["j1", "j2", "j3"]
+    # `na` sur correctness et completeness : clés laissées absentes, pas de verdict de panel.
+    assert {v["criterion"] for v in verdicts if v["judge_model"] == "j1"} == {"faithfulness"}
+    assert "correctness" not in panel and "completeness" not in panel
+
+
+def test_anciennes_lignes_booleennes_relues() -> None:
+    """Compatibilité : `verdicts.jsonl` et `panel.jsonl` d'avant la v0.3.0 (booléens)."""
+    v = Verdict.model_validate(
+        {"answer_id": "a", "judge_model": "j", "criterion": "correctness", "verdict": True}
+    )
+    p = PanelVerdict.model_validate(
+        {"answer_id": "a", "criterion": "faithfulness", "verdict": False, "tie": True}
+    )
+    assert (v.verdict, p.verdict) == ("yes", "no")
+    assert v.model_dump(mode="json")["verdict"] == "yes"

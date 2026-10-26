@@ -34,7 +34,8 @@ RESERVES = frozenset(
     {"con", "prn", "aux", "nul"} | {f"{p}{i}" for p in ("com", "lpt") for i in range(1, 10)}
 )
 ENTETE = (
-    "# Paquet d'annotation (contracts.md §4.6) : remplacer chaque verdict '' par yes ou no.\n"
+    "# Paquet d'annotation (contracts.md §4.6) : remplacer chaque verdict '' par yes, no ou\n"
+    "# na (sans objet : le Critère ne s'applique pas, p. ex. fidélité d'une Réponse vide).\n"
     "# Les clés question, reference_answer, answer, cited_anchors, reference_passages et\n"
     "# context_passages aident à annoter (ce que reçoivent les Juges) ; elles sont ignorées au\n"
     "# chargement. Les Passages ne figurent que sur la première ligne de chaque Réponse.\n"

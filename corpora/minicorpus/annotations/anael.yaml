@@ -1002,8 +1002,8 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-014
   criterion: faithfulness
-  verdict: yes
-  note: "Aucun extrait reçu, et pas de réponse inventée"
+  verdict: na
+  note: "Sans objet (story 9.3) : Réponse vide, rien d'affirmé ; était yes par convention. Aucun extrait reçu, et pas de réponse inventée"
   question: Où trouve-t-on le maître de port Oswin Dacrel chaque matin ?
   reference_answer: Dans la Halle des Cordages
   answer: ''
@@ -1024,8 +1024,8 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-016
   criterion: faithfulness
-  verdict: yes
-  note: "Aucun extrait reçu, et pas de réponse inventée"
+  verdict: na
+  note: "Sans objet (story 9.3) : Réponse vide, rien d'affirmé ; était yes par convention. Aucun extrait reçu, et pas de réponse inventée"
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
   answer: ''
@@ -1189,8 +1189,8 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-025
   criterion: faithfulness
-  verdict: yes
-  note: "Pas d'extrait remonté, le système ne répond rien comme attendu"
+  verdict: na
+  note: "Sans objet (story 9.3) : Réponse vide, rien d'affirmé ; était yes par convention. Pas d'extrait remonté, le système ne répond rien comme attendu"
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
   reference_answer: Deux sièges de plus
@@ -1359,8 +1359,8 @@ annotations:
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-040
   criterion: faithfulness
-  verdict: yes
-  note: "Pas d'extrait remonté, donc une réponse vide est cohérente"
+  verdict: na
+  note: "Sans objet (story 9.3) : Réponse vide, rien d'affirmé ; était yes par convention. Pas d'extrait remonté, donc une réponse vide est cohérente"
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
   answer: ''
@@ -1381,8 +1381,8 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-042
   criterion: faithfulness
-  verdict: yes
-  note: "Pas d'extrait remonté, donc une réponse vide est cohérente"
+  verdict: na
+  note: "Sans objet (story 9.3) : Réponse vide, rien d'affirmé ; était yes par convention. Pas d'extrait remonté, donc une réponse vide est cohérente"
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
   answer: ''

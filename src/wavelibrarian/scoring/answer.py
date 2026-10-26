@@ -105,3 +105,9 @@ def citation_correctness(
 def abstention_correctness(abstained: bool, *, unanswerable: bool) -> bool:
     """Oui si la Réponse s'abstient exactement quand la Question est `unanswerable`."""
     return abstained == unanswerable
+
+
+def faithfulness_sans_objet(text: str, abstained: bool) -> bool:
+    """Vrai pour une Réponse vide (ou faite de blancs) ou une abstention : elle n'affirme rien,
+    `faithfulness` vaut `na` sans appel de Juge (story 9.3)."""
+    return abstained or not text.strip()

@@ -4,24 +4,26 @@ import json
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
 from wavelibrarian.core.errors import ConfigError
+from wavelibrarian.core.types import NA, VerdictValue, oui_non
 from wavelibrarian.stats.kappa import cohen_kappa
 
 CRITERES = ("correctness", "completeness", "faithfulness")
-VERDICTS = {"yes": True, "no": False}
+# `na` (sans objet, story 9.3) : valide pour les trois Critères côté humain.
+VERDICTS: tuple[VerdictValue, ...] = ("yes", "no", "na")
 
 Cle = tuple[str, str, str]  # (annotateur, answer_id, criterion)
 
 
 @dataclass(frozen=True)
 class Annotations:
-    """Verdicts booléens indexés par (annotateur, `answer_id`, `criterion`)."""
+    """Verdicts (`yes`, `no`, `na`) indexés par (annotateur, `answer_id`, `criterion`)."""
 
-    verdicts: dict[Cle, bool]
+    verdicts: dict[Cle, VerdictValue]
 
     @property
     def annotateurs(self) -> list[str]:
@@ -73,7 +75,9 @@ def _lire_yaml(chemin: Path) -> Any:
         raise ConfigError(str(chemin), f"YAML invalide : {exc}") from exc
 
 
-def charger_fichier(chemin: Path, deja: dict[Cle, bool] | None = None) -> dict[Cle, bool]:
+def charger_fichier(
+    chemin: Path, deja: dict[Cle, VerdictValue] | None = None
+) -> dict[Cle, VerdictValue]:
     """Lit un fichier d'annotateur. Chemins d'erreur : `annotations[3].criterion`."""
     doc = _lire_yaml(chemin)
     if not isinstance(doc, dict):
@@ -84,7 +88,7 @@ def charger_fichier(chemin: Path, deja: dict[Cle, bool] | None = None) -> dict[C
     liste = doc.get("annotations")
     if not isinstance(liste, list):
         raise ConfigError("annotations", f"{chemin.name} : une liste est attendue")
-    out: dict[Cle, bool] = {} if deja is None else deja
+    out: dict[Cle, VerdictValue] = {} if deja is None else deja
     nom = chemin.name
     for i, ligne in enumerate(liste):
         base = f"annotations[{i}]"
@@ -100,12 +104,13 @@ def charger_fichier(chemin: Path, deja: dict[Cle, bool] | None = None) -> dict[C
                 f"{nom} : Critère inconnu {critere!r} ; permis : {', '.join(CRITERES)}",
             )
         verdict = ligne.get("verdict")
-        # Le chargeur garde `yes` / `no` nus en chaînes : seuls ces deux mots sont permis.
+        # Le chargeur garde `yes` / `no` nus en chaînes : seuls ces trois mots sont permis.
         if not isinstance(verdict, str) or verdict not in VERDICTS:
             raise ConfigError(
-                f"{base}.verdict", f"{nom} : verdict inconnu {verdict!r} ; permis : yes, no"
+                f"{base}.verdict",
+                f"{nom} : verdict inconnu {verdict!r} ; permis : {', '.join(VERDICTS)}",
             )
-        valeur = VERDICTS[verdict]
+        valeur = cast(VerdictValue, verdict)
         cle = (annotateur, answer_id, critere)
         if cle in out:
             raise ConfigError(
@@ -126,7 +131,7 @@ def charger_dossier(dossier: Path) -> Annotations:
     )
     if not fichiers:
         raise ConfigError(str(dossier), "aucun fichier d'annotations (*.yaml, *.yml)")
-    verdicts: dict[Cle, bool] = {}
+    verdicts: dict[Cle, VerdictValue] = {}
     for f in fichiers:
         charger_fichier(f, verdicts)
     if not verdicts:
@@ -151,7 +156,7 @@ def answer_ids_de_answers_jsonl(chemin: Path) -> set[str]:
 def rapprocher(annotations: Annotations, answer_ids: Iterable[str]) -> Rapprochement:
     """Garde les annotations dont l'`answer_id` complet est dans l'Exécution ; signale le reste."""
     connus = set(answer_ids)
-    gardees: dict[Cle, bool] = {}
+    gardees: dict[Cle, VerdictValue] = {}
     ignorees: list[str] = []
     for cle, v in annotations.verdicts.items():
         if cle[1] in connus:
@@ -168,35 +173,61 @@ Passe = tuple[str, str, int]  # (answer_id, criterion, pass_id)
 
 @dataclass(frozen=True)
 class FicheCritere:
-    """Un Juge sur un Critère : kappa juge-humain (passe 0), instabilité, nombre d'items."""
+    """Un Juge sur un Critère : kappa juge-humain (passe 0), instabilité, nombre d'items.
+
+    `n_items` : paires (annotateur, Réponse) où l'humain et le Juge disent tous deux `yes` ou
+    `no` (celles du kappa) ; `na_agreements` : paires où tous deux disent `na` ;
+    `na_disagreements` : paires où l'un dit `na` et l'autre `yes` ou `no` (story 9.3)."""
 
     kappa: float | None
     instability: float | None
-    n_items: int  # paires (annotateur, Réponse) comparées au verdict de la passe 0
+    n_items: int
+    na_agreements: int = 0
+    na_disagreements: int = 0
 
     def en_json(self) -> dict[str, Any]:
-        return {"kappa": self.kappa, "instability": self.instability, "n_items": self.n_items}
+        return {
+            "kappa": self.kappa,
+            "instability": self.instability,
+            "n_items": self.n_items,
+            "na_agreements": self.na_agreements,
+            "na_disagreements": self.na_disagreements,
+        }
+
+
+def _binaires(duos: Iterable[tuple[VerdictValue, VerdictValue]]) -> list[tuple[bool, bool]]:
+    """Paires où les deux verdicts sont `yes` ou `no`, en booléens (celles du kappa)."""
+    sortie: list[tuple[bool, bool]] = []
+    for a, b in duos:
+        x, y = oui_non(a), oui_non(b)
+        if x is not None and y is not None:
+            sortie.append((x, y))
+    return sortie
 
 
 def fiches_du_juge(
-    verdicts: Mapping[Passe, bool], annotations: Annotations, answer_ids: Collection[str]
+    verdicts: Mapping[Passe, VerdictValue], annotations: Annotations, answer_ids: Collection[str]
 ) -> dict[str, FicheCritere]:
     """Fiches par Critère annoté d'un Juge, sur les Réponses `answer_ids` qu'il a pu noter.
 
     `verdicts` : ses verdicts par (answer_id, criterion, pass_id). Kappa : verdict de la passe 0
-    contre chaque annotation (chaque annotateur compte séparément) ; une Réponse sans verdict de
-    passe 0 (appel en échec) n'entre pas. Instabilité : part des Réponses annotées, notées à
-    au moins deux passes, dont les verdicts diffèrent."""
+    contre chaque annotation (chaque annotateur compte séparément), sur les seules paires où
+    l'humain et le Juge disent `yes` ou `no` ; les paires avec un `na` sont comptées à part. Une
+    Réponse sans verdict de passe 0 (appel en échec) n'entre pas. Instabilité : part des Réponses
+    annotées, notées à au moins deux passes, dont les verdicts diffèrent (un passage de `na` à
+    `yes` ou `no` compte)."""
     admises = set(answer_ids)
     fiches: dict[str, FicheCritere] = {}
     for critere in CRITERES:
-        paires = [
+        toutes: list[tuple[VerdictValue, VerdictValue]] = [
             (humain, verdicts[(aid, critere, 0)])
             for (_, aid, c), humain in annotations.verdicts.items()
             if c == critere and aid in admises and (aid, critere, 0) in verdicts
         ]
+        paires = _binaires(toutes)
+        accords_na = sum(1 for h, j in toutes if h == NA and j == NA)
         annotees = {aid for (_, aid, c) in annotations.verdicts if c == critere} & admises
-        passes: dict[str, list[bool]] = {}
+        passes: dict[str, list[VerdictValue]] = {}
         for (aid, c, _), v in verdicts.items():
             if c == critere and aid in annotees:
                 passes.setdefault(aid, []).append(v)
@@ -209,6 +240,8 @@ def fiches_du_juge(
             if notees
             else None,
             n_items=len(paires),
+            na_agreements=accords_na,
+            na_disagreements=len(toutes) - len(paires) - accords_na,
         )
     return fiches
 
@@ -217,7 +250,8 @@ def kappa_inter_annotateurs(
     annotations: Annotations, answer_ids: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
     """Kappa entre chaque couple d'annotateurs, par Critère, sur les Réponses annotées par les
-    deux. `answer_ids` : restreint aux Réponses données (sinon toutes)."""
+    deux. `answer_ids` : restreint aux Réponses données (sinon toutes). Comme pour les Juges, le
+    kappa ne porte que sur les Réponses où les deux annotateurs disent `yes` ou `no`."""
     noms = annotations.annotateurs
     sortie: list[dict[str, Any]] = []
     for i, a in enumerate(noms):
@@ -232,9 +266,20 @@ def kappa_inter_annotateurs(
                     communs = [x for x in communs if x in set(answer_ids)]
                 if not communs:
                     continue
-                va = [annotations.verdicts[(a, x, critere)] for x in communs]
-                vb = [annotations.verdicts[(b, x, critere)] for x in communs]
-                criteres[critere] = {"kappa": cohen_kappa(va, vb), "n_items": len(communs)}
+                duos: list[tuple[VerdictValue, VerdictValue]] = [
+                    (annotations.verdicts[(a, x, critere)], annotations.verdicts[(b, x, critere)])
+                    for x in communs
+                ]
+                binaires = _binaires(duos)
+                accords_na = sum(1 for x, y in duos if x == NA and y == NA)
+                criteres[critere] = {
+                    "kappa": cohen_kappa([x for x, _ in binaires], [y for _, y in binaires])
+                    if binaires
+                    else None,
+                    "n_items": len(binaires),
+                    "na_agreements": accords_na,
+                    "na_disagreements": len(duos) - len(binaires) - accords_na,
+                }
             sortie.append({"annotators": [a, b], "criteria": criteres})
     return sortie
 

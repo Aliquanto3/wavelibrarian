@@ -55,8 +55,28 @@ class CriterionVerdict(_Sortie):
     ]
 
 
+class FaithfulnessVerdict(_Sortie):
+    """Verdict de `faithfulness` : `na` (sans objet) permis quand la Réponse n'affirme rien de
+    vérifiable (story 9.3) ; sur tout autre Critère, `na` est une sortie non conforme."""
+
+    verdict: Literal["yes", "no", "na"]
+    justification: Annotated[
+        str, Field(max_length=JUSTIFICATION_MAX), BeforeValidator(tronquer_justification)
+    ]
+
+
+CRITERE_NA = "faithfulness"  # seul Critère où un Juge peut répondre `na`
+
+
 class JudgeOutput(_Sortie):
-    verdicts: dict[str, CriterionVerdict]
+    verdicts: dict[str, CriterionVerdict | FaithfulnessVerdict]
+
+    @model_validator(mode="after")
+    def _na_en_fidelite_seulement(self) -> "JudgeOutput":
+        fautifs = [c for c, v in self.verdicts.items() if v.verdict == "na" and c != CRITERE_NA]
+        if fautifs:
+            raise ValueError(f"`na` permis pour {CRITERE_NA} seulement : {', '.join(fautifs)}")
+        return self
 
 
 class Entity(_Sortie):

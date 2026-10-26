@@ -15,10 +15,13 @@ from pydantic import BaseModel, ConfigDict
 from wavelibrarian.core.errors import BudgetExceeded
 from wavelibrarian.core.types import (
     JUDGED_CRITERIA,
+    NA,
     Answer,
     Criterion,
     Question,
     Verdict,
+    VerdictLu,
+    VerdictValue,
 )
 from wavelibrarian.ports.components import ComponentSpec, Judge, JudgeInput
 from wavelibrarian.scoring.answer import (
@@ -26,6 +29,7 @@ from wavelibrarian.scoring.answer import (
     abstention_correctness,
     citation_correctness,
     exact_match,
+    faithfulness_sans_objet,
 )
 
 log = logging.getLogger(__name__)
@@ -39,13 +43,14 @@ class Sink(Protocol):
 
 class PanelVerdict(BaseModel):
     """Ligne de `panel.jsonl`. `judges` : Juges admissibles dont les voix comptent (vide pour un
-    Critère automatique). Égalité : `verdict` faux et `tie` vrai."""
+    Critère automatique). Égalité : `verdict` `no` et `tie` vrai. Un booléen (Exécution antérieure
+    à la v0.3.0) se relit `yes` ou `no`."""
 
     model_config = ConfigDict(frozen=True)
 
     answer_id: str
     criterion: Criterion
-    verdict: bool
+    verdict: VerdictLu
     tie: bool = False
     judges: tuple[str, ...] = ()
 
@@ -57,11 +62,16 @@ def cle(v: Verdict) -> CleVerdict:
     return (v.answer_id, v.judge_model, v.criterion, v.pass_id)
 
 
-def criteres_juges(question: Question) -> tuple[Criterion, ...]:
-    """Critères notés par un Juge : `correctness` est exclu d'une réponse courte (exact_match)."""
+def criteres_juges(question: Question, answer: Answer | None = None) -> tuple[Criterion, ...]:
+    """Critères notés par un Juge : `correctness` est exclu d'une réponse courte (exact_match) ;
+    `faithfulness` est exclu d'une Réponse vide ou d'une abstention (`answer` donnée), où il vaut
+    `na` sans Juge."""
+    criteres: tuple[Criterion, ...] = JUDGED_CRITERIA
     if question.answer_form == "short":
-        return tuple(c for c in JUDGED_CRITERIA if c != "correctness")
-    return JUDGED_CRITERIA
+        criteres = tuple(c for c in criteres if c != "correctness")
+    if answer is not None and faithfulness_sans_objet(answer.text, answer.abstained):
+        criteres = tuple(c for c in criteres if c != "faithfulness")
+    return criteres
 
 
 def verdicts_automatiques(
@@ -70,8 +80,9 @@ def verdicts_automatiques(
     reference_anchor_ids: Collection[str],
     corpus_anchor_ids: Collection[str],
 ) -> list[Verdict]:
-    """Critères sans Juge d'une Réponse `ok` : `citation_correctness`, `abstention_correctness`
-    et, pour `answer_form: short`, `correctness` par `exact_match`."""
+    """Critères sans Juge d'une Réponse `ok` : `citation_correctness`, `abstention_correctness`,
+    pour `answer_form: short`, `correctness` par `exact_match` et, pour une Réponse vide ou une
+    abstention, `faithfulness` à `na` (story 9.3)."""
     inconnue = question.type == "unanswerable"
     cites = [c.anchor_id for c in answer.citations]
     oui: dict[Criterion, bool] = {
@@ -86,23 +97,33 @@ def verdicts_automatiques(
     }
     if question.answer_form == "short":
         oui["correctness"] = exact_match(question.reference_answer, answer.text)
+    valeurs: dict[Criterion, VerdictValue] = {c: "yes" if v else "no" for c, v in oui.items()}
+    if faithfulness_sans_objet(answer.text, answer.abstained):
+        valeurs["faithfulness"] = NA
     return [
         Verdict(answer_id=answer.answer_id, judge_model=JUGE_AUTO, criterion=c, verdict=v)
-        for c, v in oui.items()
+        for c, v in valeurs.items()
     ]
 
 
 def majorite(
-    answer_id: str, criterion: Criterion, votes: Sequence[bool], judges: Sequence[str]
+    answer_id: str, criterion: Criterion, votes: Sequence[VerdictValue], judges: Sequence[str]
 ) -> PanelVerdict:
-    """Majorité des voix (Juges et passes confondus) ; égalité = `no` et `tie`."""
-    oui = sum(votes)
-    non = len(votes) - oui
+    """Majorité des voix (Juges et passes confondus) : `na` si plus de la moitié des voix disent
+    `na`, sinon majorité des `yes` et `no` ; égalité entre `yes` et `no` = `no` et `tie`."""
+    na = sum(1 for v in votes if v == NA)
+    oui = sum(1 for v in votes if v == "yes")
+    non = len(votes) - na - oui
+    if na * 2 > len(votes):
+        verdict: VerdictValue = NA
+        egalite = False
+    else:
+        verdict, egalite = ("yes" if oui > non else "no"), oui == non
     return PanelVerdict(
         answer_id=answer_id,
         criterion=criterion,
-        verdict=oui > non,
-        tie=oui == non,
+        verdict=verdict,
+        tie=egalite,
         judges=tuple(judges),
     )
 
@@ -135,7 +156,7 @@ def juger_reponse(
 
     for v in verdicts_automatiques(answer, question, reference_anchor_ids, corpus_anchor_ids):
         ecrire(v)
-    criteres: tuple[Criterion, ...] = criteres_juges(question)
+    criteres: tuple[Criterion, ...] = criteres_juges(question, answer)
     item = JudgeInput(
         question=question.text,
         reference_answer=question.reference_answer,
@@ -162,6 +183,9 @@ def juger_reponse(
                     log.warning("Juge %s sans verdict %s sur %s", modele, c, answer.answer_id)
                     continue
                 oui, justification = notes[c]
+                if oui == NA and c != "faithfulness":  # sortie non conforme : clé laissée absente
+                    log.warning("Juge %s : na sur %s pour %s", modele, c, answer.answer_id)
+                    continue
                 ecrire(
                     Verdict(
                         answer_id=answer.answer_id,

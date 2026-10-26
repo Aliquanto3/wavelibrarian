@@ -104,7 +104,11 @@ def _espion(
         if scenario is None:
             return reel(self, item, criteria, pass_id)
         return {
-            c: (scenario(self.model_id, pass_id, c, _humain(qid, c)), "scénarisé") for c in criteria
+            c: (
+                "yes" if scenario(self.model_id, pass_id, c, _humain(qid, c)) else "no",
+                "scénarisé",
+            )
+            for c in criteria
         }
 
     monkeypatch.setattr(LLMJudge, "judge", juge)
@@ -192,7 +196,12 @@ def test_calibration_json_kappa_instabilite_items_et_inter_annotateurs(
     assert paire["annotators"] == ["anael", "bruno"]
     assert paire["criteria"]["completeness"]["n_items"] == 6
     assert paire["criteria"]["completeness"]["kappa"] < 0  # bruno inverse tout anael
-    assert paire["criteria"]["faithfulness"] == {"kappa": None, "n_items": 6}
+    assert paire["criteria"]["faithfulness"] == {
+        "kappa": None,
+        "n_items": 6,
+        "na_agreements": 0,
+        "na_disagreements": 0,
+    }
     assert "calibration_judge" not in d
     assert excluded_judges(dossier / "calibration.json") == {"fake-llm-c"}
 
