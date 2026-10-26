@@ -24,7 +24,8 @@ Au plus 2 stories en développement à la fois.
 | Étape | Dépense |
 | --- | --- |
 | 9.9 calibration d'Opus (354 appels) | 3,32 $ |
-| Total | 3,32 $ / 10 $ |
+| 9.10 rejugement mini-cpu (72 appels, 47 du Cache) | 0,43 $ |
+| Total | 3,75 $ / 10 $ |
 
 ## Sprint 1 — Epic 9 (v0.3.0)
 
@@ -112,3 +113,6 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 10:37 · 9.9 · décision · relancée avec uv run --extra energy (1er lancement arrêté au démarrage, sans appel : extra energy absent) · 
 - 2026-10-26 10:37 · 9.9 · dev · fini : Opus 1,00 / 0,72 / 0,76 au-dessus du seuil ; 354 appels ; 3,32 $ · 
 - 2026-10-26 10:37 · 9.5 · décision · bascule appliquée : mini-cpu et lazy-seuil-cpu en Juge unique Opus (opus.json), tests e2e et 8.7 réalignés · 
+- 2026-10-26 10:38 · 9.10 · dev · rejugement réel lancé (wl rejuger 20261018-115941-a2a512, mini-cpu, Opus seul, plafond 3 $) · 
+- 2026-10-26 10:38 · 9.11 · attente humaine · feu vert Ollama CPU demandé à Anaël (notification) · 
+- 2026-10-26 10:41 · 9.10 · dev · fini : rejugement 20261026-093758-1afc6b completed, 72 Réponses, 0,43 $ (47 verdicts du Cache) ; IC recouvrants · 
