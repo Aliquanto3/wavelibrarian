@@ -75,6 +75,9 @@ def _lire_yaml(chemin: Path) -> Any:
         raise ConfigError(str(chemin), f"YAML invalide : {exc}") from exc
 
 
+lire_yaml = _lire_yaml  # lecture des paquets (sans booléens implicites), pour l'export
+
+
 def charger_fichier(
     chemin: Path, deja: dict[Cle, VerdictValue] | None = None
 ) -> dict[Cle, VerdictValue]:

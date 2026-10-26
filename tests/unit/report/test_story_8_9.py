@@ -84,8 +84,10 @@ def test_export_prerempli_format_4_6(run_dir: Path, tmp_path: Path) -> None:
     lignes = doc["annotations"]
     criteres = {"correctness", "completeness", "faithfulness"}
     assert lignes and {a["criterion"] for a in lignes} <= criteres
-    assert all(a["verdict"] == "" and a["question"] and "answer" in a for a in lignes)
-    assert all("cited_anchors" in a for a in lignes)
+    assert all(a["verdict"] == "" and a["note"] == "" for a in lignes)
+    premieres = {a["answer_id"]: a for a in reversed(lignes)}
+    assert all(a["question"] and "answer" in a for a in premieres.values())
+    assert all(isinstance(a["cited_anchors"], list) for a in premieres.values())
     assert all(a["answer_id"].startswith(run_dir.name + "/") for a in lignes)
     assert len({a["answer_id"] for a in lignes}) == 3
 
@@ -250,10 +252,10 @@ def test_contexte_des_juges_dans_le_paquet(run_dir: Path, tmp_path: Path) -> Non
     d = tmp_path / "p"
     exporter_paquet(run_dir, d, annotateurs=["a"], nombre=500, textes_reference=references)
     lignes = _lignes(d / "a.yaml")
-    assert all("reference_answer" in a for a in lignes)
     premieres: dict[str, dict[str, Any]] = {}
     for a in lignes:
         premieres.setdefault(a["answer_id"], a)
+    assert all("reference_answer" in a for a in premieres.values())
     for aid, a in premieres.items():
         qid = aid.rsplit("/", 1)[1]
         assert a["reference_passages"] == [f"passage de référence de {qid}"]

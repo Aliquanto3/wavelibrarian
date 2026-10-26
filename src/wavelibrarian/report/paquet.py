@@ -2,12 +2,15 @@
 
 Le paquet reprend le format de `contracts.md` §4.6 (`annotator`, `annotations` de `answer_id`,
 `criterion`, `verdict`, `note`) et y ajoute des clés de contexte en lecture seule, que le chargeur
-de la story 5.1 ignore : `question`, `reference_answer`, `answer` et `cited_anchors` sur chaque
-ligne ; sur la première ligne de chaque Réponse, `reference_passages` (texte des Ancrages de
-référence) et `context_passages` (Passages fournis au Generator). C'est ce que reçoivent les Juges
-(`JudgeInput`), rien de plus. `verdict` est vide (`""`) ; l'annotateur y met `yes` ou `no`. Le
-tirage est stable à graine égale (AD-20) : la graine de l'Expérience (ou celle donnée) est dérivée
-par `sha16("annotation", graine)`.
+de la story 5.1 ignore, et qui ne figurent que sur la première ligne de chaque Réponse (story 9.4) :
+`question`, `reference_answer`, `answer`, `cited_anchors` (identifiants d'Ancrage seulement),
+`reference_passages` (texte des Ancrages de référence) et `context_passages` (Passages fournis au
+Generator). C'est ce que reçoivent les Juges (`JudgeInput`), rien de plus. L'ancien format (ces clés
+répétées sur chaque ligne) reste chargeable. `verdict` est vide (`""`) ; l'annotateur y met `yes`,
+`no` ou `na`. Le tirage est stratifié par Configuration × Type de question (allocation
+proportionnelle) et stable à graine égale (AD-20) : la graine de l'Expérience (ou celle donnée) est
+dérivée par `sha16("annotation", graine)`. `exporter_depuis` tire une double annotation parmi les
+lignes déjà annotées d'un paquet, stratifiées par Critère.
 """
 
 import math
@@ -25,6 +28,7 @@ from wavelibrarian.core.ids import sha16
 from wavelibrarian.core.types import Answer, Question
 from wavelibrarian.report.ancrages import ResolveurCorpus, resolveur_de
 from wavelibrarian.report.lecture import charger
+from wavelibrarian.scoring.calibration import lire_yaml
 from wavelibrarian.scoring.panel import criteres_juges
 
 TERMINEES = ("completed", "completed_with_errors")
@@ -38,7 +42,7 @@ ENTETE = (
     "# na (sans objet : le Critère ne s'applique pas, p. ex. fidélité d'une Réponse vide).\n"
     "# Les clés question, reference_answer, answer, cited_anchors, reference_passages et\n"
     "# context_passages aident à annoter (ce que reçoivent les Juges) ; elles sont ignorées au\n"
-    "# chargement. Les Passages ne figurent que sur la première ligne de chaque Réponse.\n"
+    "# chargement et ne figurent que sur la première ligne de chaque Réponse.\n"
 )
 
 
@@ -64,11 +68,50 @@ class Paquet:
     n_eligibles: int  # Réponses `ok` dont on a tiré
     autres: list[Path] = field(default_factory=list)  # YAML laissés dans le dossier (écrasement)
     alertes: list[str] = field(default_factory=list)  # Corpus relu : Ancrages non résolus, etc.
+    # Strate -> (retenues, disponibles) : « config × type » ou Critère (`--depuis`).
+    repartition: dict[str, tuple[int, int]] = field(default_factory=dict)
+    n_lignes: int = 0  # lignes (Réponse, Critère) par fichier d'annotateur
 
 
 def graine_de_tirage(graine: int) -> int:
     """Graine du tirage dérivée de la graine de l'Expérience (AD-20)."""
     return int(sha16("annotation", str(graine)), 16)
+
+
+def repartir(tailles: dict[str, int], nombre: int) -> dict[str, int]:
+    """Allocation proportionnelle de `nombre` tirages entre strates de `tailles` données
+    (plus grands restes), au moins un par strate non vide si `nombre` le permet, jamais plus que
+    la taille d'une strate. Déterministe : égalités départagées par le nom de strate."""
+    strates = sorted(k for k, t in tailles.items() if t > 0)
+    total = sum(tailles[k] for k in strates)
+    if nombre >= total:
+        return {k: tailles[k] for k in strates}
+    quota = {k: nombre * tailles[k] / total for k in strates}
+    if nombre < len(strates):
+        # Pas de place pour toutes les strates : les plus grands quotas d'abord.
+        choisies = sorted(strates, key=lambda k: (-quota[k], k))[:nombre]
+        return {k: (1 if k in choisies else 0) for k in strates}
+    alloue = {k: min(tailles[k], max(1, math.floor(quota[k]))) for k in strates}
+    while sum(alloue.values()) < nombre:
+        k = min(
+            (k for k in strates if alloue[k] < tailles[k]), key=lambda k: (alloue[k] - quota[k], k)
+        )
+        alloue[k] += 1
+    while sum(alloue.values()) > nombre:
+        k = max((k for k in strates if alloue[k] > 1), key=lambda k: (alloue[k] - quota[k], k))
+        alloue[k] -= 1
+    return alloue
+
+
+def _tirer_par_strates(
+    rng: random.Random, strates: dict[str, list[str]], nombre: int
+) -> tuple[list[str], dict[str, tuple[int, int]]]:
+    """Tire dans chaque strate (ordre des noms) ; rend les retenus et la répartition."""
+    alloue = repartir({k: len(v) for k, v in strates.items()}, nombre)
+    retenus: list[str] = []
+    for k in sorted(alloue):
+        retenus.extend(rng.sample(sorted(strates[k]), alloue[k]))
+    return retenus, {k: (alloue[k], len(strates[k])) for k in sorted(alloue)}
 
 
 def _valider_annotateurs(annotateurs: list[str]) -> None:
@@ -124,14 +167,16 @@ def exporter_paquet(
     statut = ex.manifeste.get("status")
     if statut not in TERMINEES:
         raise ConfigError("run", f"Exécution non terminée (statut {statut!r})")
-    eligibles = sorted(
-        a.answer_id for a in ex.reponses.values() if a.status == "ok" and a.question_id in ex.jeu
-    )
-    if not eligibles:
+    ok = [a for a in ex.reponses.values() if a.status == "ok" and a.question_id in ex.jeu]
+    if not ok:
         raise ConfigError("run", "aucune Réponse `ok` à annoter")
+    strates: dict[str, list[str]] = {}
+    for a in ok:
+        strates.setdefault(f"{a.config_id} × {ex.jeu[a.question_id].type}", []).append(a.answer_id)
     base = ex.experience.seed if graine is None else graine
     rng = random.Random(graine_de_tirage(base))
-    retenues = rng.sample(eligibles, min(nombre, len(eligibles)))
+    retenues, repartition = _tirer_par_strates(rng, strates, nombre)
+    rng.shuffle(retenues)  # l'ordre du tirage décide des doubles : pas de biais de strate
     n_doubles = math.floor(len(retenues) * part_double + 0.5) if len(annotateurs) > 1 else 0
     lignes: dict[str, list[str]] = {nom: [] for nom in annotateurs}
     for i, aid in enumerate(retenues):
@@ -157,37 +202,143 @@ def exporter_paquet(
         references[aid] = texte_de(rep, q) if texte_de is not None else []
     vers.mkdir(parents=True, exist_ok=True)
     fichiers: dict[str, Path] = {}
+    n_lignes = 0
     for nom, ids in lignes.items():
         entrees: list[dict[str, Any]] = []
         for aid in sorted(ids):
-            rep = ex.reponses[aid]
-            question = ex.jeu[rep.question_id]
+            rep_ = ex.reponses[aid]
+            question = ex.jeu[rep_.question_id]
             for n, critere in enumerate(criteres_juges(question)):
                 entree: dict[str, Any] = {
                     "answer_id": aid,
                     "criterion": critere,
                     "verdict": "",
                     "note": "",
-                    "question": question.text,
-                    "reference_answer": question.reference_answer,
-                    "answer": rep.text,
-                    "cited_anchors": [c.anchor_id for c in rep.citations],
                 }
-                if n == 0:
+                if n == 0:  # données propres à la Réponse : une seule fois
+                    entree["question"] = question.text
+                    entree["reference_answer"] = question.reference_answer
+                    entree["answer"] = rep_.text
+                    entree["cited_anchors"] = [c.anchor_id for c in rep_.citations]
                     entree["reference_passages"] = list(references[aid])
-                    entree["context_passages"] = list(rep.context_texts)
+                    entree["context_passages"] = list(rep_.context_texts)
                 entrees.append(entree)
-        chemin = vers / f"{nom}.yaml"
-        corps = yaml.dump(
-            {"annotator": nom, "annotations": entrees},
-            Dumper=_Dumper,
-            allow_unicode=True,
-            sort_keys=False,
-            width=100,
-        )
-        chemin.write_text(ENTETE + corps, encoding="utf-8", newline="\n")
-        fichiers[nom] = chemin
-    ecrits = {p.name.casefold() for p in fichiers.values()}
-    autres = [f for f in presents if f.name.casefold() not in ecrits]
+        fichiers[nom] = _ecrire(vers, nom, entrees)
+        n_lignes += len(entrees)
     alertes = resolveur.alertes() if resolveur is not None else []
-    return Paquet(fichiers, len(retenues), n_doubles, len(eligibles), autres, alertes)
+    return Paquet(
+        fichiers,
+        len(retenues),
+        n_doubles,
+        len(ok),
+        _autres(presents, fichiers),
+        alertes,
+        repartition,
+        n_lignes,
+    )
+
+
+def _ecrire(vers: Path, nom: str, entrees: list[dict[str, Any]]) -> Path:
+    chemin = vers / f"{nom}.yaml"
+    corps = yaml.dump(
+        {"annotator": nom, "annotations": entrees},
+        Dumper=_Dumper,
+        allow_unicode=True,
+        sort_keys=False,
+        width=100,
+    )
+    chemin.write_text(ENTETE + corps, encoding="utf-8", newline="\n")
+    return chemin
+
+
+def _autres(presents: list[Path], fichiers: dict[str, Path]) -> list[Path]:
+    ecrits = {p.name.casefold() for p in fichiers.values()}
+    return [f for f in presents if f.name.casefold() not in ecrits]
+
+
+DONNEES_DE_REPONSE = (
+    "question",
+    "reference_answer",
+    "answer",
+    "cited_anchors",
+    "reference_passages",
+    "context_passages",
+)
+ANNOTE = ("yes", "no", "na")
+
+
+def exporter_depuis(
+    source: Path,
+    vers: Path,
+    *,
+    annotateurs: list[str],
+    nombre: int = 30,
+    graine: int | None = None,
+    ecraser: bool = False,
+) -> Paquet:
+    """Double annotation : tire `nombre` lignes parmi les lignes déjà annotées (verdict `yes`,
+    `no` ou `na`) du paquet `source`, stratifiées par Critère, et les écrit pour chaque
+    annotateur, verdicts et notes vides. `answer_id` et Critères sont conservés ; les données
+    de la Réponse passent sur la première ligne retenue de chaque Réponse. Graine par défaut : 0.
+    `ConfigError` si la source est illisible ou sans ligne annotée, ou si un annotateur porte le
+    nom de celui de la source."""
+    if nombre < 1:
+        raise ConfigError("nombre", "au moins une ligne à annoter")
+    _valider_annotateurs(annotateurs)
+    if not source.is_file():
+        raise ConfigError("depuis", f"{source} : paquet introuvable (un fichier YAML est attendu)")
+    doc = lire_yaml(source)
+    lignes = doc.get("annotations") if isinstance(doc, dict) else None
+    if not isinstance(lignes, list) or not all(isinstance(x, dict) for x in lignes):
+        raise ConfigError("depuis", f"{source.name} : une liste d'annotations est attendue")
+    origine = doc.get("annotator")
+    if isinstance(origine, str) and origine.casefold() in {a.casefold() for a in annotateurs}:
+        raise ConfigError(
+            "annotateurs", f"{origine!r} a déjà annoté ce paquet : choisir un autre annotateur"
+        )
+    presents = _yaml_du_dossier(vers)
+    if presents and not ecraser:
+        noms = ", ".join(f.name for f in presents)
+        raise ConfigError(
+            "vers", f"{vers} contient déjà des annotations ({noms}) : --ecraser pour les remplacer"
+        )
+    donnees: dict[str, dict[str, Any]] = {}
+    for ligne in lignes:  # les données de la Réponse viennent de n'importe laquelle de ses lignes
+        d = donnees.setdefault(str(ligne.get("answer_id")), {})
+        for cle in DONNEES_DE_REPONSE:
+            if cle in ligne and cle not in d:
+                d[cle] = ligne[cle]
+    annotees = [i for i, x in enumerate(lignes) if x.get("verdict") in ANNOTE]
+    if not annotees:
+        raise ConfigError("depuis", f"{source.name} : aucune ligne annotée")
+    strates: dict[str, list[str]] = {}
+    for i in annotees:
+        strates.setdefault(str(lignes[i].get("criterion")), []).append(str(i))
+    rng = random.Random(graine_de_tirage(0 if graine is None else graine))
+    choisies, repartition = _tirer_par_strates(rng, strates, nombre)
+    entrees: list[dict[str, Any]] = []
+    vues: set[str] = set()
+    for i in sorted(int(c) for c in choisies):
+        aid = str(lignes[i]["answer_id"])
+        entree: dict[str, Any] = {
+            "answer_id": aid,
+            "criterion": lignes[i]["criterion"],
+            "verdict": "",
+            "note": "",
+        }
+        if aid not in vues:
+            vues.add(aid)
+            entree.update(donnees[aid])
+        entrees.append(entree)
+    vers.mkdir(parents=True, exist_ok=True)
+    fichiers = {nom: _ecrire(vers, nom, entrees) for nom in annotateurs}
+    return Paquet(
+        fichiers,
+        len(vues),
+        len(vues),
+        len(annotees),
+        _autres(presents, fichiers),
+        [],
+        repartition,
+        len(entrees),
+    )

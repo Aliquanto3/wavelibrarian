@@ -32,7 +32,9 @@ from wavelibrarian.llm.preflight import preflight
 from wavelibrarian.measure.tokenizers import make_tokenizer
 from wavelibrarian.report.export import exporter_front as exporter_front_vers
 from wavelibrarian.report.generer import generer_rapport
-from wavelibrarian.report.paquet import exporter_paquet
+from wavelibrarian.report.importer import importer_verdicts
+from wavelibrarian.report.page_annotation import generer_page
+from wavelibrarian.report.paquet import Paquet, exporter_depuis, exporter_paquet
 from wavelibrarian.runner import installer as installation
 from wavelibrarian.runner.calibrer import calibrer as calibration
 from wavelibrarian.runner.context import Context
@@ -864,10 +866,22 @@ app.add_typer(annotations_app, name="annotations")
 
 @annotations_app.command("exporter")
 def annotations_exporter(
-    run_id: Annotated[str, typer.Argument(help="Identifiant de l'Exécution terminée.")],
+    run_id: Annotated[
+        str | None,
+        typer.Argument(help="Identifiant de l'Exécution terminée (absent avec --depuis)."),
+    ] = None,
+    *,
     vers: Annotated[
         Path, typer.Option("--vers", help="Dossier du paquet (un YAML par annotateur).")
     ],
+    depuis: Annotated[
+        Path | None,
+        typer.Option(
+            "--depuis",
+            help="Paquet déjà annoté : tire --nombre lignes annotées (par Critère) pour une "
+            "double annotation.",
+        ),
+    ] = None,
     annotateurs: Annotated[
         str, typer.Option("--annotateurs", help="Annotateurs, séparés par des virgules.")
     ] = "anael",
@@ -887,31 +901,44 @@ def annotations_exporter(
 ) -> None:
     """Écrit un paquet d'annotation prérempli (format de `contracts.md` §4.6), verdicts vides.
 
-    Chaque ligne porte la Question, la réponse de référence, la Réponse et les Ancrages cités ;
-    la première ligne de chaque Réponse donne aussi le texte des Ancrages de référence et les
-    Passages fournis au Generator (ce que reçoivent les Juges). Seules les Réponses `ok`
-    sont tirées, y compris d'une Exécution `completed_with_errors`. Le tirage est stable à graine
-    égale. Avec un seul annotateur, aucune Réponse n'est doublement annotée. Un dossier qui
-    contient déjà un YAML est refusé sans `--ecraser`. Remplir les verdicts (`yes` ou `no`), puis
-    lancer `wl calibrer`. Codes de sortie : 0 succès, 1 erreur, 2 Exécution introuvable ou non
-    terminée, réglage invalide, dossier déjà rempli.
+    La première ligne de chaque Réponse porte la Question, la réponse de référence, la Réponse, les
+    identifiants des Ancrages cités, le texte des Ancrages de référence et les Passages fournis au
+    Generator (ce que reçoivent les Juges). Seules les Réponses `ok` sont tirées, y compris d'une
+    Exécution `completed_with_errors`, par strates Configuration × Type de question (allocation
+    proportionnelle, répartition affichée) ; le tirage est stable à graine égale. Avec un seul
+    annotateur, aucune Réponse n'est doublement annotée. Avec `--depuis <paquet annoté>` (sans
+    run_id), les lignes viennent du paquet source, stratifiées par Critère (graine par défaut 0).
+    Un dossier qui contient déjà un YAML est refusé sans `--ecraser`. Remplir les verdicts (`yes`,
+    `no` ou `na`) à la main ou avec `wl annotations page`, puis lancer `wl calibrer`. Codes de
+    sortie : 0 succès, 1 erreur, 2 Exécution introuvable ou non terminée, réglage invalide,
+    dossier déjà rempli.
     """
     wl_home = Path(os.environ.get("WL_HOME") or ".wl")
-    dossier = wl_home / "runs" / run_id
-    if not RUN_ID.fullmatch(run_id) or not dossier.is_dir():
-        typer.echo(f"Exécution {run_id} introuvable dans {wl_home / 'runs'}.", err=True)
+    if (run_id is None) == (depuis is None):
+        typer.echo("Configuration invalide : donner un run_id ou --depuis, pas les deux.", err=True)
         raise typer.Exit(2)
+    noms = [a.strip() for a in annotateurs.split(",")]
     try:
-        paquet = exporter_paquet(
-            dossier,
-            vers,
-            annotateurs=[a.strip() for a in annotateurs.split(",")],
-            nombre=nombre,
-            graine=graine,
-            part_double=part_double,
-            ecraser=ecraser,
-            wl_home=wl_home,
-        )
+        if depuis is not None:
+            paquet = exporter_depuis(
+                depuis, vers, annotateurs=noms, nombre=nombre, graine=graine, ecraser=ecraser
+            )
+        else:
+            assert run_id is not None
+            dossier = wl_home / "runs" / run_id
+            if not RUN_ID.fullmatch(run_id) or not dossier.is_dir():
+                typer.echo(f"Exécution {run_id} introuvable dans {wl_home / 'runs'}.", err=True)
+                raise typer.Exit(2)
+            paquet = exporter_paquet(
+                dossier,
+                vers,
+                annotateurs=noms,
+                nombre=nombre,
+                graine=graine,
+                part_double=part_double,
+                ecraser=ecraser,
+                wl_home=wl_home,
+            )
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
@@ -927,13 +954,76 @@ def annotations_exporter(
             "`wl calibrer`.",
             err=True,
         )
-    if paquet.n_reponses < nombre:
+    _afficher_paquet(paquet, vers, nombre, depuis is not None)
+
+
+def _afficher_paquet(paquet: Paquet, vers: Path, nombre: int, depuis: bool) -> None:
+    n_tires = paquet.n_lignes if depuis else paquet.n_reponses
+    if n_tires < nombre:
+        quoi = "ligne(s) annotée(s)" if depuis else "Réponse(s) `ok`"
         typer.echo(
-            f"Avertissement : {paquet.n_eligibles} Réponse(s) `ok` seulement, "
-            f"{nombre} demandée(s).",
+            f"Avertissement : {paquet.n_eligibles} {quoi} seulement, {nombre} demandée(s).",
+            err=True,
+        )
+    if depuis:
+        typer.echo(
+            f"Paquet de {paquet.n_lignes} ligne(s) sur {paquet.n_reponses} Réponse(s), "
+            f"{len(paquet.fichiers)} fichier(s) dans {vers}"
+        )
+    else:
+        typer.echo(
+            f"Paquet de {paquet.n_reponses} Réponse(s) dont {paquet.n_doubles} doublement "
+            f"annotée(s), {len(paquet.fichiers)} fichier(s) dans {vers}"
+        )
+    typer.echo("Répartition par strate (retenues / disponibles) :")
+    for strate, (retenues, disponibles) in paquet.repartition.items():
+        typer.echo(f"  {strate} : {retenues} / {disponibles}")
+
+
+@annotations_app.command("page")
+def annotations_page(
+    paquet: Annotated[Path, typer.Argument(help="Paquet d'annotation (YAML d'un annotateur).")],
+    vers: Annotated[Path, typer.Option("--vers", help="Page HTML à écrire.")],
+) -> None:
+    """Écrit la page HTML d'annotation d'un paquet : autonome (hors ligne), à l'aveugle, sans
+    surlignage. La réponse de référence n'est montrée que pour correctness et completeness ;
+    oui, non ou sans objet par Critère. Exporte `verdicts-<annotateur>.json` (à reporter avec
+    `wl annotations importer`). Codes de sortie : 0 succès, 1 erreur d'écriture, 2 paquet invalide.
+    """
+    try:
+        n = generer_page(paquet, vers)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except OSError as erreur:
+        typer.echo(f"Page non écrite : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    typer.echo(f"Page de {n} Réponse(s) écrite dans {vers}")
+
+
+@annotations_app.command("importer")
+def annotations_importer(
+    paquet: Annotated[Path, typer.Argument(help="Paquet d'annotation à compléter (modifié).")],
+    verdicts: Annotated[Path, typer.Argument(help="`verdicts-<annotateur>.json` de la page.")],
+) -> None:
+    """Reporte les verdicts et les notes de la page dans le paquet, ligne à ligne ; le reste du
+    paquet est inchangé. Codes de sortie : 0 succès, 1 erreur d'écriture, 2 fichier invalide ou
+    verdicts d'un autre annotateur.
+    """
+    try:
+        res = importer_verdicts(paquet, verdicts)
+    except ConfigError as erreur:
+        typer.echo(f"Configuration invalide : {erreur}", err=True)
+        raise typer.Exit(2) from erreur
+    except OSError as erreur:
+        typer.echo(f"Paquet non écrit : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    if res.inconnus:
+        typer.echo(
+            f"Avertissement : {len(res.inconnus)} verdict(s) du JSON absents du paquet, ignorés.",
             err=True,
         )
     typer.echo(
-        f"Paquet de {paquet.n_reponses} Réponse(s) dont {paquet.n_doubles} doublement "
-        f"annotée(s), {len(paquet.fichiers)} fichier(s) dans {vers}"
+        f"{res.verdicts} verdict(s) et {res.notes} note(s) reportés dans {paquet} ; "
+        f"{res.sans_verdict} ligne(s) sans verdict."
     )
