@@ -144,7 +144,7 @@ class Context:
                 retries=retries,
                 # Story 9.7 : la Configuration courante (`self.config_id`, changée par le runner
                 # à chaque Réponse) entre dans la clé du Cache de réponses.
-                cache_scope=(lambda: self.config_id or None) if isoler_configurations else None,
+                cache_scope=self._portee_cache if isoler_configurations else None,
             )
             self.gateway: ModelGateway = _PasserelleSousPoste(self, mesuree)
         except BaseException:
@@ -208,6 +208,13 @@ class Context:
             budget=budget,
             execution=False,
         )
+
+    def _portee_cache(self) -> str | None:
+        """Portée du Cache isolé (story 9.7) : la Configuration courante, au Poste `query`
+        seulement (génération, Decider, sélection…). Les Juges (`judging`, aussi en calibration)
+        et la construction d'index (`indexing`, `update`, partagée par `index_key`) gardent
+        des clés communes à toutes les Configurations."""
+        return (self.config_id or None) if self._post == "query" else None
 
     @property
     def post(self) -> CostPost:

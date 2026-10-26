@@ -4,13 +4,14 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from wavelibrarian.components.deciders.llm import SYSTEM
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.defaults import load_profile
-from wavelibrarian.config.experiment import Experiment, LlmCacheSettings
-from wavelibrarian.config.resolve import fingerprint
+from wavelibrarian.config.experiment import Experiment, LlmCacheSettings, ResolvedExperiment
+from wavelibrarian.config.resolve import fingerprint, to_yaml, write_resolved
 from wavelibrarian.config.validate import validate_file
 from wavelibrarian.llm.cache import cache_key, role_marker
 from wavelibrarian.llm.providers.fake import FakeProvider
@@ -134,3 +135,78 @@ def test_experience_lazy_seuil_cpu(wl_home: Path) -> None:
     # Option ordinaire : elle entre dans l'empreinte (une reprise ne peut pas la changer).
     autre = r.model_copy(update={"llm_cache": LlmCacheSettings()})
     assert fingerprint(autre) != fingerprint(r)
+
+
+# --- Revue 9.7 : empreinte pré-9.7, portée limitée au Poste `query`, câblage depuis le YAML ----
+
+
+def _mini_test(tmp_path: Path, **ajouts: object) -> Path:
+    """`mini-test.yaml` réduit à deux Configurations, chemins rendus absolus, plus `ajouts`."""
+    donnees = yaml.safe_load((EXPERIENCES / "mini-test.yaml").read_text(encoding="utf-8"))
+    for cle in ("corpus", "questions", "scenario"):
+        donnees[cle] = str((EXPERIENCES / donnees[cle]).resolve())
+    donnees["configurations"] = donnees["configurations"][:2]
+    donnees.update(ajouts)
+    chemin = tmp_path / "exp.yaml"
+    chemin.write_text(yaml.safe_dump(donnees, allow_unicode=True), encoding="utf-8")
+    return chemin
+
+
+def test_empreinte_d_une_experience_pre_9_7_inchangee(tmp_path: Path, wl_home: Path) -> None:
+    # Constat 1 du second avis : `llm_cache` par défaut ne doit pas changer l'empreinte, sans quoi
+    # `--reprendre` refuse toute Exécution v0.2.0. Écrit comme en v0.2.0 : sans clé `llm_cache`.
+    r = validate_file(_mini_test(tmp_path), wl_home).resolved
+    assert "llm_cache" not in yaml.safe_load(to_yaml(r))
+    dossier = tmp_path / "run-v020"
+    write_resolved(r, dossier)
+    ancienne = yaml.safe_load((dossier / "experiment.resolved.yaml").read_text(encoding="utf-8"))
+    relue = ResolvedExperiment.model_validate(ancienne)
+    attendue = (dossier / "experiment.sha256").read_text(encoding="utf-8").strip()
+    assert fingerprint(relue) == fingerprint(r) == attendue
+    # Activée, l'option entre dans la forme écrite et dans l'empreinte.
+    isolee = validate_file(
+        _mini_test(tmp_path, llm_cache={"isoler_configurations": True}), wl_home
+    ).resolved
+    assert yaml.safe_load(to_yaml(isolee))["llm_cache"] == {"isoler_configurations": True}
+    assert fingerprint(isolee) != fingerprint(r)
+
+
+def test_isolation_cablee_depuis_le_yaml_et_limitee_au_poste_query(
+    tmp_path: Path, wl_home: Path
+) -> None:
+    # Constats 3, 5 et 7 : YAML -> `from_experiment` -> passerelle ; Juges (`judging`, aussi en
+    # calibration) et construction d'index (`indexing`) gardent un Cache commun.
+    res = validate_file(_mini_test(tmp_path, llm_cache={"isoler_configurations": True}), wl_home)
+    provider = FakeProvider()
+    appels: list[tuple[str, str]] = []
+
+    def _appel(req: LLMRequest) -> str:
+        appels.append((ctx.config_id, req.role))
+        return "ok"
+
+    provider.script("generate", "*", _appel)
+    ctx = Context.from_experiment(
+        res.resolved, wl_home=wl_home, run_id="r-1", providers={"fake": provider}
+    )
+    req = LLMRequest(
+        model_id="fake-llm-a",
+        role="generate",
+        step="generate",
+        system="Réponds.",
+        messages=(Message(role="user", content="Capitale ?"),),
+        max_tokens=50,
+        inputs={"question": "q", "blocks": {}},
+    )
+    with ctx:
+        for post in ("query", "judging", "indexing"):
+            for config_id in ("sans-contexte", "contexte-long"):
+                ctx.config_id = config_id
+                with ctx.scope(post=post):  # type: ignore[arg-type]
+                    ctx.gateway.complete(req)
+    # `query` : une clé par Configuration (deux appels) ; `judging` puis `indexing` : une clé
+    # commune sans `config_id` (un appel, puis rejeu pour toutes les Configurations et Postes).
+    assert appels == [
+        ("sans-contexte", "generate"),
+        ("contexte-long", "generate"),
+        ("sans-contexte", "generate"),
+    ]

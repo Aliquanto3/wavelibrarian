@@ -18,6 +18,7 @@ from wavelibrarian.config.defaults import load_costs, load_profile
 from wavelibrarian.config.experiment import (
     Configuration,
     Experiment,
+    LlmCacheSettings,
     ResolvedConfiguration,
     ResolvedExperiment,
 )
@@ -325,8 +326,15 @@ def resolve_experiment(
 
 
 def resolved_dict(resolue: ResolvedExperiment) -> dict[str, Any]:
-    """Forme sérialisable (JSON) de l'Expérience résolue : `Decimal` et dates en chaînes."""
-    return resolue.model_dump(mode="json")
+    """Forme sérialisable (JSON) de l'Expérience résolue : `Decimal` et dates en chaînes.
+
+    `llm_cache` à sa valeur par défaut est omis (story 9.7) : l'empreinte d'une Expérience qui ne
+    le déclare pas reste celle d'avant la story, et une Exécution antérieure se reprend.
+    """
+    forme = resolue.model_dump(mode="json")
+    if resolue.llm_cache == LlmCacheSettings():
+        del forme["llm_cache"]
+    return forme
 
 
 def to_yaml(resolue: ResolvedExperiment) -> str:

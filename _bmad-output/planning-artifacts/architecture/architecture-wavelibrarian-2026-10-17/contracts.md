@@ -669,7 +669,7 @@ judges:
   calibration_judge: null
   excluded_from: null                  # chemin d'un calibration.json (Juges exclus)
 stats: {resamples: 2000, confidence: 0.95, alpha: 0.05}
-llm_cache: {isoler_configurations: false}   # true : l'id de Configuration entre dans la clé du Cache de réponses (v0.3.0, 9.7) ; clés inchangées avec false
+llm_cache: {isoler_configurations: false}   # true : l'id de Configuration entre dans la clé du Cache de réponses (v0.3.0, 9.7) ; clés inchangées avec false. Portée : appels du Poste `query` seulement (génération, Decider, sélection…) ; Juges (`judging`, calibration comprise), indexation et `update` gardent une clé commune. À `false`, la clé est omise de `experiment.resolved.yaml` et de l'empreinte (une Exécution v0.2.0 se reprend)
 retries: {max_attempts: 3, backoff_s: 1.0, max_backoff_s: 30.0}
 configurations:
   - id: naive-haiku                    # [a-z0-9-]+, unique
