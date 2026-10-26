@@ -1,6 +1,6 @@
 [project]
 name = "wavelibrarian"
-version = "0.1.0"
+version = "0.2.0"
 description = "Banc de comparaison des architectures de recherche documentaire IA (RAG, GraphRAG, LLM Wiki, recherche agentique)."
 readme = "README.md"
 license = "Apache-2.0"
