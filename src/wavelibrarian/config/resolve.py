@@ -319,6 +319,7 @@ def resolve_experiment(
         judges=juges,
         stats=experience.stats,
         retries=experience.retries,
+        llm_cache=experience.llm_cache,
         configurations=tuple(configurations),
     )
 

@@ -13,6 +13,7 @@ conditions: [standard]
 judges:
   pool: ["granite4.2:3b", "qwen3.5:4b"]  # Familles distinctes du Generator minicpm (AD-14)
   panel_size: 2
+llm_cache: {isoler_configurations: true}  # chaque seuil fait son propre appel et sa latence
 budget:
   per_run: {anthropic: {amount: "0.00", currency: USD}}
 configurations:
@@ -20,7 +21,7 @@ configurations:
     architecture: lazy_graphrag
     params: &lazy
       generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
-      decider: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+      decider: {name: llm, params: {model: "granite4.2:3b"}}
       relevance_threshold: 0.1
   - id: lazy-seuil-03
     architecture: lazy_graphrag

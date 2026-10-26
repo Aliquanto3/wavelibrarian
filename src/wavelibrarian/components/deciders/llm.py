@@ -15,7 +15,7 @@ SYSTEM = (
     "Pour chaque passage numéroté, donne un score de pertinence entre 0 (sans rapport) et 1 "
     "(répond directement) au regard de la question. Réponds en JSON, un score par passage, dans "
     "l'ordre reçu : "
-    '{"scores": [0.0, 0.0]}.'
+    '{"scores": [<score du passage 1>, <score du passage 2>, ...]}.'
 )
 
 

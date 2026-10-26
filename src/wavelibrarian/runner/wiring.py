@@ -1,5 +1,6 @@
 """Câblage de la passerelle mesurée depuis un profil (joint `llm` à `measure`)."""
 
+from collections.abc import Callable
 from functools import partial
 
 from wavelibrarian.config.catalog import ModelCatalog
@@ -22,6 +23,7 @@ def build_gateway(
     cache: ResponseCache,
     tracer: Tracer,
     retries: RetrySettings | None = None,
+    cache_scope: Callable[[], str | None] | None = None,
 ) -> MeteredGateway:
     """Tokenizer de référence du profil, estimateur d'énergie du profil, délai d'appel du profil.
 
@@ -45,4 +47,5 @@ def build_gateway(
         estimator=estimator,
         retries=retries,
         default_timeout_s=profile.defaults.call_timeout_s,
+        cache_scope=cache_scope,
     )

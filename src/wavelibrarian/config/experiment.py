@@ -49,6 +49,13 @@ class RetrySettings(_Schema):
     max_backoff_s: float = 30.0
 
 
+class LlmCacheSettings(_Schema):
+    """`isoler_configurations` : l'identifiant de Configuration entre dans la clé du Cache de
+    réponses (deux Configurations qui font le même appel paient et mesurent chacune le leur)."""
+
+    isoler_configurations: bool = Field(default=False, strict=True)
+
+
 class Configuration(_Schema):
     """Une Configuration : une Architecture et ses paramètres (validés par le registre)."""
 
@@ -79,6 +86,7 @@ class Experiment(_Schema):
     judges: JudgesSettings = JudgesSettings()
     stats: StatsSettings = StatsSettings()
     retries: RetrySettings = RetrySettings()
+    llm_cache: LlmCacheSettings = LlmCacheSettings()
     configurations: tuple[Configuration, ...] = Field(min_length=1)
 
 
@@ -115,4 +123,5 @@ class ResolvedExperiment(_Schema):
     judges: JudgesSettings
     stats: StatsSettings
     retries: RetrySettings
+    llm_cache: LlmCacheSettings = LlmCacheSettings()  # défaut : relire une Exécution antérieure
     configurations: tuple[ResolvedConfiguration, ...]

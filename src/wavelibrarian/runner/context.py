@@ -89,6 +89,7 @@ class Context:
         retries: RetrySettings | None = None,
         providers: Providers | None = None,
         execution: bool = False,
+        isoler_configurations: bool = False,
     ) -> None:
         if not _RUN_ID.fullmatch(run_id):
             raise ValueError(f"run_id invalide : {run_id!r} (lettres, chiffres, - et _)")
@@ -141,6 +142,9 @@ class Context:
                 cache=self._cache,
                 tracer=self.tracer,
                 retries=retries,
+                # Story 9.7 : la Configuration courante (`self.config_id`, changée par le runner
+                # à chaque Réponse) entre dans la clé du Cache de réponses.
+                cache_scope=(lambda: self.config_id or None) if isoler_configurations else None,
             )
             self.gateway: ModelGateway = _PasserelleSousPoste(self, mesuree)
         except BaseException:
@@ -178,6 +182,7 @@ class Context:
             retries=experience.retries,
             providers=providers,
             execution=execution,
+            isoler_configurations=experience.llm_cache.isoler_configurations,
         )
 
     @classmethod

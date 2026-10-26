@@ -27,6 +27,7 @@ def cache_key(
     provider: str,
     output_schema: dict[str, Any] | None = None,
     provider_options: Mapping[str, Any] | None = None,
+    scope: str | None = None,
 ) -> str:
     """`sha256(canonical_json(model, params, system, messages, pass_id[, output_schema]))`.
 
@@ -41,6 +42,8 @@ def cache_key(
     Un system sans ce marqueur lève `ValueError` : la clé se calcule après le marquage.
     `provider_options` (provider `ollama` seulement) : options du profil envoyées avec la
     requête (`repeat_penalty`, `num_ctx`…), qui changent la réponse (story 8.7).
+    `scope` (story 9.7, `llm_cache.isoler_configurations`) : identifiant de Configuration, qui
+    sépare les entrées de deux Configurations ; `None` : clé inchangée.
     """
     if not request.system.startswith(role_marker(request.role)):
         raise ValueError(
@@ -68,6 +71,8 @@ def cache_key(
         contenu["step"] = request.step  # `script(role, step_glob, …)` : sortie selon l'étape
     if output_schema is not None:
         contenu["output_schema"] = output_schema
+    if scope is not None:
+        contenu["config_id"] = scope
     return hashlib.sha256(canonical_json(contenu).encode("utf-8")).hexdigest()
 
 

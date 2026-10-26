@@ -75,8 +75,11 @@ class MeteredGateway:
         default_timeout_s: float = 30.0,
         sleep: Callable[[float], None] = time.sleep,
         timer: Callable[[], float] = time.perf_counter,
+        cache_scope: Callable[[], str | None] | None = None,
     ) -> None:
-        """`tokenizer_for` : `RunContext.tokenizer_for` ; `sleep` et `timer` sont injectables."""
+        """`tokenizer_for` : `RunContext.tokenizer_for` ; `sleep` et `timer` sont injectables.
+        `cache_scope` : rend l'identifiant de Configuration courant à poser dans la clé du Cache
+        (`llm_cache.isoler_configurations`, story 9.7) ; `None` : clés partagées."""
         self._catalog = catalog
         self._providers = providers
         self._ledger = ledger
@@ -88,6 +91,7 @@ class MeteredGateway:
         self._timeout = default_timeout_s
         self._sleep = sleep
         self._timer = timer
+        self._cache_scope = cache_scope
 
     # --- API publique ------------------------------------------------------------------------
 
@@ -239,7 +243,10 @@ class MeteredGateway:
         # Après le marquage : le rôle entre dans la clé ; le schéma aussi (il change la requête).
         # Story 8.7 : options Ollama du profil (`repeat_penalty`…) dans la clé, comme `think`.
         options = getattr(provider, "cache_options", None) if nom == "ollama" else None
-        cle = cache_key(marquee, nom, schema_json, options(marquee) if options else None)
+        portee = self._cache_scope() if self._cache_scope is not None else None
+        cle = cache_key(
+            marquee, nom, schema_json, options(marquee) if options else None, scope=portee
+        )
 
         cached = self._cache.get(cle) if use_cache else None
         if cached is not None:
