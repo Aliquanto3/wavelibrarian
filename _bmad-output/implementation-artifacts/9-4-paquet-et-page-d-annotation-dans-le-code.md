@@ -18,23 +18,24 @@ Exigences : FR-38 ; `contracts.md` §4.6, §8. Arbitrages A7 et A10 (proposition
 - **Retrait** de `scripts/page_annotation.py` et `scripts/importer_verdicts.py`. `contracts.md` §4.6 (paquet court) et §8 (quatre lignes `wl annotations`) à jour. `lire_yaml` (alias public du lecteur de `calibration.py`) évite d'importer un nom privé.
 - Tests : `tests/unit/report/test_story_9_4.py` (21 : allocation, forme courte, stratification et stabilité, `--depuis`, refus, page : hors ligne, aveugle, sans surlignage, échappement XSS, réponse de référence, import aller-retour ligne à ligne, notes, refus sans écriture, CLI) ; `test_story_8_9.py` réaligné (données de Réponse sur la première ligne seulement).
 
-## Mesure de taille (objectif -50 % non atteint)
+## Mesure de taille (objectif -50 % atteint après revue)
 
-Run réel `20261018-115941-a2a512` (lecture seule), 40 Réponses (`--nombre 40 --graine 1`), exportées vers le scratchpad. Même paquet, forme ancienne reconstruite (les quatre clés répétées sur chaque ligne) contre forme courte :
+Run réel `20261018-115941-a2a512` (lecture seule), 40 Réponses (`--nombre 40 --graine 1`, Corpus relu), exportées vers le scratchpad. La forme ancienne est reconstruite à partir du même paquet (`question`, `reference_answer`, `answer`, `cited_anchors` répétés sur chaque ligne, Passages en clair sur la première).
 
 | | caractères / Réponse | total |
 | --- | --- | --- |
-| ancien format | 6 620 | 264 819 |
-| paquet court | 6 306 | 252 263 |
-| gain | -4,7 % | |
+| ancien format | 6 633 | 265 334 |
+| paquet court sans table (livraison dev) | 6 306 | 252 263 |
+| paquet court avec table `passages` (revue) | 2 904 | 116 167 |
+| gain sur l'ancien format | -56,2 % | |
 
-Sur `anael.yaml` relu puis ré-exporté en forme courte (`exporter_depuis`, 40 Réponses, 92 lignes) : 7 657 → 6 199 caractères par Réponse (-19 %), le fichier de 306 304 à 247 972.
+63 Passages distincts dans la table. Le gain vient de l'étiquette `[S<n>]` sortie du texte : un même extrait reçu en `[S1]` par une Configuration et en `[S3]` par une autre est partagé (97 652 caractères de contexte uniques avec l'étiquette, 45 014 sans). Aucun Passage n'est tronqué (A7) : relu par `lire_paquet`, `context_passages` est identique, octet pour octet, aux `context_texts` des 40 Réponses du run réel.
 
-Cause : `context_passages` pèse 4 400 caractères par Réponse (66 à 70 %), `cited_anchors` 860 (13 %) sur la seule première ligne, et le paquet de 8.9 ne répétait déjà pas les Passages. La forme courte ne gagne que sur les clés répétées (`question`, `reference_answer`, `answer`, `cited_anchors` sur 1,3 à 2,3 lignes en plus par Réponse). Le texte `context_passages` est ce que reçoivent les Juges : on ne le raccourcit pas sans décision.
+Sur `anael.yaml` relu puis ré-exporté (`exporter_depuis`, 40 Réponses, 92 lignes) : 306 304 → 112 068 caractères (-63,4 %), Passages identiques à la source.
 
 ## Reports
 
-- **Atteindre -50 %** demande une décision de conception : table de Passages partagée en tête de fichier (les Passages se répètent d'une Configuration à l'autre : 186 116 caractères pour 103 532 uniques sur le run réel, soit -33 % du fichier) et `cited_anchors` retiré du paquet (non affiché par la page, -13 %) donneraient environ -46 % ; le reste exigerait de ne montrer les Passages qu'aux Réponses qui affirment quelque chose. Non fait : change le format de §4.6 au-delà de la story.
+- **`--part-double` non stratifié** (second avis, low) : la part doublement annotée suit l'ordre du tirage mélangé par la graine, sans quota par strate ; avec peu de Réponses doubles, une strate peut en être absente. Le kappa inter-annotateurs reste calculé sur ce qui est double. À reprendre si la recette d'Anaël le demande.
 - Les références à `scripts/page_annotation.py` et `importer_verdicts.py` restent dans `epics.md` (énoncé de la story) et dans la spec 9.3 (report vers 9.4), documents historiques.
 - `--depuis` : graine par défaut 0 faute d'Expérience ; pas de lecture d'un dossier de paquets (un fichier).
 
@@ -43,3 +44,22 @@ Cause : `context_passages` pèse 4 400 caractères par Réponse (66 à 70 %), `c
 ```
 uv run pytest -q --tb=short tests/unit/report/test_story_9_4.py tests/unit/report/test_story_8_9.py tests/unit/runner/test_story_5_2.py tests/unit/runner/test_story_8_11.py
 ```
+
+## Revue
+
+### Passe 1 (2026-10-26, SHA revu 2479490)
+
+Branche rebasée sur `story/9-3` revue (2ed872c) : `main` ne contient pas encore 9.3.
+
+- **Important**, medium, revue : AC 1 non atteint (-4,7 %). Corrigé : table `passages` en tête (empreinte courte de l'Ancrage et du texte, étiquette `[S<n>]` gardée sur la ligne), `lire_paquet` / `resoudre_passages` pour la page et `--depuis` (table utile recopiée, Ancrages de référence gardés), chargeur 5.1 inchangé (ignore la table) ; -56,2 % sur le run réel, sans troncature (A7). Tests `test_table_des_passages_partagee_et_sans_perte`, `test_reference_de_passage_inconnue_refusee`, `test_depuis_recopie_la_table_utile`.
+- **Important**, medium, second avis 1 : verdict vidé dans la page ni retiré ni signalé. Corrigé selon l'arbitrage : conservé dans le paquet, compté (`Import.vides_conserves`) et affiché par la CLI. Test `test_import_note_nulle_et_verdict_vide`.
+- **Important**, medium, revue : l'importeur gardait l'`answer_id` de l'entrée précédente quand une entrée ne commençait pas par `answer_id` (paquet réordonné à la main) : verdict reporté sur la mauvaise ligne sans erreur. Corrigé : remise à zéro à chaque `- `, et contrôle sémantique avant substitution (verdicts et notes relus égaux aux attendus, sinon code 2, rien écrit). Test `test_import_entree_sans_answer_id_en_tete_refusee`.
+- **Nit**, low, second avis 2 : la charge JSON portait réponse et Passages de référence pour un item `faithfulness` seul (et les extraits pour un item sans fidélité). Corrigé (filtre par Critères de l'item). Test `test_page_sans_reference_pour_un_item_fidelite_seul`.
+- **Nit**, low, second avis 3 : note `null` écrite « None », U+0085 (et U+2028/2029, C1, DEL) altérés. Corrigé (note non texte refusée, `null` vide, échappement `\uXXXX`). Tests paramétrés `test_import_notes_speciales_relues_a_l_identique`.
+- **Nit**, low, second avis 4 : CRLF converti en LF, écriture non atomique. Corrigé : lecture en octets, `\r` gardé ligne à ligne, fichier voisin relu puis `os.replace` ; docstring juste. Test `test_import_garde_les_fins_de_ligne_crlf`.
+- **Nit**, low, second avis 5 : `--part-double` non stratifié. Reporté (Reports).
+- **Nit**, low, second avis 6 : tests manquants. Ajoutés : note avec `\` et `#`, doublon de Critère (désormais refusé par la page, comme par le chargeur 5.1), `answer_id` absent (page et `--depuis`, ce dernier levait `KeyError`).
+- **Nit**, low, second avis 7 : `--depuis --ecraser` pouvait écraser sa source. Corrigé (code 2). Test `test_depuis_refuse_d_ecraser_sa_source`. Même garde pour `wl annotations page --vers <le paquet>`.
+- **Nit**, low, revue : `--part-double` passé avec `--depuis` est ignoré sans message. Non corrigé (sans effet sur les données).
+- **Nit**, low, revue : la progression de la page est rangée sous `wl-annot-<annotateur>` : deux paquets du même annotateur ouverts dans le même navigateur partagent leurs verdicts (les clés étrangères sortent en « absents du paquet » à l'import). Non corrigé.
+- Complexité : 0 constat (table de Passages en dictionnaire, import en un passage linéaire).

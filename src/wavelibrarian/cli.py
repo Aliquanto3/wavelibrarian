@@ -1023,6 +1023,14 @@ def annotations_importer(
             f"Avertissement : {len(res.inconnus)} verdict(s) du JSON absents du paquet, ignorés.",
             err=True,
         )
+    if res.vides_conserves:
+        typer.echo(
+            f"Avertissement : {len(res.vides_conserves)} verdict(s) vidé(s) dans la page, "
+            "conservé(s) dans le paquet (à effacer à la main si voulu) : "
+            + ", ".join(res.vides_conserves[:5])
+            + (" …" if len(res.vides_conserves) > 5 else ""),
+            err=True,
+        )
     typer.echo(
         f"{res.verdicts} verdict(s) et {res.notes} note(s) reportés dans {paquet} ; "
         f"{res.sans_verdict} ligne(s) sans verdict."

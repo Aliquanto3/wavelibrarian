@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 from wavelibrarian.cli import app
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.report.generer import generer_rapport
-from wavelibrarian.report.paquet import exporter_paquet, graine_de_tirage
+from wavelibrarian.report.paquet import exporter_paquet, graine_de_tirage, lire_paquet
 from wavelibrarian.scoring.calibration import charger_dossier, kappa_inter_annotateurs
 
 RACINE = Path(__file__).resolve().parents[3] / "corpora" / "minicorpus"
@@ -53,7 +53,7 @@ def run_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def _lignes(f: Path) -> list[dict[str, Any]]:
-    return yaml.safe_load(f.read_text(encoding="utf-8"))["annotations"]
+    return lire_paquet(f)["annotations"]
 
 
 def _ids(f: Path) -> set[str]:

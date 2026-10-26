@@ -12,11 +12,13 @@ from typer.testing import CliRunner
 from wavelibrarian.cli import app
 from wavelibrarian.core.errors import ConfigError
 from wavelibrarian.report.importer import importer_verdicts
+from wavelibrarian.report.lecture import lire_reponses
 from wavelibrarian.report.page_annotation import donnees_de_page, generer_page
 from wavelibrarian.report.paquet import (
     DONNEES_DE_REPONSE,
     exporter_depuis,
     exporter_paquet,
+    lire_paquet,
     repartir,
 )
 from wavelibrarian.scoring.calibration import charger_dossier, charger_fichier, lire_yaml
@@ -40,6 +42,7 @@ DONNEES: dict[str, Any] = {
     ],
 }
 CLES_COURTES = {"answer_id", "criterion", "verdict", "note"}
+PASSAGES = ("context_passages", "reference_passages")
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +64,7 @@ def run_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def _lignes(f: Path) -> list[dict[str, Any]]:
-    return lire_yaml(f)["annotations"]
+    return lire_paquet(f)["annotations"]
 
 
 def _annoter(f: Path) -> None:
@@ -151,7 +154,7 @@ def test_mesure_taille_par_reponse_sur_anael(tmp_path: Path) -> None:
     p = exporter_depuis(ANAEL, tmp_path, annotateurs=["bob"], nombre=10_000)
     apres = (tmp_path / "bob.yaml").read_text(encoding="utf-8")
     assert p.n_reponses == 40 and p.n_lignes == 92
-    assert len(apres) < 0.85 * len(avant)  # mesure de la spec : -19 %
+    assert len(apres) < 0.5 * len(avant)  # mesure de la spec : -63 %
     vieux, neuf = _lignes(ANAEL), _lignes(tmp_path / "bob.yaml")
     assert [(a["answer_id"], a["criterion"]) for a in neuf] == [
         (a["answer_id"], a["criterion"]) for a in vieux
@@ -159,8 +162,9 @@ def test_mesure_taille_par_reponse_sur_anael(tmp_path: Path) -> None:
     assert all(a["verdict"] == "" and a["note"] == "" for a in neuf)
     for ancien in vieux:
         premiere = next(a for a in neuf if a["answer_id"] == ancien["answer_id"])
-        for cle in ("question", "reference_answer", "answer", "cited_anchors"):
-            assert premiere[cle] == ancien[cle]
+        for cle in ("question", "reference_answer", "answer", "cited_anchors", *PASSAGES):
+            if cle in ancien:  # Passages en clair sur la première ligne de l'ancien format
+                assert premiere[cle] == ancien[cle]
 
 
 def test_anael_reste_chargeable_tel_quel() -> None:
@@ -506,3 +510,197 @@ def test_scripts_retires() -> None:
     racine = Path(__file__).resolve().parents[3]
     assert not (racine / "scripts" / "page_annotation.py").exists()
     assert not (racine / "scripts" / "importer_verdicts.py").exists()
+
+
+# --- revue : table des Passages, page filtrée, import robuste ---------------------------------
+
+
+def test_table_des_passages_partagee_et_sans_perte(run_dir: Path, tmp_path: Path) -> None:
+    """Chaque Passage une fois dans `passages` ; les lignes s'y réfèrent ; la relecture rend le
+    texte exact reçu par les Juges (`context_texts`), sans troncature."""
+    exporter_paquet(run_dir, tmp_path / "p", annotateurs=["a"], nombre=500)
+    brut = lire_yaml(tmp_path / "p" / "a.yaml")
+    assert list(brut)[:2] == ["annotator", "passages"]
+    table = brut["passages"]
+    assert table and all(set(e) <= {"anchor", "text"} for e in table.values())
+    textes = [(e.get("anchor"), e["text"]) for e in table.values()]
+    assert len(textes) == len(set(textes))  # chaque Passage une seule fois
+    refs = [r for a in brut["annotations"] for r in a.get("context_passages", [])]
+    assert len(refs) > len(table)  # des Passages se répètent d'une Réponse à l'autre
+    assert all(re.fullmatch(r"S\d+ [0-9a-f]{8}", r) for r in refs)
+    contextes = {a.answer_id: list(a.context_texts) for a in lire_reponses(run_dir).values()}
+    n = 0
+    for ligne in lire_paquet(tmp_path / "p" / "a.yaml")["annotations"]:
+        if "context_passages" in ligne:
+            assert ligne["context_passages"] == contextes[ligne["answer_id"]]
+            n += 1
+    assert n > 0
+    # Le chargeur de la 5.1 ignore la table.
+    _annoter(tmp_path / "p" / "a.yaml")
+    assert len(charger_fichier(tmp_path / "p" / "a.yaml")) == len(brut["annotations"])
+
+
+def test_reference_de_passage_inconnue_refusee(tmp_path: Path) -> None:
+    doc = {
+        "annotator": "ana",
+        "passages": {"abcdef12": {"text": "x"}},
+        "annotations": [
+            {
+                "answer_id": "r/c/s/t/b/q-1",
+                "criterion": "faithfulness",
+                "verdict": "",
+                "note": "",
+                "context_passages": ["S1 00000000"],
+            }
+        ],
+    }
+    (tmp_path / "p.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+    with pytest.raises(ConfigError, match="absent de la table"):
+        generer_page(tmp_path / "p.yaml", tmp_path / "p.html")
+
+
+def test_depuis_recopie_la_table_utile(run_dir: Path, tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    exporter_paquet(run_dir, src, annotateurs=["ana"], nombre=12, graine=1)
+    _annoter(src / "ana.yaml")
+    exporter_depuis(src / "ana.yaml", tmp_path / "d", annotateurs=["bob"], nombre=2, graine=5)
+    table_src = lire_yaml(src / "ana.yaml")["passages"]
+    brut = lire_yaml(tmp_path / "d" / "bob.yaml")
+    utiles = {r.split()[-1] for a in brut["annotations"] for k in PASSAGES for r in a.get(k, [])}
+    assert set(brut["passages"]) == utiles  # seulement la table utile
+    assert all(brut["passages"][k] == table_src[k] for k in utiles)  # mêmes clés, mêmes textes
+
+
+def test_depuis_refuse_d_ecraser_sa_source(run_dir: Path, tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    exporter_paquet(run_dir, src, annotateurs=["ana"], nombre=3)
+    _annoter(src / "ana.yaml")
+    copie = src / "bob.yaml"
+    doc = lire_yaml(src / "ana.yaml")
+    doc["annotator"] = "zoe"
+    copie.write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    avant = copie.read_bytes()
+    with pytest.raises(ConfigError, match="serait écrasé"):
+        exporter_depuis(copie, src, annotateurs=["bob"], ecraser=True)
+    assert copie.read_bytes() == avant
+    args = ["annotations", "exporter", "--depuis", str(copie), "--vers", str(src)]
+    r = CliRunner().invoke(app, [*args, "--annotateurs", "bob", "--ecraser"])
+    assert r.exit_code == 2 and copie.read_bytes() == avant
+
+
+def test_depuis_answer_id_absent_refuse(tmp_path: Path) -> None:
+    doc = {
+        "annotator": "ana",
+        "annotations": [{"criterion": "correctness", "verdict": "yes", "note": ""}],
+    }
+    (tmp_path / "s.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+    with pytest.raises(ConfigError, match="answer_id"):
+        exporter_depuis(tmp_path / "s.yaml", tmp_path / "o", annotateurs=["bob"])
+
+
+def test_page_sans_reference_pour_un_item_fidelite_seul(tmp_path: Path) -> None:
+    doc = lire_yaml(_paquet_piege(tmp_path / "p.yaml"))
+    doc["annotations"] = [{**doc["annotations"][0], "criterion": "faithfulness"}]
+    (tmp_path / "f.yaml").write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    (item,) = donnees_de_page(tmp_path / "f.yaml")["items"]
+    assert "reference_answer" not in item and "reference_passages" not in item
+    assert item["context_passages"]
+    doc["annotations"] = [{**doc["annotations"][0], "criterion": "correctness"}]
+    (tmp_path / "c.yaml").write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    (item,) = donnees_de_page(tmp_path / "c.yaml")["items"]
+    assert "context_passages" not in item and item["reference_answer"] == "REFERENCE-TEXTE"
+
+
+def test_page_doublon_de_critere_et_answer_id_absent(tmp_path: Path) -> None:
+    doc = lire_yaml(_paquet_piege(tmp_path / "p.yaml"))
+    doc["annotations"].append(dict(doc["annotations"][1]))
+    (tmp_path / "d.yaml").write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ConfigError, match="doublon"):
+        donnees_de_page(tmp_path / "d.yaml")
+    del doc["annotations"][2]["answer_id"]
+    (tmp_path / "a.yaml").write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ConfigError, match="answer_id"):
+        donnees_de_page(tmp_path / "a.yaml")
+    with pytest.raises(ConfigError, match="paquet lui-même"):
+        generer_page(tmp_path / "p.yaml", tmp_path / "p.yaml")
+
+
+def _paquet_minimal(chemin: Path, newline: str = "\n") -> Path:
+    texte = (
+        "# entête\nannotator: ana\nannotations:\n"
+        "- answer_id: r/c/s/t/b/q-1\n  criterion: correctness\n  verdict: ''\n  note: ''\n"
+        "- answer_id: r/c/s/t/b/q-1\n  criterion: faithfulness\n  verdict: 'yes'\n  note: ''\n"
+    )
+    chemin.write_bytes(texte.replace("\n", newline).encode("utf-8"))
+    return chemin
+
+
+def _json(chemin: Path, verdicts: dict[str, Any]) -> Path:
+    chemin.write_text(json.dumps({"annotator": "ana", "verdicts": verdicts}), encoding="utf-8")
+    return chemin
+
+
+@pytest.mark.parametrize(
+    "note",
+    [
+        "a \\ b # c",
+        'guillemets " et \\" mêlés',
+        "fin\u0085de ligne NEL,   et  ",
+        "contrôle \x07 et DEL \x7f",
+        "  # commence par un dièse  ",
+    ],
+)
+def test_import_notes_speciales_relues_a_l_identique(tmp_path: Path, note: str) -> None:
+    paquet = _paquet_minimal(tmp_path / "p.yaml")
+    v = _json(tmp_path / "v.json", {"r/c/s/t/b/q-1|correctness": {"verdict": "no", "note": note}})
+    res = importer_verdicts(paquet, v)
+    assert res.notes == 1
+    assert lire_yaml(paquet)["annotations"][0]["note"] == note.strip()
+
+
+def test_import_note_nulle_et_verdict_vide(tmp_path: Path) -> None:
+    paquet = _paquet_minimal(tmp_path / "p.yaml")
+    v = _json(
+        tmp_path / "v.json",
+        {
+            "r/c/s/t/b/q-1|correctness": {"verdict": "yes", "note": None},
+            "r/c/s/t/b/q-1|faithfulness": {"verdict": ""},  # vidé dans la page
+        },
+    )
+    res = importer_verdicts(paquet, v)
+    lignes = lire_yaml(paquet)["annotations"]
+    assert lignes[0]["note"] == "" and "None" not in paquet.read_text(encoding="utf-8")
+    assert lignes[1]["verdict"] == "yes"  # pas effacé...
+    assert res.vides_conserves == ["r/c/s/t/b/q-1|faithfulness"]  # ...mais signalé
+    r = CliRunner().invoke(app, ["annotations", "importer", str(paquet), str(v)])
+    assert r.exit_code == 0 and "vidé(s) dans la page, conservé(s)" in r.output
+
+
+def test_import_garde_les_fins_de_ligne_crlf(tmp_path: Path) -> None:
+    paquet = _paquet_minimal(tmp_path / "p.yaml", newline="\r\n")
+    v = _json(tmp_path / "v.json", {"r/c/s/t/b/q-1|correctness": {"verdict": "na", "note": "n"}})
+    importer_verdicts(paquet, v)
+    octets = paquet.read_bytes()
+    assert octets.count(b"\r\n") == octets.count(b"\n") == 11
+    assert b'  verdict: na\r\n  note: "n"\r\n' in octets
+    assert not list(tmp_path.glob("*.tmp-import"))
+
+
+def test_import_entree_sans_answer_id_en_tete_refusee(tmp_path: Path) -> None:
+    """Une entrée qui ne commence pas par `answer_id` ne reçoit pas le verdict de la
+    précédente : l'import est refusé, rien n'est écrit."""
+    paquet = tmp_path / "p.yaml"
+    paquet.write_text(
+        "annotator: ana\nannotations:\n"
+        "- answer_id: r/q-1\n  criterion: correctness\n  verdict: ''\n  note: ''\n"
+        "- criterion: completeness\n  answer_id: r/q-1\n  verdict: ''\n  note: ''\n",
+        encoding="utf-8",
+    )
+    avant = paquet.read_bytes()
+    v = _json(
+        tmp_path / "v.json",
+        {"r/q-1|correctness": {"verdict": "yes"}, "r/q-1|completeness": {"verdict": "no"}},
+    )
+    with pytest.raises(ConfigError, match="non reconnues"):
+        importer_verdicts(paquet, v)
+    assert paquet.read_bytes() == avant

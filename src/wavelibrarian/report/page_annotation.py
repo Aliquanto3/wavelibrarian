@@ -16,16 +16,24 @@ from pathlib import Path
 from typing import Any
 
 from wavelibrarian.core.errors import ConfigError
-from wavelibrarian.scoring.calibration import lire_yaml
+from wavelibrarian.report.paquet import lire_paquet
 
 CLES_REPONSE = ("question", "reference_answer", "answer", "reference_passages", "context_passages")
+# Données montrées seulement si l'item a l'un de ces Critères (la charge JSON reste à l'aveugle
+# et ne porte pas la réponse attendue d'un item `faithfulness` seul).
+REFERENCE = frozenset({"correctness", "completeness"})
+CLES_SELON_CRITERE = {
+    "reference_answer": REFERENCE,
+    "reference_passages": REFERENCE,
+    "context_passages": frozenset({"faithfulness"}),
+}
 
 
 def donnees_de_page(paquet: Path) -> dict[str, Any]:
     """`{annotator, items}` : une entrée par Réponse (`id`, `criteria`, données de la Réponse
     prises sur n'importe laquelle de ses lignes), triées par Question puis identifiant. Ni
     verdict ni note : la page est à l'aveugle."""
-    doc = lire_yaml(paquet)
+    doc = lire_paquet(paquet)
     if not isinstance(doc, dict):
         raise ConfigError("paquet", f"{paquet.name} : un mapping est attendu à la racine")
     annotateur = doc.get("annotator")
@@ -48,8 +56,13 @@ def donnees_de_page(paquet: Path) -> dict[str, Any]:
         for cle in CLES_REPONSE:
             if ligne.get(cle) and not g.get(cle):
                 g[cle] = ligne[cle]
-        if critere not in g["criteria"]:
-            g["criteria"].append(critere)
+        if critere in g["criteria"]:  # refusé aussi par le chargeur de la story 5.1
+            raise ConfigError(f"annotations[{i}]", f"{paquet.name} : doublon {aid} pour {critere}")
+        g["criteria"].append(critere)
+    for g in groupes.values():
+        for cle, criteres in CLES_SELON_CRITERE.items():
+            if not criteres.intersection(g["criteria"]):
+                g.pop(cle, None)
     items = sorted(groupes.values(), key=lambda g: (g["id"].rsplit("/", 1)[-1], g["id"]))
     return {"annotator": annotateur, "items": items}
 
@@ -57,6 +70,8 @@ def donnees_de_page(paquet: Path) -> dict[str, Any]:
 def generer_page(paquet: Path, vers: Path) -> int:
     """Écrit la page `vers` ; rend le nombre de Réponses. `ConfigError` si le paquet est invalide."""
     donnees = donnees_de_page(paquet)
+    if vers.exists() and vers.samefile(paquet):
+        raise ConfigError("vers", f"{vers} est le paquet lui-même : choisir un fichier .html")
     charge = json.dumps(donnees, ensure_ascii=False).replace("<", "\\u003c")
     # U+2028 / U+2029 terminent une ligne en JavaScript ancien : on les échappe aussi.
     charge = charge.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
