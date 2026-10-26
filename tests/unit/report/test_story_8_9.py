@@ -201,9 +201,11 @@ def test_rapport_section_calibration(
     assert "## Calibration des Juges" in texte and "Calibration absente" in texte
     _calibration(copie, [])
     texte = md()
-    assert "| `fake-llm-a` | correctness | 0,50 | 0,25 | 8 | oui (kappa 0,50 < 0,60) |" in texte
-    assert "| `fake-llm-a` | faithfulness | indéfini | indéfinie | 1 | oui" in texte
-    assert "| `fake-llm-b` | correctness | 0,80 | 0,25 | 8 | non |" in texte
+    assert (
+        "| `fake-llm-a` | correctness | 0,50 | 0,25 | 8 | n/a | oui (kappa 0,50 < 0,60) |" in texte
+    )
+    assert "| `fake-llm-a` | faithfulness | indéfini | indéfinie | 1 | n/a | oui" in texte
+    assert "| `fake-llm-b` | correctness | 0,80 | 0,25 | 8 | n/a | non |" in texte
     assert "Kappa inter-annotateurs : absent (aucune double annotation)." in texte
     paire = {
         "annotators": ["ana", "bob"],
@@ -295,3 +297,20 @@ def test_bout_en_bout_export_calibrer_rapport(
     for juge in donnees["judges"]:
         assert f"| `{juge}` |" in section
     assert "| ana et bob |" in section and "Source :" not in section
+
+
+def test_paquet_rempli_avec_na_se_recharge(run_dir: Path, tmp_path: Path) -> None:
+    """Revue 9.3 : un paquet exporté, rempli avec `na` (nu en YAML) sur les trois Critères, est
+    accepté par le chargeur de `wl calibrer`."""
+    d = tmp_path / "p"
+    exporter_paquet(run_dir, d, annotateurs=["anael"], nombre=2)
+    f = d / "anael.yaml"
+    doc = yaml.safe_load(f.read_text(encoding="utf-8"))
+    for a in doc["annotations"]:
+        a["verdict"] = "na"
+    texte = yaml.safe_dump(doc, allow_unicode=True)
+    assert "verdict: na\n" in texte  # écrit nu, comme un annotateur le taperait
+    f.write_text(texte, encoding="utf-8")
+    ann = charger_dossier(d)
+    assert ann.verdicts and set(ann.verdicts.values()) == {"na"}
+    assert {c for (_, _, c) in ann.verdicts} == {a["criterion"] for a in doc["annotations"]}

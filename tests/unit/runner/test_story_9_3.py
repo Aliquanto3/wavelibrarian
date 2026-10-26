@@ -18,6 +18,7 @@ from wavelibrarian.cli import app
 from wavelibrarian.components.judges.llm import LLMJudge
 from wavelibrarian.core.types import Criterion
 from wavelibrarian.ports.components import JudgeInput
+from wavelibrarian.runner.execute import _Runner
 from wavelibrarian.runner.rundir import read_answers, read_panel, read_verdicts
 
 RACINE = Path(__file__).resolve().parents[3] / "corpora" / "minicorpus"
@@ -210,6 +211,12 @@ def test_calibration_fidelite_na_sans_appel_et_accords_na_comptes(
         assert fiche["criteria"]["completeness"]["na_agreements"] == 0
     brut = _lignes(tmp_path / "cal_verdicts.jsonl")
     assert all(v["verdict"] in ("yes", "no", "na") for x in brut for v in x["verdicts"].values())
+    # Revue 9.3 : la section « Calibration des Juges » du Rapport affiche les comptes `na`.
+    (dossier / "calibration.json").write_bytes(sortie.read_bytes())
+    _wl("rapport", dossier.name)
+    md = (dossier / "report" / "report.md").read_text(encoding="utf-8")
+    assert "na (accords / désaccords)" in md
+    assert "| faithfulness | " in md and " | 3 | 3 / 0 | " in md
 
 
 def test_rejugement_produit_les_na_de_fidelite(
@@ -228,3 +235,36 @@ def test_rejugement_produit_les_na_de_fidelite(
     for aid in muettes:
         assert verdicts[(aid, "auto", "faithfulness", 0)].verdict == "na"
         assert panel[(aid, "faithfulness")].verdict == "na"
+
+
+def test_sans_corpus_de_phase_la_fidelite_d_une_abstention_n_est_pas_comptee_non_jugee(
+    run: tuple[Path, Path, list[tuple[str, tuple[str, ...]]]],
+    wl_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Revue 9.3 : Corpus de phase indisponible, les Critères comptés non jugés d'une abstention
+    excluent `faithfulness` (elle vaut `na` sans Juge, ce n'est pas un jugement manquant)."""
+    exp, source, _ = run
+    monkeypatch.setattr(_Runner, "_corpus_de_phase", lambda *_: None)
+    CliRunner().invoke(app, ["rejuger", source.name, str(exp)])
+    (cible,) = [d for d in (wl_home / "runs").iterdir() if d.is_dir() and d != source]
+    manifeste = json.loads((cible / "manifest.json").read_text(encoding="utf-8"))
+    comptes = {c["config_id"]: c["count"] for c in manifeste["causes"] if c["cause"] == "unjudged"}
+    reponses = read_answers(source)
+    questions = {
+        q["id"]: q
+        for q in yaml.safe_load((RACINE / "questions.yaml").read_text(encoding="utf-8"))[
+            "questions"
+        ]
+    }
+
+    def attendus(config_id: str, fidelite: bool) -> int:
+        # correctness, completeness, faithfulness ; `short` : correctness par exact_match
+        return sum(
+            (2 if questions[a.question_id].get("answer_form") == "short" else 3) - (not fidelite)
+            for a in reponses.values()
+            if a.config_id == config_id and a.status == "ok"
+        )
+
+    assert comptes["sans-contexte"] == attendus("sans-contexte", fidelite=False)
+    assert comptes["bm25"] == attendus("bm25", fidelite=True)

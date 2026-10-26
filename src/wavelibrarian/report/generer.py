@@ -281,6 +281,13 @@ def _kappa(x: float | None) -> str:
     return "indéfini" if x is None else _nb(x)
 
 
+def _accords_na(f: dict[str, Any]) -> str:
+    """Accords et désaccords sur `na` (story 9.3) ; `n/a` pour un `calibration.json` antérieur."""
+    if "na_agreements" not in f and "na_disagreements" not in f:
+        return "n/a"
+    return f"{f.get('na_agreements', 0)} / {f.get('na_disagreements', 0)}"
+
+
 def _calibration(ex: Execution) -> list[str]:
     """Section « Calibration des Juges » : lit `calibration.json` (Exécution, sinon
     `judges.excluded_from`), sans rien recalculer."""
@@ -294,6 +301,10 @@ def _calibration(ex: Execution) -> list[str]:
     seuil = donnees.get("kappa_threshold")
     intro = "Kappa juge-humain par Juge et par Critère"
     intro += f" (seuil {_nb(seuil)})." if isinstance(seuil, int | float) else "."
+    intro += (
+        " Items : paires au kappa (`yes` ou `no` des deux côtés) ; na : paires où les deux disent"
+        " `na` (sans objet), puis où un seul le dit, hors du kappa."
+    )
     source = donnees.get("run_id")
     if source != ex.run_dir.name:
         # `judges.excluded_from` pointe en général vers la calibration d'une Exécution antérieure.
@@ -312,12 +323,22 @@ def _calibration(ex: Execution) -> list[str]:
                     _kappa(f.get("kappa")),
                     "indéfinie" if instab is None else _nb(instab),
                     str(f.get("n_items", 0)),
+                    _accords_na(f),
                     exclu,
                 ]
             )
     sortie = [*titre, intro, ""]
     sortie += _table(
-        ["Juge", "Critère", "Kappa juge-humain", "Instabilité", "Items", "Exclu"], lignes
+        [
+            "Juge",
+            "Critère",
+            "Kappa juge-humain",
+            "Instabilité",
+            "Items",
+            "na (accords / désaccords)",
+            "Exclu",
+        ],
+        lignes,
     )
     paires = [
         (p.get("annotators") or [], c, f)
@@ -327,9 +348,15 @@ def _calibration(ex: Execution) -> list[str]:
     if paires:
         sortie += ["Kappa inter-annotateurs :", ""]
         sortie += _table(
-            ["Annotateurs", "Critère", "Kappa", "Réponses"],
+            ["Annotateurs", "Critère", "Kappa", "Réponses", "na (accords / désaccords)"],
             [
-                [" et ".join(a), c, _kappa(f.get("kappa")), str(f.get("n_items", 0))]
+                [
+                    " et ".join(a),
+                    c,
+                    _kappa(f.get("kappa")),
+                    str(f.get("n_items", 0)),
+                    _accords_na(f),
+                ]
                 for a, c, f in paires
             ],
         )

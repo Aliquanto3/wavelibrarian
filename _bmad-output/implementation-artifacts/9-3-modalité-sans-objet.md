@@ -22,13 +22,29 @@ Exigences : FR-36, FR-37, FR-38, FR-40 ; AD-14 ; `contracts.md` §1, §3, §4.6,
 
 ## Reports
 
-- Section « Calibration des Juges » du Rapport : n'affiche pas encore `na_agreements` / `na_disagreements` (présents dans `calibration.json`).
 - Page d'annotation et import (`scripts/page_annotation.py`, `importer_verdicts.py`) : bouton « sans objet » laissé à la story 9.4.
-- `runner/execute.py` non modifié : sans Corpus de phase, `_non_juges` compte encore `faithfulness` d'une abstention parmi les Critères non jugés (cas marginal).
 - Fichiers de calibration 9.1 (verdicts booléens) : relus, mais refusés par `--reprendre` (empreinte changée) ; recalibrer (9.9).
+
+- Exécutions antérieures à la v0.3.0 (dont la série v0.2.0) : leur `panel.jsonl` garde la fidélité jugée (souvent `yes`) des Réponses vides et des abstentions ; `wl rapport` la relit telle quelle, sans réécriture des Exécutions anciennes. Pour corriger le Rapport v0.2.0 : `wl rejuger <run_id> <experience.yaml>` (story 9.6), qui recalcule `na` (consigné dans `contracts.md` §7).
+- Cache de réponses : le prompt système et le schéma du Juge changent, donc la clé de Cache (`system` et `output_schema` y entrent) : aucun verdict mis en Cache avant la 9.3 n'est relu, il est redemandé (coût d'un premier rejugement). Le Filtre closed-book, qui passe par le même Juge, perd aussi ses entrées de Cache.
 
 ## Commande de vérification
 
 ```
 uv run pytest -q --tb=short tests/unit/scoring tests/unit/components/test_llm_judge.py tests/unit/runner/test_story_9_3.py tests/unit/runner/test_story_4_9.py tests/unit/runner/test_story_5_2.py tests/unit/report
 ```
+
+## Revue
+
+### Passe 1 (2026-10-26, SHA revu 920da8f)
+
+Base : `main` 9191109, branche à jour (pas de rebase nécessaire).
+
+- Important · low · second avis 1 · corrigé : sans Corpus de phase, `_non_juges` comptait `faithfulness` d'une abstention comme non jugée ; `criteres_juges(q, a)` dans `runner/execute.py`, test `test_sans_corpus_de_phase_…` (échoue sans le correctif).
+- Important · low · second avis 2 · corrigé : ligne `judge` du tableau des rôles de `contracts.md` §2.2 corrompue (fragment dupliqué, `|` non échappés qui cassaient le tableau).
+- Nit · medium · second avis 3 · consigné (règle inchangée, décision de l'orchestrateur) : `majorite` compte une voix par Juge et par passe ; avec `passes` > 1, un Juge à deux `na` sur trois passes donne `na`. Règle écrite dans `contracts.md` §5 (`panel.jsonl`) ; tests `test_juge_unique_une_passe_verdict_du_juge_na_compris` et `test_plusieurs_passes_chaque_passe_est_une_voix`.
+- Nit · medium · second avis 5 · reporté (consigné) : Exécutions antérieures non corrigées sans `wl rejuger` ; Reports ci-dessus et `contracts.md` §7.
+- Nit · low · second avis 10 · corrigé : tests ajoutés pour le Corpus absent (point 1) et pour un paquet d'annotation exporté puis rempli de `na` nus, rechargé par `charger_dossier` (`test_story_8_9.py`). Cache : vérifié dans `llm/cache.py` (`system` et schéma dans la clé), consigné dans les Reports.
+- Nit · low · second avis 11 · corrigé : section « Calibration des Juges » du Rapport, colonne « na (accords / désaccords) » (juge-humain et inter-annotateurs, `n/a` pour un `calibration.json` antérieur), phrase d'intro sur `Items` ; test dans `test_story_9_3.py`, attendus de `test_story_8_9.py` réalignés.
+- Second avis 4, 6 à 9 : RAS, confirmé.
+- Complexité : 0 constat (`_nombre_na` en O(1) par Réponse, aucun parcours complet par événement).

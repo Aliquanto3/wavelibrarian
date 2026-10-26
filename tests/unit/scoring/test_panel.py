@@ -252,3 +252,21 @@ def test_anciennes_lignes_booleennes_relues() -> None:
     )
     assert (v.verdict, p.verdict) == ("yes", "no")
     assert v.model_dump(mode="json")["verdict"] == "yes"
+
+
+def test_juge_unique_une_passe_verdict_du_juge_na_compris() -> None:
+    """Revue 9.3 : Panel d'un seul Juge à une passe (Expériences livrées) : le verdict de panel
+    de `faithfulness` est celui du Juge, `na` compris, sans égalité signalée."""
+    for vote in ("yes", "no", "na"):
+        _, panel = _juger([_Juge("j1", vote)], question=_question(), answer=_answer())
+        fid = panel["faithfulness"]
+        assert (fid["verdict"], fid["tie"], fid["judges"]) == (vote, False, ["j1"])
+
+
+def test_plusieurs_passes_chaque_passe_est_une_voix() -> None:
+    """Revue 9.3 : avec `passes` > 1, les voix sont confondues (Juges et passes) : un Juge qui dit
+    `na` à deux passes sur trois l'emporte sur son `yes`."""
+    _, panel = _juger([_Juge("j1", "na", "na", "yes")], passes=3)
+    assert panel["faithfulness"]["verdict"] == "na"
+    _, panel = _juger([_Juge("j1", "na", "yes", "no")], passes=3)
+    assert (panel["faithfulness"]["verdict"], panel["faithfulness"]["tie"]) == ("no", True)

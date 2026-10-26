@@ -396,7 +396,7 @@ class _Runner:
                         )
                     corpus_phase = corpus_de[(conf.id, a.phase)]
                     if corpus_phase is None:
-                        self._non_juges(conf.id, len(criteres_juges(q)))
+                        self._non_juges(conf.id, len(criteres_juges(q, a)))
                         continue
                     parse, tout = corpus_phase
                     ancres = [
