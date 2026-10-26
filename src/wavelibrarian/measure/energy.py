@@ -1,8 +1,8 @@
 """Énergie (AD-17) : mesure locale par phase, estimation API par appel, répartition au prorata.
 
-`measured` seulement si un compteur matériel a été lu et que rien d'important n'est estimé,
-`mixed` si un compteur est lu mais qu'une part (RAM) est estimée par formule ; `codecarbon` et
-`ecologits` sont importés au premier usage (extra `energy`).
+`measured` seulement si toutes les parts suivies sont lues par un compteur matériel, `mixed` si une
+part est lue et une autre estimée par formule (la RAM de codecarbon l'est toujours), `estimated`
+si aucune n'est lue ; `codecarbon` et `ecologits` sont importés au premier usage (extra `energy`).
 """
 
 import importlib
@@ -40,7 +40,8 @@ def spread_energy(
     """Répartit l'énergie d'une phase sur ses spans locaux au prorata de leur latence.
 
     Chaque span reçoit `(kWh, méthode)` ; sans énergie connue : `(None, "unknown")`. Si aucun
-    span n'a de durée, l'énergie relevée est répartie à parts égales plutôt que perdue.
+    span n'a de durée, l'énergie relevée est répartie à parts égales plutôt que perdue. Les hits
+    du Cache sont exclus en amont (`Tracer.end_phase`) : ils ne reçoivent aucune énergie.
     """
     total = sum(latencies_s)
     if kwh is None or not latencies_s:
@@ -75,15 +76,16 @@ class FakeEstimator:
         return (usage.input_tokens + usage.output_tokens) * 1e-7
 
 
-def _materiels_suivis(tracker: Any) -> list[Any]:
+def _materiels_suivis(tracker: Any, gpu: bool = False) -> list[Any]:
     """Matériels de codecarbon dont l'énergie compte vraiment. Un `GPU` n'en fait partie que si
-    la demande (`tracker._gpu_ids`, sinon `gpu_ids` du matériel) désigne au moins un GPU :
-    codecarbon 3.3.x instancie un `GPU` même avec `gpu_ids=[]` et, dès le 2e tracker du processus,
-    y remet tous les GPU détectés (`[0]`), d'où `nvml` à tort sur un poste NVIDIA sans GPU actif."""
+    le GPU est demandé (`gpu`, champ `energy.gpu` : `gpu_ids=None`, tous les GPU visibles) ou si
+    `tracker._gpu_ids` (sinon `gpu_ids` du matériel) désigne au moins un GPU : codecarbon 3.3.x
+    instancie un `GPU` même avec `gpu_ids=[]` et, dès le 2e tracker du processus, y remet tous
+    les GPU détectés (`[0]`), d'où `nvml` à tort sur un poste NVIDIA sans GPU actif."""
     voulus = getattr(tracker, "_gpu_ids", None)
     suivis = []
     for hw in getattr(tracker, "_hardware", None) or []:
-        if type(hw).__name__ == "GPU":
+        if type(hw).__name__ == "GPU" and not gpu:
             ids = voulus if voulus is not None else getattr(hw, "gpu_ids", None)
             if not ids:
                 continue
@@ -97,13 +99,13 @@ def _mode(hw: Any) -> str:
     return str(getattr(hw, "_mode", "") or getattr(hw, "mode", "")).lower()
 
 
-def energy_source(tracker: Any) -> str:
+def energy_source(tracker: Any, gpu: bool = False) -> str:
     """Mode du compteur lu par codecarbon (`wl.energy_source`, contracts.md §6) : `nvml` pour un
     GPU suivi, sinon le mode matériel s'il y en a un, sinon le premier mode connu, sinon
     `unknown`. Un GPU non suivi (hors `gpu_ids`, ou GPU désactivé) ne donne rien. Toujours une
     chaîne, même sans compteur. La RAM de codecarbon n'a pas de mode : sa part est estimée par
     formule, quel que soit le compteur CPU ou GPU."""
-    modes = [m for m in (_mode(hw) for hw in _materiels_suivis(tracker)) if m]
+    modes = [m for m in (_mode(hw) for hw in _materiels_suivis(tracker, gpu)) if m]
     if "nvml" in modes:  # le GPU domine l'énergie d'une phase qui en suit un
         return "nvml"
     for mode in modes:
@@ -117,22 +119,15 @@ def is_hardware_counter(tracker: Any) -> bool:
     return any(_mode(hw) in _MODES_MATERIELS for hw in _materiels_suivis(tracker))
 
 
-def energy_method(tracker: Any) -> EnergyMethod:
-    """Méthode d'une phase (contracts.md §6, AD-17) : `estimated` sans compteur matériel lu ;
-    `measured` si tout ce qui compte l'est : un GPU suivi par NVML domine l'énergie de la phase
-    (la part RAM, estimée par formule, y est marginale) ; `mixed` si une part reste estimée, soit
-    la RAM de codecarbon (aucun compteur DRAM) à côté d'un CPU lu par compteur (Windows
-    `windows_emi`, story 8.6), soit un CPU sans compteur à côté d'un GPU lu."""
-    suivis = _materiels_suivis(tracker)
-    if not any(_mode(hw) in _MODES_MATERIELS for hw in suivis):
+def energy_method(tracker: Any, gpu: bool = False) -> EnergyMethod:
+    """Méthode d'une phase (contracts.md §6, AD-17, A8) : `measured` si toutes les parts suivies
+    sont lues par un compteur matériel ; `mixed` si une part est lue et une autre estimée par
+    formule (la RAM de codecarbon, sans compteur DRAM, l'est toujours : CPU `windows_emi` de la
+    story 8.6 ou GPU NVML à côté d'elle) ; `estimated` si aucune part n'est lue."""
+    lues = [_mode(hw) in _MODES_MATERIELS for hw in _materiels_suivis(tracker, gpu)]
+    if not any(lues):
         return "estimated"
-    calcul = [hw for hw in suivis if type(hw).__name__ != "RAM"]
-    if any(_mode(hw) not in _MODES_MATERIELS for hw in calcul):
-        return "mixed"
-    if any(type(hw).__name__ == "GPU" for hw in suivis):
-        return "measured"
-    ram = any(type(hw).__name__ == "RAM" or not _mode(hw) for hw in suivis)
-    return "mixed" if ram else "measured"
+    return "measured" if all(lues) else "mixed"
 
 
 def _retirer_gpu(tracker: Any) -> None:
@@ -154,7 +149,8 @@ def _retirer_gpu(tracker: Any) -> None:
 
 class CodecarbonMeter:
     """Énergie locale par phase via `codecarbon.OfflineEmissionsTracker`. CPU seul, sans NVML,
-    par défaut (fix-8-8) ; `gpu=True` (champ `energy.gpu` du profil `gpu`) suit le GPU 0."""
+    par défaut (fix-8-8) ; `gpu=True` (champ `energy.gpu` du profil `gpu`) suit tous les GPU
+    visibles (`gpu_ids=None` : codecarbon 3.3.x respecte alors `CUDA_VISIBLE_DEVICES`)."""
 
     def __init__(self, country_iso_code: str = "FRA", *, gpu: bool = False) -> None:
         self._cc = _importer("codecarbon")
@@ -170,7 +166,7 @@ class CodecarbonMeter:
             project_name=phase,
             save_to_file=False,
             log_level="error",
-            gpu_ids=[0] if self._gpu else [],  # sans `energy.gpu`, jamais d'interrogation du GPU
+            gpu_ids=None if self._gpu else [],  # sans `energy.gpu`, jamais d'interrogation du GPU
         )
         if not self._gpu:
             _retirer_gpu(self._tracker)
@@ -181,8 +177,8 @@ class CodecarbonMeter:
         if tracker is None:
             return None
         tracker.stop()
-        self.method = energy_method(tracker)
-        self.source = energy_source(tracker)
+        self.method = energy_method(tracker, self._gpu)
+        self.source = energy_source(tracker, self._gpu)
         data = getattr(tracker, "final_emissions_data", None)
         energy = getattr(data, "energy_consumed", None)
         return None if energy is None else float(energy)

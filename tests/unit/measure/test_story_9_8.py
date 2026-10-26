@@ -29,9 +29,11 @@ CPU_ESTIME = SimpleNamespace(_mode="cpu_load")
         ([CPU_EMI], [], "measured"),  # aucune part estimée
         ([RAM, CPU_ESTIME], [], "estimated"),
         ([RAM], [], "estimated"),
-        ([RAM, CPU_EMI, GPU_SUIVI], [0], "measured"),  # le GPU lu domine ; AC : CPU lu aussi
+        # décision du 2026-10-26 (A8) : `measured` seulement si toutes les parts sont lues
+        ([RAM, CPU_EMI, GPU_SUIVI], [0], "mixed"),  # la RAM reste estimée
+        ([CPU_EMI, GPU_SUIVI], [0], "measured"),
         ([RAM, CPU_ESTIME, GPU_SUIVI], [0], "mixed"),  # CPU estimé à côté d'un GPU lu
-        ([RAM, GPU_SUIVI], [0], "measured"),
+        ([RAM, GPU_SUIVI], [0], "mixed"),
         ([RAM, CPU_EMI, GPU_SUIVI], [], "mixed"),  # GPU non demandé : ignoré, il reste CPU + RAM
     ],
 )
@@ -78,8 +80,29 @@ def test_gpu_demande_n_est_pas_retire_et_la_source_est_nvml(
     meter.start("query")
     assert meter._tracker is not None and len(meter._tracker._hardware) == 3
     assert meter.stop() == 0.004
-    assert appels["gpu_ids"] == [0] and not retires
+    # `None` : tous les GPU visibles (codecarbon respecte `CUDA_VISIBLE_DEVICES`), aucun indice
+    assert appels["gpu_ids"] is None and not retires
+    assert (meter.method, meter.source) == ("mixed", "nvml")  # RAM estimée à côté du GPU lu
+
+
+def test_gpu_demande_suivi_meme_sans_indice_resolu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`gpu_ids=None` : ni le tracker ni le GPU de codecarbon ne portent d'indice avant la
+    mesure ; le GPU demandé compte quand même."""
+    gpu = type("GPU", (), {"gpu_ids": None})()
+    _faux_codecarbon(monkeypatch, [gpu, CPU_EMI], {})
+    meter = CodecarbonMeter("FRA", gpu=True)
+    meter.start("query")
+    meter.stop()
     assert (meter.method, meter.source) == ("measured", "nvml")
+
+
+def test_profil_cpu_etiquette_mixed_de_bout_en_bout(monkeypatch: pytest.MonkeyPatch) -> None:
+    gpu = type("GPU", (), {"gpu_ids": [0]})()
+    _faux_codecarbon(monkeypatch, [RAM, gpu, CPU_EMI], {})
+    meter = make_meter(load_profile("cpu").energy)
+    meter.start("query")
+    meter.stop()
+    assert (meter.method, meter.source) == ("mixed", "windows_emi")  # type: ignore[attr-defined]
 
 
 def test_sans_gpu_le_comportement_de_fix_8_8_est_inchange(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -110,12 +133,12 @@ def test_make_meter_transmet_le_champ_gpu(monkeypatch: pytest.MonkeyPatch) -> No
 # --- Phase `judging` --------------------------------------------------------------------------
 
 
-def _appel(ctx: Context, provider: str, modele: str, latence: float) -> None:
+def _appel(ctx: Context, provider: str, modele: str, latence: float, hit: bool = False) -> None:
     with ctx.scope(post="judging", question_id="q1"):
         ctx.tracer.record(
             "judge", "llm", model_id=modele, provider=provider, usage=Usage(),
             cost=Decimal(0), cost_uncached=Decimal(0), currency="EUR",
-            latency_s=latence, from_cache=False,
+            latency_s=latence, from_cache=hit,
             extra={"wl.energy_method": "estimated", "wl.energy_source": "ecologits"}
             if provider == "anthropic"
             else {},
@@ -132,19 +155,28 @@ class _Meter(FakeMeter):
         super().start(phase)
 
 
-def _lancer(tmp_path: Path, membres: tuple[str, ...]) -> list[dict[str, Any]]:
+def _lancer(
+    tmp_path: Path, membres: tuple[str, ...], panne: bool = False, hits: bool = False
+) -> list[dict[str, Any]]:
     _Meter.demarrages = []
     with Context.from_profile("test", wl_home=tmp_path / "wl", run_id="r-j") as ctx:
         runner: Any = SimpleNamespace(ctx=ctx, meter=_Meter(0.01))
+        essais = {"n": 0}
 
         def _juger(experience: Any, panels: Any) -> None:
-            _appel(ctx, "ollama", "qwen3.5:4b", 1.0)
-            _appel(ctx, "ollama", "qwen3.5:4b", 3.0)
+            essais["n"] += 1
+            _appel(ctx, "ollama", "qwen3.5:4b", 1.0, hits)
+            if panne and essais["n"] == 1:
+                raise KeyboardInterrupt  # interruption en plein Panel, phase ouverte
+            _appel(ctx, "ollama", "qwen3.5:4b", 3.0, hits)
             _appel(ctx, "anthropic", "claude-haiku-5-5", 2.0)
 
         runner.energie_de_phase = lambda *a, **k: _Runner.energie_de_phase(runner, *a, **k)
         runner._juger = _juger
-        _Runner.juger(runner, cast(Any, None), {"c": membres})
+        if panne:
+            with pytest.raises(KeyboardInterrupt):
+                _Runner.juger(runner, cast(Any, None), {"c": membres})
+        _Runner.juger(runner, cast(Any, None), {"c": membres})  # reprise : la phase est refermée
         trace = ctx.run_dir / "traces.jsonl"
     return [json.loads(x) for x in trace.read_text(encoding="utf-8").splitlines()]
 
@@ -166,3 +198,18 @@ def test_juges_d_api_seuls_n_ouvrent_pas_de_phase(tmp_path: Path) -> None:
     spans = _lancer(tmp_path, ("claude-haiku-5-5",))
     assert _Meter.demarrages == []
     assert all("wl.energy_kwh" not in s or s["gen_ai.provider.name"] != "ollama" for s in spans)
+
+
+def test_reprise_apres_interruption_la_phase_judging_est_refermee(tmp_path: Path) -> None:
+    spans = _lancer(tmp_path, ("qwen3.5:4b",), panne=True)
+    assert _Meter.demarrages == ["judging:judging"] * 2
+    local = [s for s in spans if s["gen_ai.provider.name"] == "ollama"]
+    # 1er passage : le span déjà tracé est écrit avec l'énergie de la phase interrompue
+    assert [s["wl.energy_kwh"] for s in local] == pytest.approx([0.01, 0.0025, 0.0075])
+
+
+def test_hits_du_cache_seuls_ne_recoivent_aucune_energie(tmp_path: Path) -> None:
+    spans = _lancer(tmp_path, ("qwen3.5:4b",), hits=True)
+    local = [s for s in spans if s["gen_ai.provider.name"] == "ollama"]
+    assert [s["wl.energy_kwh"] for s in local] == [0.0, 0.0]
+    assert {s["wl.energy_method"] for s in local} == {"mixed"}

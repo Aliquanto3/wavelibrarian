@@ -76,8 +76,8 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
             if couts.faux_llm_pur
             else ""
         ),
-        "- **Avertissement** : les kWh `measured` (compteur matériel), `mixed` (compteur "
-        "matériel pour le CPU ou le GPU, part RAM estimée par formule) et `estimated` (modèle "
+        "- **Avertissement** : les kWh `measured` (compteur matériel), `mixed` (une part lue "
+        "par compteur, une autre estimée par formule) et `estimated` (modèle "
         "d'estimation) restent dans trois colonnes, jamais additionnées : leurs périmètres "
         "ne se comparent pas. Le CO2e suit la même séparation.",
     ]
@@ -97,14 +97,17 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
         lignes.append(f"- Source de l'énergie (`wl.energy_source`, spans avec énergie) : {detail}.")
     if any(ligne.kwh_measured for ligne in couts.lignes):
         lignes.append(
-            "- Les kWh `measured` viennent d'un compteur matériel qui domine la phase (GPU lu par "
-            "NVML) ; codecarbon y ajoute la part RAM, estimée par formule (aucun compteur DRAM lu)."
+            "- Les kWh `measured` viennent de compteurs matériels pour toutes les parts suivies "
+            "de la phase ; dès qu'une part est estimée par formule, la phase est `mixed`."
         )
     if any(ligne.kwh_mixed for ligne in couts.lignes):
         lignes.append(
-            "- Légende de `mixed` : le CPU est lu par un compteur matériel (par exemple "
-            "`windows_emi` sous Windows) mais la RAM est estimée par formule (aucun compteur DRAM) "
-            "ou un CPU estimé accompagne un GPU lu : ces kWh sont en partie estimés."
+            "- Légende de `mixed` : une part est lue par un compteur matériel (CPU, par exemple "
+            "`windows_emi` sous Windows, ou GPU par NVML) et une autre est estimée par formule "
+            "(la RAM, aucun compteur DRAM, ou un CPU sans compteur) : ces kWh sont en partie "
+            "estimés. L'énergie d'une phase (dont `judging`, qui couvre aussi les attentes des "
+            "Juges d'API et les Critères automatiques) est celle de toute sa fenêtre, répartie au "
+            "prorata de latence de ses seuls spans locaux."
         )
     if couts.spans_sans_energie:
         lignes.append(

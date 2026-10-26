@@ -629,7 +629,7 @@ profile: cpu
 ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {num_gpu: 0}}
 embedder_device: cpu
 tokenizer: reference                   # test : approx (aucun téléchargement)
-energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}   # test : fake ; gpu : ajouter `gpu: true` (suit le GPU 0, source `nvml`) ; défaut false (cpu, test : GPU retiré de la mesure, fix-8-8)
+energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}   # test : fake ; gpu : ajouter `gpu: true` (suit tous les GPU visibles, `CUDA_VISIBLE_DEVICES` respecté, source `nvml`) ; défaut false (cpu, test : GPU retiré de la mesure, fix-8-8)
 defaults:
   generator_models: [claude-haiku-5-5, "minicpm5:1b-q4_k_m"]
   embedder: multilingual-e5-small
@@ -791,8 +791,8 @@ Chaque appel produit un span. Son `name` est l'étape, ses `start_time` et `end_
 | `wl.cost`, `wl.cost_uncached`, `wl.currency` | str (Decimal), str, str |
 | `wl.llm_cache_hit` | bool |
 | `wl.latency_s` | float |
-| `wl.energy_kwh`, `wl.energy_method` | float (absent si inconnu) ; `EnergyMethod = Literal["measured", "mixed", "estimated", "unknown"]`. `mixed` : CPU lu par un compteur matériel, RAM estimée par formule (Windows `windows_emi`) ou CPU estimé à côté d'un GPU lu ; `measured` : compteur matériel sans part estimée notable (GPU `nvml` suivi, CPU lu aussi) |
-| `wl.energy_source` | mode du compteur codecarbon (`intel_rapl`, `intel_power_gadget`, `apple_powermetrics`, `nvml`, `windows_emi`, ou un mode estimé : `cpu_load`, `tdp_constant`…), `ecologits` pour une API, `fake` pour le compteur factice, `unknown` si l'énergie est inconnue (au Rapport, `absent` : trace sans l'attribut) ; la part RAM ajoutée par codecarbon reste une formule ; `windows_emi` compte comme compteur matériel après vérification qu'il suit la charge (v0.2.0, P4), donc `mixed` avec la RAM (v0.3.0). Phases d'énergie : `index`, `update`, `query` d'une Configuration, et `judging` (Juges locaux seulement, spans `judge` locaux au prorata de la latence) ; `nvml` seulement si `energy.gpu` est vrai |
+| `wl.energy_kwh`, `wl.energy_method` | float (absent si inconnu) ; `EnergyMethod = Literal["measured", "mixed", "estimated", "unknown"]`. `measured` : toutes les parts suivies lues par un compteur matériel ; `mixed` : une part lue (CPU `windows_emi`, GPU `nvml`…) et une autre estimée par formule (la RAM de codecarbon, sans compteur DRAM, ou un CPU sans compteur) ; `estimated` : aucune part lue (décision du 2026-10-26, cohérente avec A8) |
+| `wl.energy_source` | mode du compteur codecarbon (`intel_rapl`, `intel_power_gadget`, `apple_powermetrics`, `nvml`, `windows_emi`, ou un mode estimé : `cpu_load`, `tdp_constant`…), `ecologits` pour une API, `fake` pour le compteur factice, `unknown` si l'énergie est inconnue (au Rapport, `absent` : trace sans l'attribut) ; la part RAM ajoutée par codecarbon reste une formule ; `windows_emi` compte comme compteur matériel après vérification qu'il suit la charge (v0.2.0, P4), donc `mixed` avec la RAM (v0.3.0). Phases d'énergie : `index`, `update`, `query` d'une Configuration, et `judging` (Juges locaux seulement : énergie de toute la fenêtre du Poste, attentes des Juges d'API et Critères automatiques compris, répartie sur les spans `judge` locaux au prorata de la latence ; un hit du Cache ne reçoit aucune énergie) ; `nvml` seulement si `energy.gpu` est vrai |
 | `wl.status` | `ok` \| `error` \| `budget_refused` \| `non_conformant` |
 | `wl.invalid_citations`, `wl.loop` | int (si pertinent) |
 | `wl.justification_truncated` | int : justifications de Juge tronquées à 200 caractères dans une sortie conforme (absent si aucune, story 9.2) |

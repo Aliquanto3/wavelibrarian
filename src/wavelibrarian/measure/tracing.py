@@ -133,11 +133,19 @@ class Tracer:
         self, kwh: float | None, method: EnergyMethod = "estimated", source: str = "unknown"
     ) -> None:
         """Répartit `kwh` sur les spans locaux retenus (prorata du temps réellement passé, un
-        hit du cache ne compte pas), puis les écrit."""
+        hit du cache ne compte pas), puis les écrit. Un hit du Cache ne reçoit aucune énergie
+        (0 kWh) : une phase faite de hits seuls (reprise d'un Juge local) garde son énergie au
+        niveau de la phase, comme une phase sans span local."""
         tampon, self._phase = self._phase, None
         if not tampon:
             return
-        parts = spread_energy(kwh, [latence for *_, latence, _ in tampon], method)
+        calcul = [i for i, (*_, attrs) in enumerate(tampon) if not attrs["wl.llm_cache_hit"]]
+        parts: list[tuple[float | None, EnergyMethod]] = [
+            (None, "unknown") if kwh is None else (0.0, method)
+        ] * len(tampon)
+        reparties = spread_energy(kwh, [tampon[i][3] for i in calcul], method)
+        for i, part in zip(calcul, reparties, strict=True):
+            parts[i] = part
         for (step, debut, fin, _, attrs), (energie, methode) in zip(tampon, parts, strict=True):
             if energie is not None:
                 attrs["wl.energy_kwh"] = energie

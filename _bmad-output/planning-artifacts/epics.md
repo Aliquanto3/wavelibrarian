@@ -2505,7 +2505,7 @@ So that l'énergie totale d'un run ne soit plus sous-estimée ni mal étiquetée
 
 **Given** le profil `gpu` avec `energy: {gpu: true}` (nouveau champ, défaut `false`, `true` dans `gpu.yaml`)
 **When** une phase est mesurée
-**Then** le GPU est suivi : `wl.energy_source=nvml`, méthode `measured` si le CPU l'est aussi ; au profil `cpu`, le comportement de fix-8-8 est inchangé (GPU retiré)
+**Then** le GPU est suivi : `wl.energy_source=nvml`, méthode `measured` si toutes les parts suivies sont mesurées, `mixed` sinon (décision d'orchestration du 2026-10-26, cohérence avec A8) ; au profil `cpu`, le comportement de fix-8-8 est inchangé (GPU retiré)
 
 **Given** des compteurs injectés
 **When** on lance les tests de `measure/energy.py`

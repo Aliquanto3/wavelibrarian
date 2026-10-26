@@ -190,7 +190,7 @@ def test_energie_mesuree_et_estimee_jamais_additionnees(run_dir: Path, tmp_path:
     assert "jamais additionnées" in md and "ne se comparent pas" in md
     assert couts.sources_energie == {"windows_emi": 2, "absent": 1}
     assert "`wl.energy_source`" in md and "`windows_emi` (2)" in md
-    assert "part RAM, estimée par formule" in md
+    assert "compteurs matériels pour toutes les parts suivies" in md
     assert "kWh mesurés" in md and "kWh estimés" in md
     assert f"{float(Decimal(2) * gco2):.3f}".replace(".", ",") in md  # 39,200 g mesurés
 
@@ -225,9 +225,9 @@ def test_energie_mixte_a_part_et_judging_hors_configuration(run_dir: Path, tmp_p
     attendue = possession_cost(ex.experience.costs, kwh=0.125, compute_seconds=4.0, index_gb=0)
     assert j.possession_fake == attendue > 0
     assert couts.total_configuration("a", "standard", None, fictif=True) == q.real + q.fake
-    assert q.real + q.fake < q.real + q.fake + j.fake  # le Poste judging pèse, mais hors total
+    assert j.fake > 0  # le Poste judging pèse, mais hors du total ci-dessus
     md = construire_markdown(ex, _res(), couts)
-    assert "Légende de `mixed`" in md and "RAM est estimée par formule" in md
+    assert "Légende de `mixed`" in md and "estimée par formule" in md
     assert "kWh mixtes" in md and "trois colonnes" in md
     assert couts.sources_energie == {"windows_emi": 2, "absent": 2}
     hors = md.split("### Postes hors Configuration")[1].split("### Latence")[0]
