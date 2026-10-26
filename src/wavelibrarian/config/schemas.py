@@ -123,6 +123,7 @@ class EnergySettings(_Schema):
     local: Literal["codecarbon", "fake"]
     api: Literal["ecologits", "fake"]
     country_iso_code: str = "FRA"
+    gpu: bool = False  # suivre le GPU (NVML) dans la mesure locale ; vrai dans le profil `gpu`
 
 
 class RoleDefaults(_Schema):

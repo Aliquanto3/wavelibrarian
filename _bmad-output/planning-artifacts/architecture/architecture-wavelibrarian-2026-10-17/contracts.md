@@ -25,7 +25,9 @@ Criterion = Literal["correctness", "completeness", "faithfulness",
 JUDGED_CRITERIA: tuple[Criterion, ...] = ("correctness", "completeness", "faithfulness")
 CostPost = Literal["indexing", "update", "query", "judging", "evalset"]
 # judging (Juges, Filtre closed-book en Exécution) et evalset (génération de questions) sont
-# affichés à part et exclus du coût d'une Configuration dans le Rapport.
+# affichés à part et exclus du coût d'une Configuration dans le Rapport (possession comprise).
+# Les Juges locaux (fournisseur `ollama`) ont leur phase d'énergie `judging` (§6) ; les Juges
+# d'API gardent l'énergie estimée par appel.
 Condition = Literal["standard", "perfect_context"]
 Phase = Literal["base", "after_update"]       # avant / après application du Scénario de mise à jour
 
@@ -469,7 +471,7 @@ class CostSettings(BaseModel):             # costs.yaml (§4.2 bis), lu par repo
 class ProfileSettings(BaseModel):          # defaults/profiles/<nom>.yaml (§4.3)
     profile: Literal["cpu", "gpu", "test"]
     ollama: OllamaSettings; embedder_device: str; tokenizer: Literal["reference", "approx"]
-    energy: EnergySettings                 # {local: codecarbon|fake, api: ecologits|fake, country_iso_code: "FRA"}
+    energy: EnergySettings                 # {local: codecarbon|fake, api: ecologits|fake, country_iso_code: "FRA", gpu: bool = False}
     defaults: RoleDefaults                 # generator_models, embedder, judge_pool, panel_size, closed_book_models,
                                            # question_gen_model, call_timeout_s
 ```
@@ -627,7 +629,7 @@ profile: cpu
 ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {num_gpu: 0}}
 embedder_device: cpu
 tokenizer: reference                   # test : approx (aucun téléchargement)
-energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}   # test : fake
+energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}   # test : fake ; gpu : ajouter `gpu: true` (suit le GPU 0, source `nvml`) ; défaut false (cpu, test : GPU retiré de la mesure, fix-8-8)
 defaults:
   generator_models: [claude-haiku-5-5, "minicpm5:1b-q4_k_m"]
   embedder: multilingual-e5-small
@@ -789,8 +791,8 @@ Chaque appel produit un span. Son `name` est l'étape, ses `start_time` et `end_
 | `wl.cost`, `wl.cost_uncached`, `wl.currency` | str (Decimal), str, str |
 | `wl.llm_cache_hit` | bool |
 | `wl.latency_s` | float |
-| `wl.energy_kwh`, `wl.energy_method` | float (absent si inconnu) ; `measured` \| `estimated` \| `unknown` |
-| `wl.energy_source` | mode du compteur codecarbon (`intel_rapl`, `intel_power_gadget`, `apple_powermetrics`, `nvml`, `windows_emi`, ou un mode estimé : `cpu_load`, `tdp_constant`…), `ecologits` pour une API, `fake` pour le compteur factice, `unknown` si l'énergie est inconnue (au Rapport, `absent` : trace sans l'attribut) ; la part RAM ajoutée par codecarbon reste une formule ; `windows_emi` compte comme compteur matériel, donc `measured`, après vérification qu'il suit la charge (v0.2.0, P4) |
+| `wl.energy_kwh`, `wl.energy_method` | float (absent si inconnu) ; `EnergyMethod = Literal["measured", "mixed", "estimated", "unknown"]`. `mixed` : CPU lu par un compteur matériel, RAM estimée par formule (Windows `windows_emi`) ou CPU estimé à côté d'un GPU lu ; `measured` : compteur matériel sans part estimée notable (GPU `nvml` suivi, CPU lu aussi) |
+| `wl.energy_source` | mode du compteur codecarbon (`intel_rapl`, `intel_power_gadget`, `apple_powermetrics`, `nvml`, `windows_emi`, ou un mode estimé : `cpu_load`, `tdp_constant`…), `ecologits` pour une API, `fake` pour le compteur factice, `unknown` si l'énergie est inconnue (au Rapport, `absent` : trace sans l'attribut) ; la part RAM ajoutée par codecarbon reste une formule ; `windows_emi` compte comme compteur matériel après vérification qu'il suit la charge (v0.2.0, P4), donc `mixed` avec la RAM (v0.3.0). Phases d'énergie : `index`, `update`, `query` d'une Configuration, et `judging` (Juges locaux seulement, spans `judge` locaux au prorata de la latence) ; `nvml` seulement si `energy.gpu` est vrai |
 | `wl.status` | `ok` \| `error` \| `budget_refused` \| `non_conformant` |
 | `wl.invalid_citations`, `wl.loop` | int (si pertinent) |
 | `wl.justification_truncated` | int : justifications de Juge tronquées à 200 caractères dans une sortie conforme (absent si aucune, story 9.2) |
@@ -812,7 +814,7 @@ Toutes les grandeurs se calculent à partir de `answers.jsonl`, `panel.jsonl`, `
 | Débit | Questions répondues ÷ durée murale de la phase query, en minutes |
 | Point mort | Pour A (indexation plus chère) contre B : N* = (indexation_A − indexation_B) ÷ (requête_B − requête_A). Calculé seulement si la Qualité de A est égale ou supérieure à celle de B et si requête_A < requête_B. Sinon, le Rapport écrit la raison |
 | Fraîcheur | Parmi les Questions dont `scenario_target` est défini, part des Questions correctes en phase `after_update` |
-| Énergie | kWh par poste, en colonnes séparées `measured` et `estimated`, jamais additionnées. CO2e = kWh × intensité du Catalogue |
+| Énergie | kWh par poste, en colonnes séparées `measured`, `mixed` et `estimated` (légende de `mixed` au Rapport), jamais additionnées. L'énergie `judging` est affichée au poste `judging`. CO2e = kWh × intensité du Catalogue |
 | Fronts de Pareto | Non dominés sur (Qualité ↑, coût total ↓), (Qualité ↑, énergie ↓), (Qualité ↑, latence p95 ↓), plus un front (taux du Critère ↑, coût total ↓) par Critère. Coût total = indexation + mise à jour + requête |
 | Inapplicables | Reprises de `applicability.json`, avec leur raison |
 | Juges | Panel admissible par Configuration, Juges exclus par la calibration, nombre d'égalités signalées |
@@ -821,7 +823,7 @@ Fichiers produits :
 - `scores.csv` : config_id, condition, tier, phase, question_type, criterion, value, ci_low, ci_high, n.
 - `retrieval.csv` : config_id, …, metric, k, value, ci_low, ci_high, method.
 - `pairs.csv` : config_a, config_b, metric, diff, p_value, test, n_common.
-- `costs.csv` : config_id, post, cost_eur_real, cost_eur_uncached, kwh_measured, kwh_estimated, co2e_g, n_calls.
+- `costs.csv` : config_id, post, cost_eur_real, cost_eur_uncached, kwh_measured, kwh_estimated, co2e_g, n_calls, … (colonnes `kwh_mixed` et `co2e_g_mixed` en fin de ligne).
 - `pareto.csv` : front, config_id, x, y.
 - `export.py` écrit le front choisi sous forme de liste `configurations:` réutilisable dans une nouvelle Expérience (FR-41).
 

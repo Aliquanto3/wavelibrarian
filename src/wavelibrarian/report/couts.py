@@ -30,7 +30,7 @@ LOCAUX = frozenset({"local", "embed", "rerank"})
 ENTETE_COUTS = [
     "config_id", "post", "cost_eur_real", "cost_eur_uncached", "kwh_measured", "kwh_estimated",
     "co2e_g", "n_calls", "condition", "tier", "phase", "possession_eur", "co2e_g_estimated",
-    "cost_eur_fake",
+    "cost_eur_fake", "kwh_mixed", "co2e_g_mixed",
 ]  # fmt: skip
 _MICRO = Decimal("0.000001")
 _ZERO = Decimal(0)
@@ -51,8 +51,12 @@ class LigneCout:
     possession_fake: Decimal = _ZERO  # possession fictive (span `fake` ou compteur `fake`)
     kwh_measured: Decimal = _ZERO
     kwh_estimated: Decimal = _ZERO
+    kwh_mixed: Decimal = (
+        _ZERO  # CPU lu par compteur, RAM estimée par formule (EnergyMethod `mixed`)
+    )
     co2e_measured_g: Decimal = _ZERO
     co2e_estimated_g: Decimal = _ZERO
+    co2e_mixed_g: Decimal = _ZERO
     n_calls: int = 0
     kwh_local: Decimal = _ZERO
     secondes_locales: Decimal = _ZERO
@@ -245,7 +249,7 @@ def _agreger(
         energie = s.get("wl.energy_kwh")
         methode = s.get("wl.energy_method")
         fictive = factice or (compteur_factice and methode != "measured")
-        if isinstance(energie, int | float) and methode in ("measured", "estimated"):
+        if isinstance(energie, int | float) and methode in ("measured", "mixed", "estimated"):
             src = s.get("wl.energy_source")
             src = src if isinstance(src, str) and src else "absent"
             couts.sources_energie[src] = couts.sources_energie.get(src, 0) + 1
@@ -253,6 +257,9 @@ def _agreger(
             if methode == "measured":
                 ligne.kwh_measured += kwh
                 ligne.co2e_measured_g += kwh * gco2
+            elif methode == "mixed":
+                ligne.kwh_mixed += kwh
+                ligne.co2e_mixed_g += kwh * gco2
             else:
                 ligne.kwh_estimated += kwh
                 ligne.co2e_estimated_g += kwh * gco2
@@ -399,5 +406,6 @@ def ligne_csv(ligne: LigneCout) -> list[Any]:
         config, post, _q(ligne.real), _q(ligne.uncached), f"{ligne.kwh_measured:.9f}",
         f"{ligne.kwh_estimated:.9f}", f"{ligne.co2e_measured_g:.6f}", ligne.n_calls, condition,
         "all" if tier is None else tier, phase, _q(ligne.possession),
-        f"{ligne.co2e_estimated_g:.6f}", _q(ligne.fake),
+        f"{ligne.co2e_estimated_g:.6f}", _q(ligne.fake), f"{ligne.kwh_mixed:.9f}",
+        f"{ligne.co2e_mixed_g:.6f}",
     ]  # fmt: skip

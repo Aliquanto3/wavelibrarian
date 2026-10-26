@@ -18,6 +18,7 @@ FRONT_REFERENCE = "qualite-cout"  # celui du tableau de synthèse et de `--expor
 _LATENCE = "qualite-latence-p95"
 _ENERGIE_MESUREE = "qualite-energie-mesuree"
 _ENERGIE_ESTIMEE = "qualite-energie-estimee"
+_ENERGIE_MIXTE = "qualite-energie-mixte"
 # Décimales de `pareto.csv` ; le front est calculé sur ces valeurs arrondies, pour que le front
 # relu dans le fichier (export) soit celui du Rapport. x à 9 décimales : un kWh de requête locale
 # tient souvent sous 1e-6.
@@ -59,14 +60,18 @@ def _taux(res: Resultats) -> dict[tuple[str, str, int | None, str], float]:
     }
 
 
-def _kwh(couts: Couts, config: str, condition: str, tier: int | None) -> tuple[Decimal, Decimal]:
-    """kWh (mesurés, estimés) des Postes d'une Configuration, phases cumulées, non additionnés."""
-    mesure = estime = Decimal(0)
+def _kwh(
+    couts: Couts, config: str, condition: str, tier: int | None
+) -> tuple[Decimal, Decimal, Decimal]:
+    """kWh (mesurés, estimés, mixtes) des Postes d'une Configuration, phases cumulées, non
+    additionnés."""
+    mesure = estime = mixte = Decimal(0)
     for ligne in couts.lignes:
         if ligne.cle[:3] == (config, condition, tier) and ligne.cle[4] in POSTES_CONFIGURATION:
             mesure += ligne.kwh_measured
             estime += ligne.kwh_estimated
-    return mesure, estime
+            mixte += ligne.kwh_mixed
+    return mesure, estime, mixte
 
 
 def construire_fronts(ex: Execution, res: Resultats, couts: Couts | None) -> list[Front]:
@@ -112,7 +117,7 @@ def construire_fronts(ex: Execution, res: Resultats, couts: Couts | None) -> lis
                 [Point(c, taux[(c, condition, tier, QUALITE)], total[c]) for c in presentes],
             )
             kwh = {c: _kwh(couts, c, condition, tier) for c in presentes}
-            for nom, rang in ((_ENERGIE_MESUREE, 0), (_ENERGIE_ESTIMEE, 1)):
+            for nom, rang in ((_ENERGIE_MESUREE, 0), (_ENERGIE_ESTIMEE, 1), (_ENERGIE_MIXTE, 2)):
                 ajouter(
                     nom,
                     g,

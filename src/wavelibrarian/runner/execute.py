@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -353,6 +353,15 @@ class _Runner:
         return self.preparer(parser)[0]
 
     def juger(self, experience: ResolvedExperiment, panels: dict[str, tuple[str, ...]]) -> None:
+        """Poste `judging` (`_juger`), dans une phase d'énergie `judging` si un Juge est local
+        (fournisseur `ollama`) : son énergie est répartie sur les spans `judge` locaux. Les Juges
+        d'API gardent l'énergie estimée par appel (gateway), hors de cette phase."""
+        catalogue = self.ctx.catalog
+        local = any(catalogue.get(m).provider == "ollama" for ms in panels.values() for m in ms)
+        with self.energie_de_phase(None, "judging") if local else nullcontext():
+            self._juger(experience, panels)
+
+    def _juger(self, experience: ResolvedExperiment, panels: dict[str, tuple[str, ...]]) -> None:
         """Note chaque Réponse `ok` au Poste `judging` : Critères automatiques, puis Panel
         (`scoring/panel.py`). `error`, `inapplicable` et `budget_exceeded` n'ont ni verdict ni
         appel de Juge. Reprise : `verdicts.jsonl` et `panel.jsonl` sont relus, seules les clés
@@ -505,11 +514,12 @@ class _Runner:
     @contextmanager
     def energie_de_phase(
         self,
-        conf: ResolvedConfiguration,
+        conf: ResolvedConfiguration | None,
         phase: str,
         apres: Callable[[], None] | None = None,
     ) -> Iterator[None]:
-        """Relève l'énergie locale d'une phase (index ou query) d'une Configuration, puis la
+        """Relève l'énergie locale d'une phase (index, update, query) d'une Configuration, ou du
+        Poste `judging` (`conf` absent : les Juges locaux, hors Configuration), puis la
         répartit sur les spans locaux de la phase au prorata de leur latence.
 
         La phase est toujours refermée, même si le mesureur échoue au départ : une phase restée
@@ -519,11 +529,12 @@ class _Runner:
         (un `BudgetExceeded` reste un `BudgetExceeded`).
         """
         tracer = self.ctx.traceur
+        nom = "judging" if conf is None else conf.id
         tracer.begin_phase()
         kwh: float | None = None
         en_vol = False
         try:
-            self.meter.start(f"{conf.id}:{phase}")
+            self.meter.start(f"{nom}:{phase}")
             try:
                 yield
             except BaseException:
@@ -535,7 +546,7 @@ class _Runner:
                 except Exception as exc:
                     if not en_vol:
                         raise
-                    log.error("mesure d'énergie %s:%s non relevée : %s", conf.id, phase, exc)
+                    log.error("mesure d'énergie %s:%s non relevée : %s", nom, phase, exc)
         except BaseException:
             en_vol = True
             raise
@@ -551,7 +562,7 @@ class _Runner:
             except Exception as exc:
                 if not en_vol:
                     raise
-                log.error("fin de phase %s:%s en échec : %s", conf.id, phase, exc)
+                log.error("fin de phase %s:%s en échec : %s", nom, phase, exc)
 
     def poser(
         self,

@@ -106,7 +106,8 @@ def section_pareto(
         *_table(["config_id", "Qualité [IC 95 %]", "Coût total (€)", "Latence p95 (s)"], lignes),
         "Qualité de la phase `base` ; coût total = indexation + mise à jour + requête, phases "
         "cumulées, Coût de possession compris, `judging` et `evalset` exclus. Les fronts Qualité "
-        "× énergie (kWh mesurés et estimés à part), Qualité × latence p95 et (taux d'un Critère, "
+        "× énergie (kWh mesurés, mixtes et estimés à part), Qualité × latence p95 et (taux d'un "
+        "Critère, "
         "coût total) par Critère, ainsi que ceux des autres Conditions et Paliers "
         f"(`{FRONT_REFERENCE}@perfect_context`, `…@palier-N`), sont dans `pareto.csv` (`front, "
         "config_id, x, y`). Le coût cumule toutes les phases (dont `after_update`), la Qualité "

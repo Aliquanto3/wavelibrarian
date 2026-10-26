@@ -3,7 +3,7 @@ profile: gpu
 ollama: {base_url: "http://localhost:11434", keep_alive: "5m", options: {}}
 embedder_device: cuda
 tokenizer: reference
-energy: {local: codecarbon, api: ecologits, country_iso_code: FRA}
+energy: {local: codecarbon, api: ecologits, country_iso_code: FRA, gpu: true}
 defaults:
   generator_models: [claude-haiku-5-5, "qwen3.5:4b"]
   embedder: bge-m3

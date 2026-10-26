@@ -118,7 +118,7 @@ def test_fronts_non_dominees_cout_energie_latence_et_critere(run_dir: Path) -> N
             _cout("sans-contexte", "update", "1"),
             _cout("sans-contexte", "judging", "100"),  # hors coût d'une Configuration
             _cout("bm25", "indexing", "1", kwh_estimated=Decimal("2")),
-            _cout("bm25", "query", "1"),
+            _cout("bm25", "query", "1", kwh_mixed=Decimal("0.75")),
         ],
         latences=[_lat("sans-contexte", 0.5), _lat("bm25", 2.0)],
     )
@@ -131,6 +131,9 @@ def test_fronts_non_dominees_cout_energie_latence_et_critere(run_dir: Path) -> N
     # énergie : mesurée et estimée sont deux fronts, jamais additionnées
     assert [p.config_id for p in fronts["qualite-energie-mesuree"].points] == ["sans-contexte"]
     assert [p.config_id for p in fronts["qualite-energie-estimee"].points] == ["bm25"]
+    # `mixed` (compteur CPU + RAM estimée) est un troisième front, sans mélange avec les deux autres
+    assert [p.config_id for p in fronts["qualite-energie-mixte"].points] == ["bm25"]
+    assert fronts["qualite-energie-mixte"].points[0].cout == 0.75
     # un front par Critère : faithfulness, sans-contexte (0,9 pour 4 €) et bm25 (0,4 pour 2 €)
     assert {p.config_id for p in fronts["critere-faithfulness-cout"].points} == ids
     lignes = lignes_pareto(list(fronts.values()))

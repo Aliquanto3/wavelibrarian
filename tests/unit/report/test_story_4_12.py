@@ -195,6 +195,63 @@ def test_energie_mesuree_et_estimee_jamais_additionnees(run_dir: Path, tmp_path:
     assert f"{float(Decimal(2) * gco2):.3f}".replace(".", ",") in md  # 39,200 g mesurés
 
 
+def test_energie_mixte_a_part_et_judging_hors_configuration(run_dir: Path, tmp_path: Path) -> None:
+    """Story 9.8 : trois colonnes d'énergie, jamais additionnées ; l'énergie `judging` d'un Juge
+    local reste au Poste `judging`, possession comprise, hors du coût d'une Configuration."""
+    mixte = {"wl.energy_method": "mixed", "wl.energy_source": "windows_emi"}
+    spans = [
+        _span(
+            "a", "query", **mixte,
+            **{"wl.kind": "local", "wl.energy_kwh": 0.5, "wl.latency_s": 2.0},
+        ),
+        _span("a", "query", **{"wl.energy_kwh": 2.0, "wl.energy_method": "measured"}),
+        _span("a", "query", **{"wl.energy_kwh": 0.25, "wl.energy_method": "estimated"}),
+        _span(
+            "a", "judging", **{"gen_ai.provider.name": "ollama"}, **mixte,
+            **{"wl.kind": "llm", "wl.energy_kwh": 0.125, "wl.latency_s": 4.0},
+        ),
+    ]  # fmt: skip
+    ex = _ex(run_dir, tmp_path, spans, {"a": 1})
+    couts = calculer_couts(ex, _res())
+    par_poste = {ligne.cle[4]: ligne for ligne in couts.lignes}
+    q, j = par_poste["query"], par_poste["judging"]
+    assert (q.kwh_mixed, q.kwh_measured, q.kwh_estimated) == (
+        Decimal("0.5"), Decimal(2), Decimal("0.25"),
+    )  # fmt: skip
+    gco2 = ex.experience.costs.carbon.gco2e_per_kwh
+    assert q.co2e_mixed_g == Decimal("0.5") * gco2
+    assert (j.kwh_mixed, j.kwh_measured, j.kwh_estimated) == (Decimal("0.125"), 0, 0)
+    # profil `test` : compteur factice et énergie non `measured`, la possession est fictive
+    attendue = possession_cost(ex.experience.costs, kwh=0.125, compute_seconds=4.0, index_gb=0)
+    assert j.possession_fake == attendue > 0
+    assert couts.total_configuration("a", "standard", None, fictif=True) == q.real + q.fake
+    assert q.real + q.fake < q.real + q.fake + j.fake  # le Poste judging pèse, mais hors total
+    md = construire_markdown(ex, _res(), couts)
+    assert "Légende de `mixed`" in md and "RAM est estimée par formule" in md
+    assert "kWh mixtes" in md and "trois colonnes" in md
+    assert couts.sources_energie == {"windows_emi": 2, "absent": 2}
+    hors = md.split("### Postes hors Configuration")[1].split("### Latence")[0]
+    assert "judging" in hors and "0.125000" in hors.replace(",", ".")
+
+
+def test_costs_csv_ajoute_les_colonnes_mixtes_en_fin(run_dir: Path) -> None:
+    from wavelibrarian.report.couts import ENTETE_COUTS, ligne_csv
+
+    assert ENTETE_COUTS[-2:] == ["kwh_mixed", "co2e_g_mixed"]
+    assert ENTETE_COUTS[:8] == [
+        "config_id", "post", "cost_eur_real", "cost_eur_uncached", "kwh_measured",
+        "kwh_estimated", "co2e_g", "n_calls",
+    ]  # fmt: skip
+    from wavelibrarian.report.couts import LigneCout
+
+    ligne = LigneCout(("a", "standard", None, "base", "query"))
+    ligne.kwh_mixed = Decimal("0.5")
+    ligne.co2e_mixed_g = Decimal("12.5")
+    csv_ligne = ligne_csv(ligne)
+    assert len(csv_ligne) == len(ENTETE_COUTS)
+    assert csv_ligne[-2:] == ["0.500000000", "12.500000"]
+
+
 # --- AC 3 : latence, débit, coût par requête ---------------------------------------------------
 
 

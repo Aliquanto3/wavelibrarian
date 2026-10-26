@@ -9,8 +9,9 @@ from wavelibrarian.report.scores import etiquette_palier
 
 ENTETE_POSTES = [
     "Configuration", "Condition", "Palier", "Phase", "Poste", "€ réel", "€ sans cache",
-    "dont possession (€)", "kWh mesurés", "kWh estimés", "CO2e mesuré (g)", "CO2e estimé (g)",
-    "Appels", "€ fictif (fake)",
+    "dont possession (€)", "kWh mesurés", "kWh mixtes", "kWh estimés", "CO2e mesuré (g)",
+    "CO2e mixte (g)",
+    "CO2e estimé (g)", "Appels", "€ fictif (fake)",
 ]  # fmt: skip
 ENTETE_LATENCE = [
     "Configuration", "Condition", "Palier", "Phase", "n", "p50 (s)", "p95 (s)", "Débit (Q/min)",
@@ -41,7 +42,8 @@ def _ligne_poste(ligne: LigneCout) -> list[str]:
     return [
         f"`{config}`", condition, etiquette_palier(tier), phase, post, _eur(ligne.real),
         _eur(ligne.uncached), _eur(ligne.possession), f"{ligne.kwh_measured:.6f}",
-        f"{ligne.kwh_estimated:.6f}", _nb(float(ligne.co2e_measured_g), 3),
+        f"{ligne.kwh_mixed:.6f}", f"{ligne.kwh_estimated:.6f}",
+        _nb(float(ligne.co2e_measured_g), 3), _nb(float(ligne.co2e_mixed_g), 3),
         _nb(float(ligne.co2e_estimated_g), 3), str(ligne.n_calls), _eur(ligne.fake),
     ]  # fmt: skip
 
@@ -74,8 +76,9 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
             if couts.faux_llm_pur
             else ""
         ),
-        "- **Avertissement** : les kWh `measured` (compteur matériel) et `estimated` (modèle "
-        "d'estimation) restent dans deux colonnes, jamais additionnées : leurs périmètres "
+        "- **Avertissement** : les kWh `measured` (compteur matériel), `mixed` (compteur "
+        "matériel pour le CPU ou le GPU, part RAM estimée par formule) et `estimated` (modèle "
+        "d'estimation) restent dans trois colonnes, jamais additionnées : leurs périmètres "
         "ne se comparent pas. Le CO2e suit la même séparation.",
     ]
     source = ex.manifeste.get("rejudged_from")
@@ -94,8 +97,14 @@ def _parametres(ex: Execution, couts: Couts) -> list[str]:
         lignes.append(f"- Source de l'énergie (`wl.energy_source`, spans avec énergie) : {detail}.")
     if any(ligne.kwh_measured for ligne in couts.lignes):
         lignes.append(
-            "- Les kWh `measured` viennent d'un compteur CPU ou GPU ; codecarbon y ajoute la part "
-            "RAM, estimée par formule (aucun compteur DRAM lu)."
+            "- Les kWh `measured` viennent d'un compteur matériel qui domine la phase (GPU lu par "
+            "NVML) ; codecarbon y ajoute la part RAM, estimée par formule (aucun compteur DRAM lu)."
+        )
+    if any(ligne.kwh_mixed for ligne in couts.lignes):
+        lignes.append(
+            "- Légende de `mixed` : le CPU est lu par un compteur matériel (par exemple "
+            "`windows_emi` sous Windows) mais la RAM est estimée par formule (aucun compteur DRAM) "
+            "ou un CPU estimé accompagne un GPU lu : ces kWh sont en partie estimés."
         )
     if couts.spans_sans_energie:
         lignes.append(

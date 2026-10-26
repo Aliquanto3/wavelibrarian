@@ -1,7 +1,8 @@
 """Énergie (AD-17) : mesure locale par phase, estimation API par appel, répartition au prorata.
 
-`measured` seulement si un compteur matériel a été lu ; `codecarbon` et `ecologits` sont importés
-au premier usage (extra `energy`).
+`measured` seulement si un compteur matériel a été lu et que rien d'important n'est estimé,
+`mixed` si un compteur est lu mais qu'une part (RAM) est estimée par formule ; `codecarbon` et
+`ecologits` sont importés au premier usage (extra `energy`).
 """
 
 import importlib
@@ -16,7 +17,7 @@ from wavelibrarian.ports.measure import EnergyEstimator, EnergyMeter
 
 _log = logging.getLogger(__name__)
 
-EnergyMethod = Literal["measured", "estimated", "unknown"]
+EnergyMethod = Literal["measured", "mixed", "estimated", "unknown"]
 
 _MSG_EXTRA = "installer l'extra energy (`uv sync --extra energy`) : module {} introuvable"
 # Modes de codecarbon qui lisent un compteur matériel (RAPL, Power Gadget, powermetrics, NVML,
@@ -116,6 +117,24 @@ def is_hardware_counter(tracker: Any) -> bool:
     return any(_mode(hw) in _MODES_MATERIELS for hw in _materiels_suivis(tracker))
 
 
+def energy_method(tracker: Any) -> EnergyMethod:
+    """Méthode d'une phase (contracts.md §6, AD-17) : `estimated` sans compteur matériel lu ;
+    `measured` si tout ce qui compte l'est : un GPU suivi par NVML domine l'énergie de la phase
+    (la part RAM, estimée par formule, y est marginale) ; `mixed` si une part reste estimée, soit
+    la RAM de codecarbon (aucun compteur DRAM) à côté d'un CPU lu par compteur (Windows
+    `windows_emi`, story 8.6), soit un CPU sans compteur à côté d'un GPU lu."""
+    suivis = _materiels_suivis(tracker)
+    if not any(_mode(hw) in _MODES_MATERIELS for hw in suivis):
+        return "estimated"
+    calcul = [hw for hw in suivis if type(hw).__name__ != "RAM"]
+    if any(_mode(hw) not in _MODES_MATERIELS for hw in calcul):
+        return "mixed"
+    if any(type(hw).__name__ == "GPU" for hw in suivis):
+        return "measured"
+    ram = any(type(hw).__name__ == "RAM" or not _mode(hw) for hw in suivis)
+    return "mixed" if ram else "measured"
+
+
 def _retirer_gpu(tracker: Any) -> None:
     """`gpu_ids=[]` ne suffit pas : retirer le GPU garde son énergie (au repos) hors de la phase.
     codecarbon 3.3.x ne remplit `_hardware` qu'au `start()` (`_ensure_hardware_ready`, idempotent) :
@@ -134,11 +153,13 @@ def _retirer_gpu(tracker: Any) -> None:
 
 
 class CodecarbonMeter:
-    """Énergie locale par phase via `codecarbon.OfflineEmissionsTracker` (CPU seul, sans NVML)."""
+    """Énergie locale par phase via `codecarbon.OfflineEmissionsTracker`. CPU seul, sans NVML,
+    par défaut (fix-8-8) ; `gpu=True` (champ `energy.gpu` du profil `gpu`) suit le GPU 0."""
 
-    def __init__(self, country_iso_code: str = "FRA") -> None:
+    def __init__(self, country_iso_code: str = "FRA", *, gpu: bool = False) -> None:
         self._cc = _importer("codecarbon")
         self._country = country_iso_code
+        self._gpu = gpu
         self._tracker: Any = None
         self.method: EnergyMethod = "estimated"
         self.source = "unknown"  # mode du compteur lu à la dernière phase (`wl.energy_source`)
@@ -149,9 +170,10 @@ class CodecarbonMeter:
             project_name=phase,
             save_to_file=False,
             log_level="error",
-            gpu_ids=[],  # jamais d'interrogation du GPU
+            gpu_ids=[0] if self._gpu else [],  # sans `energy.gpu`, jamais d'interrogation du GPU
         )
-        _retirer_gpu(self._tracker)
+        if not self._gpu:
+            _retirer_gpu(self._tracker)
         self._tracker.start()
 
     def stop(self) -> float | None:
@@ -159,7 +181,7 @@ class CodecarbonMeter:
         if tracker is None:
             return None
         tracker.stop()
-        self.method = "measured" if is_hardware_counter(tracker) else "estimated"
+        self.method = energy_method(tracker)
         self.source = energy_source(tracker)
         data = getattr(tracker, "final_emissions_data", None)
         energy = getattr(data, "energy_consumed", None)
@@ -212,7 +234,7 @@ class EcoLogitsEstimator:
 def make_meter(settings: EnergySettings) -> EnergyMeter:
     if settings.local == "fake":
         return FakeMeter()
-    return CodecarbonMeter(settings.country_iso_code)
+    return CodecarbonMeter(settings.country_iso_code, gpu=settings.gpu)
 
 
 def make_estimator(settings: EnergySettings) -> EnergyEstimator:
