@@ -6,7 +6,7 @@ annotator: anael
 annotations:
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-004
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quel droit paie le sel de Sarnoux selon la convention de douane ?
   reference_answer: Un denier par mesure
@@ -97,8 +97,8 @@ annotations:
     Sa charte, qui date de l''an'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-004
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "La réponse est dans les extraits, mais incomplète"
   question: Quel droit paie le sel de Sarnoux selon la convention de douane ?
   reference_answer: Un denier par mesure
   answer: un denier
@@ -116,8 +116,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-020
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "La réponse est bien présente dans les extraits. Cependant, peut-être que le format du tableau tel que remonté n'était pas très lisible"
   question: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Maëlis Torvane
@@ -204,8 +204,8 @@ annotations:
     îles touchées par la fièvre grise. Les marchandises de la Grande Sève ne bénéficient'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-020
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Le système cite bien une information d'un extrait en tout cas"
   question: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Maëlis Torvane
@@ -221,8 +221,8 @@ annotations:
   - df071d2eff588750#p2
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-025
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "La réponse est bien présente dans les extraits, bien que techniquement elle nécessite un calcul mineur pour être déduite"
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
   reference_answer: Deux sièges de plus
@@ -325,8 +325,8 @@ annotations:
     Sa charte, qui date de l''an'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-025
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Le 7 se retrouve bien dans les extraits (enfin, \"sept\")"
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
   reference_answer: Deux sièges de plus
@@ -357,7 +357,7 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-028
   criterion: correctness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -446,7 +446,7 @@ annotations:
     vallée de la Sève, qui cherchaient un abri'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-028
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -474,8 +474,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-028
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Les formulations négatives auraient pu causer une erreur dans le système final, mais il ne s'est pas fait avoir"
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
     du Sud n'accepte que des barques de moins de vingt tonneaux.
@@ -502,8 +502,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-036
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Est-ce que cette question a été posée au sein d'une conversation avec plus de contexte ? Elle fait peu de sens sinon, il est même surprenant que la réponse du système soit relativement proche"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: Neuf sièges.
@@ -582,8 +582,8 @@ annotations:
     directeur de la Compagnie des Marées Grises.'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-036
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Il n'y a d'ailleurs pas d'extrait correspondant à la réponse du système ici, a-t-il basé sa réponse sur un extrait précédent ?"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: Neuf sièges.
@@ -605,7 +605,7 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/voir-aussi
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-039
   criterion: correctness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quelles contraintes la saison de la Haute Eau impose-t-elle à la navigation et aux traversées
     ?
@@ -710,7 +710,7 @@ annotations:
     profonde, sépare Ormesse de Keld ; elle est la route la plus'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-039
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quelles contraintes la saison de la Haute Eau impose-t-elle à la navigation et aux traversées
     ?
@@ -738,8 +738,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-hareng-argente
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-039
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "La réponse cite des extraits, bien qu'elle soit complètement incorrecte et qu'il y ait eu la bonne réponse ailleurs dans les extraits"
   question: Quelles contraintes la saison de la Haute Eau impose-t-elle à la navigation et aux traversées
     ?
   reference_answer: La passe de l'Ouest est fermée aux navires de plus de quarante tonneaux, les tarifs
@@ -766,8 +766,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/economie/le-hareng-argente
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-040
   criterion: correctness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Il y a bien un lien entre le Petit Sarnoux et Maëlis Torvane dans les extraits, mais celui de capitaine n'est pas précisé"
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
   answer: Maëlis Torvane
@@ -854,7 +854,7 @@ annotations:
     permettra aux pilotes de planifier les traversées. Je transmettrai ma table au'
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-040
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
@@ -881,7 +881,7 @@ annotations:
   - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
 - answer_id: 20261018-115941-a2a512/bm25/standard/all/base/q-040
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
@@ -908,8 +908,8 @@ annotations:
   - e68bdc24912e7af7#h/journal-de-maelis-torvane/neuvieme-jour
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-011
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Amusant de noter que l'extrait attendu ne remonte pas dans ce qu'a reçu le système, mais qu'un autre extrait contenant la réponse est présent quand même, permettant de répondre comme attendu"
   question: Quel navire est le seul autorisé à transporter le courrier du Conseil des Quais ?
   reference_answer: La Grande Sève
   answer: La Grande Sève
@@ -979,7 +979,7 @@ annotations:
     La Compagnie verse chaque année au Conseil des Quais une redevance de quatre cents deniers. En échange, le Conseil lui garantit l'usage exclusif du quai numéro trois du port de Port-Ysel. Oswin Dacrel a rappelé en l'an 1411 que ce privilège pouvait être révisé.
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-011
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quel navire est le seul autorisé à transporter le courrier du Conseil des Quais ?
   reference_answer: La Grande Sève
@@ -988,8 +988,8 @@ annotations:
   - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-014
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Aucun extrait reçu par le système"
   question: Où trouve-t-on le maître de port Oswin Dacrel chaque matin ?
   reference_answer: Dans la Halle des Cordages
   answer: ''
@@ -1002,16 +1002,16 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-014
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Je crois qu'il faut dire \"oui\" dans le cas où il n'y a pas d'extrait, car il n'y a pas eu d'hallucination ?"
   question: Où trouve-t-on le maître de port Oswin Dacrel chaque matin ?
   reference_answer: Dans la Halle des Cordages
   answer: ''
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-016
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Aucun extrait reçu par le système"
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
   answer: ''
@@ -1024,15 +1024,15 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-016
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Je crois qu'il faut dire \"oui\" dans le cas où il n'y a pas d'extrait, car il n'y a pas eu d'hallucination ?"
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
   answer: ''
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-017
   criterion: correctness
-  verdict: ''
+  verdict: no
   note: ''
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
@@ -1062,7 +1062,7 @@ annotations:
     Dacrel remettra les prix. Une soupe d'algues sera servie à tous les participants.
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-017
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
@@ -1071,8 +1071,8 @@ annotations:
   - 750a0563faf1fe1f#p1
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-017
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Il n'y a pas d'extrait avec la bonne réponse, ce que le système renvoie est cohérent avec les extraits"
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
   answer: cuivre, deniers
@@ -1080,8 +1080,8 @@ annotations:
   - 750a0563faf1fe1f#p1
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-020
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "La réponse attendue n'était pas dans les extraits."
   question: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Oswin Dacrel
@@ -1157,8 +1157,8 @@ annotations:
     Les navires de la Compagnie transportent le hareng fumé et le sel de Sarnoux ; la Grande Sève est la seule à porter aussi le courrier du Conseil des Quais. Maëlis Torvane a navigué sur la Grande Sève pendant six saisons, ce qui lui a permis de relever les courants décrits dans son atlas.
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-020
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Le système cite une information d'un extrait"
   question: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Oswin Dacrel
@@ -1170,7 +1170,7 @@ annotations:
   - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/activites
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-025
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
@@ -1189,8 +1189,8 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-025
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Aucun extrait reçu, donc si pas d'hallucination il faut mettre \"Oui\" ici ?"
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
   reference_answer: Deux sièges de plus
@@ -1198,7 +1198,7 @@ annotations:
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-028
   criterion: correctness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -1229,7 +1229,7 @@ annotations:
     Dacrel remettra les prix. Une soupe d'algues sera servie à tous les participants.
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-028
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -1239,8 +1239,8 @@ annotations:
   - 750a0563faf1fe1f#p1
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-028
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "La réponse n'était pas présente dans les extrait, seule une mention de la passe du Sud est faite"
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
     du Sud n'accepte que des barques de moins de vingt tonneaux.
@@ -1249,8 +1249,8 @@ annotations:
   - 750a0563faf1fe1f#p1
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-036
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Est-ce que cette question a été posée au sein d'une conversation avec plus de contexte ? Elle fait peu de sens sinon"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: '0'
@@ -1333,15 +1333,15 @@ annotations:
     des Marées Grises.
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-036
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Il n'y a pas de référence à un zéro dans ces extraits"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: '0'
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-040
   criterion: correctness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
@@ -1351,7 +1351,7 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-040
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
@@ -1359,15 +1359,15 @@ annotations:
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-040
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Aucun extrait renvoyé par le système, donc si pas de réponse on considère que c'est fidèle ?"
   question: Quel est le nom du capitaine du Petit Sarnoux ?
   reference_answer: Le Corpus ne le dit pas.
   answer: ''
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-042
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
@@ -1381,16 +1381,16 @@ annotations:
   context_passages: []
 - answer_id: 20261018-115941-a2a512/pageindex/standard/all/base/q-042
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Aucun extrait renvoyé par le système, donc si pas de réponse on considère que c'est fidèle ?"
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
   answer: ''
   cited_anchors: []
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-004
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Même question que précédemment et même erreur"
   question: Quel droit paie le sel de Sarnoux selon la convention de douane ?
   reference_answer: Un denier par mesure
   answer: un denier
@@ -1484,8 +1484,8 @@ annotations:
     des parties, après un préavis de six mois. Toute révision exige l''accord des'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-004
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "La réponse est dans les extraits, mais incomplète"
   question: Quel droit paie le sel de Sarnoux selon la convention de douane ?
   reference_answer: Un denier par mesure
   answer: un denier
@@ -1505,8 +1505,8 @@ annotations:
   - df071d2eff588750#p3
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-011
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Surprenant qu'il y ait une erreur ici alors que la même question était bien répondue juste avant, d'autant qu'il y a bien un extrait permettant de répondre correctement à la question"
   question: Quel navire est le seul autorisé à transporter le courrier du Conseil des Quais ?
   reference_answer: La Grande Sève
   answer: Corvin Hasle Cormoran Gris
@@ -1581,7 +1581,7 @@ annotations:
     dans la Halle des Cordages. Les séances sont publiques, sauf pour les questions de quarantaine.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-011
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quel navire est le seul autorisé à transporter le courrier du Conseil des Quais ?
   reference_answer: La Grande Sève
@@ -1603,7 +1603,7 @@ annotations:
   - 2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-013
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Who is the keeper of the Lighthouse of Keld?
   reference_answer: Bram Oskelle
@@ -1684,7 +1684,7 @@ annotations:
     invités à ne pas sortir sans pilote.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-013
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Who is the keeper of the Lighthouse of Keld?
   reference_answer: Bram Oskelle
@@ -1703,7 +1703,7 @@ annotations:
   - 6deef3c9ac9a1007#h/bulletin-des-marees-de-port-ysel/consignes
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-016
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
@@ -1784,7 +1784,7 @@ annotations:
     les charpentiers de marine, les sauniers, les marchands, les pilotes et les gens de'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-016
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
@@ -1805,7 +1805,7 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/les-corporations
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-017
   criterion: correctness
-  verdict: ''
+  verdict: no
   note: ''
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
@@ -1885,7 +1885,7 @@ annotations:
     Lanterne, où l''on sert une soupe d''algues. Les mois n''ont pas de'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-017
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
@@ -1907,8 +1907,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-017
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Comme précédemment, il n'y a pas d'extrait avec la bonne réponse, ce que le système renvoie est cohérent avec les extraits"
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
   answer: lanterne
@@ -1929,8 +1929,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-019
   criterion: correctness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Il y a le bon extrait pour répondre, qui est assez clair d'ailleurs, mais la réponse est incorrecte quand même"
   question: Quel capitaine a proposé d'importer du chêne de Sarnoux, et qui lui a écrit à ce sujet ?
   reference_answer: Hadrien Velquor ; la cartographe Maëlis Torvane lui a écrit.
   answer: Maëlis Torvane
@@ -2023,7 +2023,7 @@ annotations:
     profonde, sépare Ormesse de Keld ; elle est la route la plus'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-019
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Quel capitaine a proposé d'importer du chêne de Sarnoux, et qui lui a écrit à ce sujet ?
   reference_answer: Hadrien Velquor ; la cartographe Maëlis Torvane lui a écrit.
@@ -2046,8 +2046,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-019
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Cependant la système cite bien une information d'un extrait"
   question: Quel capitaine a proposé d'importer du chêne de Sarnoux, et qui lui a écrit à ce sujet ?
   reference_answer: Hadrien Velquor ; la cartographe Maëlis Torvane lui a écrit.
   answer: Maëlis Torvane
@@ -2069,8 +2069,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-021
   criterion: correctness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "La moitié de la réponse est correcte, il manque une autre information importante"
   question: Qui a laissé entendre à Maëlis Torvane que la Compagnie financerait la moitié de la seconde
     cale sèche, et combien coûterait ce projet ?
   reference_answer: Tamsin Orrelle ; le projet coûterait quatre mille deniers.
@@ -2159,7 +2159,7 @@ annotations:
     révisé.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-021
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Qui a laissé entendre à Maëlis Torvane que la Compagnie financerait la moitié de la seconde
     cale sèche, et combien coûterait ce projet ?
@@ -2180,8 +2180,8 @@ annotations:
   - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/relations-avec-le-conseil
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-021
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Toutes les infos nécessaires étaient bien dans les extraits et pas d'hallucination hors extrait"
   question: Qui a laissé entendre à Maëlis Torvane que la Compagnie financerait la moitié de la seconde
     cale sèche, et combien coûterait ce projet ?
   reference_answer: Tamsin Orrelle ; le projet coûterait quatre mille deniers.
@@ -2201,8 +2201,8 @@ annotations:
   - 9c1249855783a0ca#h/la-compagnie-des-marees-grises/relations-avec-le-conseil
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-025
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Il y avait bien l'extrait nécessaire, il y a une erreur de calcul qui a été faite (on parle de 9, de 7 et de 2 en plus, la somme a peut-être été faite au mauvais endroit ?)"
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
   reference_answer: Deux sièges de plus
@@ -2291,8 +2291,8 @@ annotations:
     Sa charte, qui date de l''an'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-025
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "la valeur \"quatre\" est présente dans les extraits pour autre chose"
   question: Combien de sièges le Conseil des Quais compte-t-il de plus dans la charte de 1413 que dans
     celle de 1290 ?
   reference_answer: Deux sièges de plus
@@ -2319,7 +2319,7 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/le-conseil-des-quais
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-028
   criterion: correctness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -2404,7 +2404,7 @@ annotations:
     vallée de la Sève, qui cherchaient un abri'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-028
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -2430,8 +2430,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-028
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Bonne réponse avec le bon extrait"
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
     du Sud n'accepte que des barques de moins de vingt tonneaux.
@@ -2456,8 +2456,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-033
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Erreur surprenante, il y avait bien la réponse attendue dans l'extrait, et la réponse renvoyée par le système fait peu de sens dans l'absolu"
   question: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne
     ?
   reference_answer: L'édition de l'an 1409
@@ -2524,8 +2524,8 @@ annotations:
     l''atlas. Je n''ai pas osé lui avouer que j''ai perdu mon compas de laiton dans la baie de Sarnoux.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-033
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Techniquement \"S4\" se retrouve dans les extraits..."
   question: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne
     ?
   reference_answer: L'édition de l'an 1409
@@ -2546,8 +2546,8 @@ annotations:
   - e68bdc24912e7af7#h/journal-de-maelis-torvane/dernier-jour
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-036
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Est-ce que cette question a été posée au sein d'une conversation avec plus de contexte ? Elle fait peu de sens sinon"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: Néfaires de la charte de 1413
@@ -2609,8 +2609,8 @@ annotations:
     coûterait quatre mille deniers et serait financé à moitié par la Compagnie des Marées Grises.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-036
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Il n'y a pas de référence à des \"néfaires\" dans ces extraits."
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: Néfaires de la charte de 1413
@@ -2629,7 +2629,7 @@ annotations:
   - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-042
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
@@ -2720,8 +2720,8 @@ annotations:
     dans la Halle des Cordages. Les séances sont publiques, sauf pour les questions de quarantaine.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-042
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Il y a techniquement une mention d'un nombre 12 qui n'a pas grand chose à voir"
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
   answer: 12 jours
@@ -2749,8 +2749,8 @@ annotations:
   - 2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-044
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Les extraits ne contenaient pas la réponse. Je vois qu'il n'y avait pas d'extrait attendu dans cette partie du HTML, c'est pour dire que l'info n'existe pas dans le corpus ? Mais alors pourquoi y avait-il une réponse attendue ?"
   question: Qui succède à Tamsin Orrelle à la direction de la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Tamsin Orrelle
@@ -2821,7 +2821,7 @@ annotations:
     courrier du Conseil des Quais.'
 - answer_id: 20261018-115941-a2a512/rag-naif/standard/all/base/q-044
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Qui succède à Tamsin Orrelle à la direction de la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
@@ -2840,7 +2840,7 @@ annotations:
   - b690931e2d4ff220#h/registre-des-navires-de-port-ysel/regles
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-002
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: En quelle année le phare de Keld a-t-il été construit ?
   reference_answer: '1297'
@@ -2927,7 +2927,7 @@ annotations:
     vallée de la Sève, qui cherchaient un abri'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-002
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: En quelle année le phare de Keld a-t-il été construit ?
   reference_answer: '1297'
@@ -2953,7 +2953,7 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-016
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
@@ -3078,7 +3078,7 @@ annotations:
     - **Lifeboat**: The
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-016
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: For how many days must a suspect ship stay at anchor in Port-Ysel?
   reference_answer: Eleven days
@@ -3121,7 +3121,7 @@ annotations:
   - a478953867401217#h/charte-du-conseil-des-quais/seances
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-017
   criterion: correctness
-  verdict: ''
+  verdict: no
   note: ''
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
@@ -3201,7 +3201,7 @@ annotations:
     Lanterne, où l''on sert une soupe d''algues. Les mois n''ont pas de'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-017
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
@@ -3223,8 +3223,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-017
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Comme précédemment, il n'y a pas d'extrait avec la bonne réponse, ce que le système renvoie est cohérent avec les extraits. Pourquoi 3 fois de suite le même cas ?"
   question: Que marque le symbole de lanterne dans l'almanach des marées ?
   reference_answer: Les jours où le phare de Keld montre son feu à éclats.
   answer: lanterne
@@ -3245,8 +3245,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/societe/la-monnaie-et-les-mesures
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-020
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Comme précédemment, la réponse est bien présente dans les extraits. Cependant, peut-être que le format du tableau tel que remonté n'était pas très lisible"
   question: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Oswin Dacrel
@@ -3343,8 +3343,8 @@ annotations:
     profonde, sépare Ormesse de Keld ; elle est la route la plus'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-020
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Le système cite une information d'un extrait"
   question: Qui commande le caboteur lancé en 1412 pour la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Oswin Dacrel
@@ -3370,7 +3370,7 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/navigation/les-passes
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-028
   criterion: correctness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -3455,7 +3455,7 @@ annotations:
     vallée de la Sève, qui cherchaient un abri'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-028
   criterion: completeness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
@@ -3481,8 +3481,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-028
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Comme précédemment, bonne réponse avec le bon extrait"
   question: Quelle passe accepte les plus grands navires, la passe de l'Ouest ou la passe du Sud ?
   reference_answer: La passe de l'Ouest (hors Haute Eau, navires de plus de quarante tonneaux) ; la passe
     du Sud n'accepte que des barques de moins de vingt tonneaux.
@@ -3507,8 +3507,8 @@ annotations:
   - 1140331c18193a5d#h/atlas-de-l-archipel-de-vaelmor/histoire/la-fondation-de-port-ysel
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-029
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "La réponse était présente dans les extraits mais n'a pas été retrouvée"
   question: Quel jour le Conseil des Quais se réunit-il depuis la charte de 1413 ?
   reference_answer: Le quinze de chaque mois.
   answer: first day of the month
@@ -3576,8 +3576,8 @@ annotations:
     de port Oswin Dacrel remettra les prix. Une soupe d''algues sera servie à tous les participants.'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-029
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "le \"premier jour de chaque mois\" est bien mentionné pour autre chose. Surprenant qu'il soit renvoyé en anglais par le système cependant, car aucun extrait n'était en anglais"
   question: Quel jour le Conseil des Quais se réunit-il depuis la charte de 1413 ?
   reference_answer: Le quinze de chaque mois.
   answer: first day of the month
@@ -3598,8 +3598,8 @@ annotations:
   - 750a0563faf1fe1f#p1
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-033
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Comme précédemment, erreur surprenante, il y avait bien la réponse attendue dans l'extrait, et la réponse renvoyée par le système fait peu de sens dans l'absolu"
   question: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne
     ?
   reference_answer: L'édition de l'an 1409
@@ -3666,8 +3666,8 @@ annotations:
     l''atlas. Je n''ai pas osé lui avouer que j''ai perdu mon compas de laiton dans la baie de Sarnoux.'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-033
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "De même, techniquement \"S4\" est dans les extraits..."
   question: Quelle édition de l'almanach des marées contient une erreur sur la grande marée d'automne
     ?
   reference_answer: L'édition de l'an 1409
@@ -3688,8 +3688,8 @@ annotations:
   - e68bdc24912e7af7#h/journal-de-maelis-torvane/dernier-jour
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-036
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Même commentaire que pour la question précédente, identique"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: Néfaires de la charte de 1413
@@ -3751,8 +3751,8 @@ annotations:
     coûterait quatre mille deniers et serait financé à moitié par la Compagnie des Marées Grises.'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-036
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "De même, pas de mention de \"néfaires\". Est-ce un mot inventé d'ailleurs ?"
   question: Et avant cette révision ?
   reference_answer: Sept sièges
   answer: Néfaires de la charte de 1413
@@ -3771,7 +3771,7 @@ annotations:
   - c24a7ced54152a42#h/rapport-du-chantier-naval-de-port-ysel/perspectives
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-042
   criterion: completeness
-  verdict: ''
+  verdict: no
   note: ''
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
@@ -3862,8 +3862,8 @@ annotations:
     dans la Halle des Cordages. Les séances sont publiques, sauf pour les questions de quarantaine.'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-042
   criterion: faithfulness
-  verdict: ''
-  note: ''
+  verdict: yes
+  note: "Comme précédemment, il y a techniquement une mention d'un nombre 12 qui n'a pas grand chose à voir"
   question: Combien de temps un navire suspect doit-il rester en quarantaine à Port-Ysel ?
   reference_answer: Onze jours (et non quarante).
   answer: 12 jours
@@ -3891,8 +3891,8 @@ annotations:
   - 2e662a86a652e22c#h/charte-du-conseil-des-quais/seances
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-044
   criterion: completeness
-  verdict: ''
-  note: ''
+  verdict: no
+  note: "Même remarque que précédemment, les extraits ne contenaient pas la réponse. Je vois qu'il n'y avait pas d'extrait attendu dans cette partie du HTML, c'est pour dire que l'info n'existe pas dans le corpus ? Mais alors pourquoi y avait-il une réponse attendue ?"
   question: Qui succède à Tamsin Orrelle à la direction de la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
   answer: Tamsin Orrelle
@@ -3963,7 +3963,7 @@ annotations:
     courrier du Conseil des Quais.'
 - answer_id: 20261018-115941-a2a512/raptor/standard/all/base/q-044
   criterion: faithfulness
-  verdict: ''
+  verdict: yes
   note: ''
   question: Qui succède à Tamsin Orrelle à la direction de la Compagnie des Marées Grises ?
   reference_answer: Ilsa Marenne
