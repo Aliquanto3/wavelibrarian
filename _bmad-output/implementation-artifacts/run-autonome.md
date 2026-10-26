@@ -119,3 +119,5 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 10:51 · 9.4 · fusion · suite complète 1406 passed (7 min 53) après rebase sur 9.9 et 9.10, fast-forward · 5d375a0
 - 2026-10-26 10:51 · 9.12 · décision · préparée : paquet de 25 lignes (--depuis anael.yaml, graine 9), page, Expérience de calibration à 2 passes (minimum du schéma), consigne · 
 - 2026-10-26 10:51 · 9.12 · attente humaine · second annotateur · 
+- 2026-10-26 11:02 · 9.11 · report · reportée par Anaël (Ollama non utilisé) ; code (9.7) et Expérience prêts · 
+- 2026-10-26 11:02 · lot · décision · run clos : 10 stories sur 11 du périmètre livrées, 9.11 reportée, 9.12 préparée ; guide de recette recette-v0.3.0.md ; main poussé · 
