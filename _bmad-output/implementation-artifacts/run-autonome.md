@@ -82,3 +82,24 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 09:44 · 9.6+9.8 · décision · double de test corrigé (test seul), test relancé vert · e48ac4f
 - 2026-10-26 09:44 · 9.6 · fusion · fast-forward · 65acfc5
 - 2026-10-26 09:44 · 9.8 · fusion · fast-forward · e48ac4f
+- 2026-10-26 09:52 · 9.3 · dev · fini · 920da8f
+- 2026-10-26 09:52 · 9.3 · second-avis · lancé · 
+- 2026-10-26 09:52 · 9.4 · dev · lancé (Sonnet, depuis story/9-3) · 
+- 2026-10-26 09:52 · 9.5 · dev · lancé (Sonnet, depuis story/9-3) · 
+- 2026-10-26 09:52 · 9.5 · décision · bascule de mini-cpu et lazy-seuil-cpu sur Opus commitée par l'orchestrateur après la 9.9 (opus.json absent avant), pour garder main vert · 
+- 2026-10-26 09:56 · 9.3 · second-avis · 2 medium (majorité sur les passes ; Exécutions v0.2.0 non corrigées sans rejugement), 3 low ; rien de high · 
+- 2026-10-26 09:56 · 9.3 · décision · règle de majorité « voix confondues » gardée (passes: 1 livré), consignée ; anciennes Exécutions corrigées par wl rejuger seulement · 
+- 2026-10-26 09:56 · 9.3 · review · lancé (Opus) · 
+- 2026-10-26 10:00 · 9.5 · dev · fini (code ; bascule YAML après 9.9) · 6b88688
+- 2026-10-26 10:00 · 9.5 · second-avis · lancé · 
+- 2026-10-26 10:03 · 9.5 · second-avis · 1 medium (kappa exigé sur correctness même non jugé), 5 low ; rien de high · 
+- 2026-10-26 10:03 · 9.5 · review · lancé (Opus) · 
+- 2026-10-26 10:07 · 9.4 · dev · fini ; cible -50 % non atteinte (-4,7 % sur le run réel : les Passages n'étaient déjà pas répétés, la mesure de départ de l'epic était fausse) · 1d297e1
+- 2026-10-26 10:07 · 9.4 · second-avis · lancé · 
+- 2026-10-26 10:10 · 9.3 · review · 2 low corrigés (non jugés sans Corpus, tableau de contrats), comptes na au Rapport de calibration · 2ed872c
+- 2026-10-26 10:11 · 9.4 · second-avis · 1 medium (verdict vidé non signalé), 6 low ; dédup des Passages possible seulement à contenu identique · 
+- 2026-10-26 10:11 · 9.4 · décision · table de Passages partagée par contenu, aucune troncature ; écart à la cible -50 % soumis à Anaël en recette s'il reste · 
+- 2026-10-26 10:11 · 9.4 · review · lancé (Opus) · 
+- 2026-10-26 10:11 · 9.5 · review · 2 low corrigés (exclu en tête sauté, mention par Configuration), 3 Critères toujours exigés (validation sans Questions), contrats §4.4 · 251ff1b
+- 2026-10-26 10:19 · 9.3 · fusion · suite complète 1348 passed (7 min 55), fast-forward · 2ed872c
+- 2026-10-26 10:19 · 9.9 · décision · calibration-opus.yaml : Opus + Haiku (wl calibrer exige 2 Juges ; Haiku ~0,05 $), 5 passes, plafond 5 $ au lieu de 4 $ (A2) d'après le coût mesuré en 8.11 · 

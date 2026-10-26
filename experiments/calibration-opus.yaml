@@ -1,0 +1,40 @@
+# Calibration du Juge principal (story 9.9, lot v0.3.0) : `claude-opus-5-5` recalibré après la
+# justification courte (9.2) et la modalité « sans objet » (9.3), qui changent le prompt et le
+# schéma des Juges. `claude-haiku-5-5` (quelques centimes) l'accompagne : `wl calibrer` exige un
+# Panel admissible de 2 Juges, et ses kappas restent utiles à titre de comparaison. 5 passes
+# (FR-38). Annotations d'Anaël sur l'Exécution de mini-cpu (story 8.8). Seule l'API Anthropic est
+# sollicitée ; plafond de 5,00 USD (coût mesuré en 8.11 : ~0,65 USD par passe d'Opus). Ne pas
+# lancer `wl run` sur ce fichier. Résultat versionné : corpora/minicorpus/calibration/opus.json.
+experiment_id: calibration-opus
+seed: 42
+profile: cpu
+corpus: ../corpora/minicorpus/corpus.yaml
+questions: ../corpora/minicorpus/questions.yaml
+split: dev
+conditions: [standard]
+judges:
+  pool: ["claude-opus-5-5", "claude-haiku-5-5"]
+  panel_size: 2
+  calibration_passes: 5
+budget:
+  per_run: {anthropic: {amount: "5.00", currency: USD}}
+configurations:
+  - id: bm25
+    architecture: bm25_only
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: rag-naif
+    architecture: naive_rag
+    params:
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: raptor
+    architecture: raptor
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
+  - id: pageindex
+    architecture: pageindex
+    params:
+      summary_model: "minicpm5:1b-q4_k_m"
+      select_model: "granite4.2:3b"
+      generator: {name: llm, params: {model: "minicpm5:1b-q4_k_m"}}
