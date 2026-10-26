@@ -210,3 +210,21 @@ def test_calibration_fidelite_na_sans_appel_et_accords_na_comptes(
         assert fiche["criteria"]["completeness"]["na_agreements"] == 0
     brut = _lignes(tmp_path / "cal_verdicts.jsonl")
     assert all(v["verdict"] in ("yes", "no", "na") for x in brut for v in x["verdicts"].values())
+
+
+def test_rejugement_produit_les_na_de_fidelite(
+    run: tuple[Path, Path, list[tuple[str, tuple[str, ...]]]], wl_home: Path
+) -> None:
+    """`wl rejuger` (story 9.6) passe par `juger` : une abstention y reçoit aussi `na` sans Juge."""
+    exp, source, appels = run
+    appels.clear()
+    _wl("rejuger", source.name, str(exp))
+    (cible,) = [d for d in (wl_home / "runs").iterdir() if d.is_dir() and d != source]
+    reponses = read_answers(cible)
+    muettes = {a.answer_id for a in reponses.values() if a.config_id == "sans-contexte"}
+    textes_muets = {reponses[a].text for a in muettes}
+    assert appels and all("faithfulness" not in c for t, c in appels if t in textes_muets)
+    verdicts, panel = read_verdicts(cible), read_panel(cible)
+    for aid in muettes:
+        assert verdicts[(aid, "auto", "faithfulness", 0)].verdict == "na"
+        assert panel[(aid, "faithfulness")].verdict == "na"
