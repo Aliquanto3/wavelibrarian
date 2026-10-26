@@ -78,3 +78,7 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 09:33 · 9.7 · fusion · suite complète de la pile 1285 passed (10 min 20), fast-forward · 05eb5b5
 - 2026-10-26 09:33 · 9.1 · fusion · même pile · a9819d0
 - 2026-10-26 09:33 · 9.6+9.8 · décision · pile 9.6 puis 9.8 rebasée sur main (sans conflit), une suite complète · 
+- 2026-10-26 09:44 · 9.6+9.8 · CI · rouge : 1 failed (test_installer, double sans max_error_rate après refactor _conclure), 1319 passed · 
+- 2026-10-26 09:44 · 9.6+9.8 · décision · double de test corrigé (test seul), test relancé vert · e48ac4f
+- 2026-10-26 09:44 · 9.6 · fusion · fast-forward · 65acfc5
+- 2026-10-26 09:44 · 9.8 · fusion · fast-forward · e48ac4f
