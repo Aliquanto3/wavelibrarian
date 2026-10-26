@@ -4,9 +4,9 @@ Ajouter un rôle modifie ce module et `llm/providers/fake.py` dans la même stor
 """
 
 from dataclasses import dataclass
-from typing import Any, Literal, get_args
+from typing import Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.ports.gateway import LLMRequest, LLMRole
@@ -22,9 +22,24 @@ class GenerateOutput(_Sortie):
     abstain: bool
 
 
+JUSTIFICATION_MAX = 200  # caractères (story 9.2) ; au-delà, troncature avec « … »
+
+
+def tronquer_justification(texte: Any) -> Any:
+    """Tronque une justification à `JUSTIFICATION_MAX` caractères au plus, « … » compris."""
+    if isinstance(texte, str) and len(texte) > JUSTIFICATION_MAX:
+        return texte[: JUSTIFICATION_MAX - 1].rstrip() + "…"
+    return texte
+
+
 class CriterionVerdict(_Sortie):
+    # `verdict` avant `justification` : l'ordre des propriétés du schéma émis (décider d'abord).
+    # La troncature précède la contrainte `maxLength` (schéma envoyé aux providers) : une
+    # justification trop longue n'est pas non conforme.
     verdict: Literal["yes", "no"]
-    justification: str
+    justification: Annotated[
+        str, Field(max_length=JUSTIFICATION_MAX), BeforeValidator(tronquer_justification)
+    ]
 
 
 class JudgeOutput(_Sortie):

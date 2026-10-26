@@ -117,6 +117,57 @@ def test_faithfulness_reprend_les_textes_du_generator(env: Env) -> None:
     assert "Texte A" not in sans.messages[0].content
 
 
+def test_prompt_demande_decision_puis_une_phrase_de_200_caracteres() -> None:
+    from wavelibrarian.components.judges.llm import _SYSTEM
+
+    assert "décide d'abord" in _SYSTEM
+    assert "une seule phrase de 200 caractères au plus" in _SYSTEM
+    assert "sans délibération" in _SYSTEM
+
+
+def _sortie_longue(criteres: list[str], longueur: int) -> str:
+    return json.dumps(
+        {
+            "verdicts": {
+                c: {"verdict": "no", "justification": "Hmm, voyons. " * longueur} for c in criteres
+            }
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "cas",
+    [
+        ("q-044", "rag-naif", ["correctness", "completeness", "faithfulness"]),
+        ("q-044", "raptor", ["correctness", "completeness", "faithfulness"]),
+        ("q-017", "pageindex", ["correctness", "completeness"]),
+    ],
+)
+def test_sorties_tronquees_de_la_8_8_rejouees_ne_sont_plus_non_conformes(
+    env: Env, cas: tuple[str, str, list[str]]
+) -> None:
+    question_id, _config, criteres = cas
+    env.sortie = _sortie_longue(criteres, 100)  # ~1300 caractères par justification
+    with env.ctx.scope(post="judging", question_id=question_id):
+        res = env.juge().judge(ITEM, criteres, pass_id=0)  # type: ignore[arg-type]
+    assert len(env.requetes) == 1  # pas de nouvel essai
+    assert set(res) == set(criteres)
+    for verdict, justification in res.values():
+        assert verdict is False
+        assert len(justification) == 200 and justification.endswith("…")
+        assert justification.startswith("Hmm, voyons. Hmm")
+
+
+def test_troncature_bornes_exactes() -> None:
+    from wavelibrarian.llm.roles import JUSTIFICATION_MAX, CriterionVerdict
+
+    assert JUSTIFICATION_MAX == 200
+    exact = "a" * 200
+    assert CriterionVerdict(verdict="yes", justification=exact).justification == exact
+    tronque = CriterionVerdict(verdict="yes", justification="a" * 201).justification
+    assert tronque == "a" * 199 + "…" and len(tronque) == 200
+
+
 def test_budget_de_sortie_couvre_les_sorties_observees(env: Env) -> None:
     from wavelibrarian.components.judges.llm import budget_sortie
 

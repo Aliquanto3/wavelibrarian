@@ -508,7 +508,7 @@ Le Faux LLM ne lit jamais le texte du prompt : il lit `LLMRequest.inputs`, dont 
 | Rôle | `inputs` (clés obligatoires) | Schéma de sortie | Comportement du Faux LLM |
 | --- | --- | --- | --- |
 | `generate` | `question`, `blocks: {label: texte}` | `{"answer": str, "citations": ["S1", ...], "abstain": bool}` | Première phrase du bloc `S1` et citation `S1`. `blocks` vide : `abstain: true` |
-| `judge` | `question`, `reference_answer`, `answer`, `criteria: [..]` | `{"verdicts": {"<criterion>": {"verdict": "yes"\|"no", "justification": str}}}` | `yes` si la réponse partage au moins 50 % des mots de la référence, sinon `no` |
+| `judge` | `question`, `reference_answer`, `answer`, `criteria: [..]` | `{"verdicts": {"<criterion>": {"verdict": "yes"\|"no", "justification": str (≤ 200 car., tronquée avec « … » au-delà)}}}` | `yes` si la réponse partage au moins 50 % des mots de la référence, sinon `no` |
 | `rewrite`, `hyde`, `summarize`, `closed_book`, `community_report`, `global_map` | `text` (question, ou textes à résumer joints) | texte libre (`complete`) | `rewrite` et `closed_book` : renvoie `text` inchangé ; le Filtre closed-book retire de la réponse la question recopiée (`sans_question`), une question n'est donc jamais contaminée par le faux. Les autres : les 30 premiers mots de `text` |
 | `extract_entities` | `text` | `{"entities": [{"name","kind","description"}], "relations": [{"source","target","description","weight"}]}` | Séquences de mots capitalisés, relation entre entités voisines |
 | `select_nodes` | `question`, `nodes: [{id, title, summary}]`, `max` | `{"node_ids": [str], "done": bool}` | Les `max` premiers nœuds dont le titre ou le résumé partage un mot avec la question |

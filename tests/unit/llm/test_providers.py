@@ -541,6 +541,28 @@ def test_ollama_schema_des_juges_sans_ref_ni_defs_et_think_desactive() -> None:
     assert corps["think"] is False
 
 
+def test_ollama_format_des_juges_porte_maxlength_et_verdict_avant_justification() -> None:
+    """Story 9.2 : la grammaire (`format`) borne la justification ; décider avant de justifier."""
+    from wavelibrarian.components.judges.llm import _schema
+
+    schema = _schema(["correctness"]).model_json_schema()
+    t = Transport(_ollama_contenu("{}"))
+    _ollama(t).complete(_req(MINICPM), timeout_s=5, output_schema=schema)
+    verdict = t.body()["format"]["properties"]["verdicts"]["properties"]["correctness"]
+    assert list(verdict["properties"]) == ["verdict", "justification"]
+    assert verdict["properties"]["justification"]["maxLength"] == 200
+    assert verdict["required"] == ["verdict", "justification"]
+
+
+def test_anthropic_outil_des_juges_porte_maxlength() -> None:
+    from wavelibrarian.components.judges.llm import _schema
+
+    schema = _schema(["correctness"]).model_json_schema()
+    outil = AnthropicProvider.native_request(_req(), schema)["tools"][0]["input_schema"]
+    defs = outil["$defs"]["CriterionVerdict"]["properties"]
+    assert defs["justification"]["maxLength"] == 200 and list(defs) == ["verdict", "justification"]
+
+
 def test_ollama_retire_les_blocs_think_et_la_cloture_markdown() -> None:
     schema = Sortie.model_json_schema()
     brut = '<think>\nje réfléchis {"x": 1}\n</think>\n```json\n{"reponse": "Paris"}\n```'

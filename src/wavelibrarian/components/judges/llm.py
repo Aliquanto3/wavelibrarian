@@ -7,16 +7,17 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, create_model
 
 from wavelibrarian.core.types import Criterion, ModelRefMeta
-from wavelibrarian.llm.roles import CriterionVerdict
+from wavelibrarian.llm.roles import JUSTIFICATION_MAX, CriterionVerdict
 from wavelibrarian.ports.components import JudgeInput
 from wavelibrarian.ports.gateway import LLMRequest, Message
 from wavelibrarian.registry import register
 
 _SYSTEM = (
-    "Tu es un juge impartial. Pour chaque critère demandé, réponds par yes ou no et une "
-    "justification courte. correctness : la réponse est exacte au regard de la référence. "
-    "completeness : elle couvre tous les points de la référence. faithfulness : tout ce qu'elle "
-    "affirme se trouve dans le contexte fourni au générateur. Réponds en JSON : "
+    "Tu es un juge impartial. Pour chaque critère demandé, décide d'abord : réponds par yes ou no, "
+    f"puis donne une justification d'une seule phrase de {JUSTIFICATION_MAX} caractères au plus, "
+    "sans délibération ni hésitation. correctness : la réponse est exacte au regard de la "
+    "référence. completeness : elle couvre tous les points de la référence. faithfulness : tout "
+    "ce qu'elle affirme se trouve dans le contexte fourni au générateur. Réponds en JSON : "
     '{"verdicts": {"<critère>": {"verdict": "yes"|"no", "justification": "..."}}}.'
 )
 # Budget de sortie : 200 tokens par Critère + 100 de structure JSON. Run 8.8 : 48 sorties coupées à
