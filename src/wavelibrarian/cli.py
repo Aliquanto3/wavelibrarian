@@ -227,8 +227,14 @@ def rejuger(
     """Rejuge les Réponses d'une Exécution terminée avec le Panel d'une Expérience, sans les
     regénérer (story 9.6) : nouvelle Exécution `rejudged_from: <run_id>`, puis Rapport.
 
+    Le Catalogue peut avoir changé ; le Jeu ne peut différer du Gel de la source que par le
+    `split` des Questions. Les Réponses `error` de la source sont recopiées : `--reprendre` ne les
+    corrige pas, il faut un nouveau `wl run`.
+
     Codes de sortie : ceux de `wl run` ; 2 si l'Expérience diffère de la source ailleurs que
-    dans `judges`, `budget` ou `max_error_rate`, ou si la source n'est pas terminée.
+    dans `judges`, `budget` ou `max_error_rate` (Catalogue mis à part), si le contenu du Jeu a
+    changé, si une Question du split courant n'a pas de Réponse dans la source, ou si la source
+    n'est pas terminée.
     """
     try:
         resultat = validate_file(experience)

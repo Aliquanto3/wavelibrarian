@@ -67,8 +67,8 @@ def _wl(*args: str, code: int = 0) -> Any:
     return res
 
 
-def _source(tmp_path: Path, jeu: Path, wl_home: Path) -> Path:
-    _wl("run", str(_experience(tmp_path, jeu, "source.yaml")))
+def _source(tmp_path: Path, jeu: Path, wl_home: Path, **champs: Any) -> Path:
+    _wl("run", str(_experience(tmp_path, jeu, "source.yaml", **champs)))
     (dossier,) = [d for d in (wl_home / "runs").iterdir() if d.is_dir()]
     return dossier
 
@@ -186,11 +186,12 @@ def _sortir_du_dev(questions: Path, qid: str) -> None:
 def test_question_hors_split_courant_ecartee_et_listee(
     tmp_path: Path, jeu: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = _source(tmp_path, jeu, wl_home)
+    # Tout le split dev, comme mini-cpu : sortir une Question ne fait entrer aucune autre.
+    source = _source(tmp_path, jeu, wl_home, max_questions=None)
     reponses = read_answers(source)
     sortie = sorted(a.question_id for a in reponses.values())[0]
     _sortir_du_dev(jeu / "questions.yaml", sortie)
-    exp = _experience(tmp_path, jeu, "source.yaml")  # même Expérience : Gel seul différent
+    exp = _experience(tmp_path, jeu, "source.yaml", max_questions=None)  # Gel seul différent
 
     # `wl run --reprendre` reste refusé sur l'ancien Gel (limite (iii) de fix-arbitrages-8-3-8-8).
     refus = _wl("run", str(exp), "--reprendre", source.name, code=2)
@@ -323,3 +324,101 @@ def test_juge_en_echec_donne_completed_with_errors(
     _wl("rejuger", source.name, str(exp), "--reprendre", cible.name)
     assert _manifeste(cible)["status"] == "completed"
     assert _manifeste(cible)["unjudged"] == 0
+
+
+# --- Revue : Catalogue changé, contenu du Jeu, source sans Réponse, --tolerer-erreurs ---------
+
+
+def _regeler(questions: Path, qid: str, **champs: Any) -> None:
+    """Modifie la Question `qid` puis re-Gèle le Jeu."""
+    doc = io.load(questions)
+    nouvelles = [q.model_copy(update=champs) if q.id == qid else q for q in doc.questions]
+    doc = doc.model_copy(update={"questions": tuple(nouvelles)})
+    assert doc.freeze is not None
+    gel = doc.freeze.model_copy(update={"sha256": empreinte(doc)})
+    io.save(questions, doc.model_copy(update={"freeze": gel}))
+
+
+def test_catalogue_et_chemins_changes_acceptes(
+    tmp_path: Path, jeu: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cas de la 9.10 : le Catalogue (fichier, date, gel des modèles) a changé depuis la source,
+    et le Corpus a changé de chemin sans changer de contenu."""
+    source = _source(tmp_path, jeu, wl_home)
+    resolue = source / "experiment.resolved.yaml"
+    donnees = yaml.safe_load(resolue.read_text(encoding="utf-8"))
+    donnees |= {
+        "catalog_date": "2026-10-01",
+        "models_frozen_at": "2026-10-01",
+        "corpus": "C:/ailleurs/minicorpus/corpus.yaml",
+    }
+    resolue.write_text(yaml.safe_dump(donnees, allow_unicode=True), encoding="utf-8")
+    catalogue = tmp_path / "models-2.yaml"
+    texte = (jeu / "models.yaml").read_text(encoding="utf-8")
+    catalogue.write_text(texte + "  - <<: *fake_llm\n    id: fake-llm-e\n", encoding="utf-8")
+    _avec_faux(monkeypatch, _faux())
+    exp = _experience(tmp_path, jeu, "rejuge.yaml", judges=AUTRES_JUGES, catalog=str(catalogue))
+    _wl("rejuger", source.name, str(exp))
+    (cible,) = _autres(wl_home, source)
+    assert (cible / "answers.jsonl").read_bytes() == (source / "answers.jsonl").read_bytes()
+    assert _manifeste(cible)["status"] == "completed"
+
+
+def test_differences_nomme_les_cles_d_une_section(tmp_path: Path, jeu: Path) -> None:
+    base = validate_file(_experience(tmp_path, jeu, "a.yaml")).resolved
+    retries = base.retries.model_copy(update={"max_attempts": 3})
+    assert differences(base, base.model_copy(update={"retries": retries})) == [
+        "retries.max_attempts"
+    ]
+    contexte = {"catalog": "x.yaml", "questions": "y.yaml", "corpus": "z.yaml"}
+    assert differences(base, base.model_copy(update=contexte)) == []
+
+
+def test_refus_contenu_d_une_question_gardee_modifie(
+    tmp_path: Path, jeu: Path, wl_home: Path
+) -> None:
+    source = _source(tmp_path, jeu, wl_home)
+    gardee = sorted(a.question_id for a in read_answers(source).values())[0]
+    _regeler(jeu / "questions.yaml", gardee, reference_answer="autre chose")
+    exp = _experience(tmp_path, jeu, "rejuge.yaml", judges=AUTRES_JUGES)
+    res = _wl("rejuger", source.name, str(exp), code=2)
+    assert "diffère du Gel de l'Exécution" in res.output
+    assert _autres(wl_home, source) == []
+
+
+def test_refus_question_entree_dans_le_split_sans_reponse(
+    tmp_path: Path, jeu: Path, wl_home: Path
+) -> None:
+    """Avec `max_questions`, sortir une Question du dev en fait entrer une autre, jamais posée."""
+    source = _source(tmp_path, jeu, wl_home)
+    posees = sorted({a.question_id for a in read_answers(source).values()})
+    _sortir_du_dev(jeu / "questions.yaml", posees[0])
+    exp = _experience(tmp_path, jeu, "rejuge.yaml", judges=AUTRES_JUGES)
+    res = _wl("rejuger", source.name, str(exp), code=2)
+    assert "sans Réponse dans l'Exécution" in res.output
+    assert _autres(wl_home, source) == []
+
+
+def test_refus_source_sans_reponse(tmp_path: Path, jeu: Path, wl_home: Path) -> None:
+    source = _source(tmp_path, jeu, wl_home)
+    (source / "answers.jsonl").unlink()
+    exp = _experience(tmp_path, jeu, "rejuge.yaml", judges=AUTRES_JUGES)
+    assert "sans Réponse : rien à rejuger" in _wl("rejuger", source.name, str(exp), code=2).output
+    assert _autres(wl_home, source) == []
+
+
+def test_tolerer_erreurs_sur_un_rejugement(
+    tmp_path: Path, jeu: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = _source(tmp_path, jeu, wl_home)
+
+    def d_en_echec(request: LLMRequest) -> str:
+        if request.model_id == "fake-llm-d":
+            return "pas du JSON"
+        return default_output(request.role, request.inputs)
+
+    _avec_faux(monkeypatch, _faux(d_en_echec))
+    exp = _experience(tmp_path, jeu, "rejuge.yaml", judges=AUTRES_JUGES)
+    _wl("rejuger", source.name, str(exp), "--tolerer-erreurs")
+    (cible,) = _autres(wl_home, source)
+    assert _manifeste(cible)["status"] == "completed_with_errors"

@@ -8,9 +8,12 @@ jugement de `wl run` (`_Runner.juger`). Les Réponses gardent leur `answer_id` (
 `run_id` source) : leurs lignes sont copiées octet pour octet, et les annotations humaines faites
 sur la source s'y rapportent toujours.
 
-Seuls `judges`, `budget` et `max_error_rate` peuvent différer de l'Expérience de la source ; le Gel
-du Jeu peut différer (c'est l'usage : rejuger après un re-Gel), les Questions sorties du split
-courant sont alors écartées et listées (`excluded_questions`).
+Seuls `judges`, `budget` et `max_error_rate` peuvent différer de l'Expérience de la source. Le
+Catalogue (`catalog`, `catalog_date`, `models_frozen_at`) peut changer : seuls les Juges sont
+rappelés, les coûts de génération copiés sont ceux des spans de la source. Le Corpus, le Scénario
+et le Jeu sont comparés par leur contenu, pas par leur chemin. Le Gel du Jeu peut différer par le
+seul `split` des Questions (c'est l'usage : rejuger après un re-Gel) ; les Questions sorties du
+split courant sont alors écartées et listées (`excluded_questions`).
 """
 
 import json
@@ -25,6 +28,8 @@ from wavelibrarian.core.bilan import causes_execution
 from wavelibrarian.core.errors import BudgetExceeded, ConfigError
 from wavelibrarian.core.ids import canonical_json, new_run_id, sha16
 from wavelibrarian.corpus.declare import declare
+from wavelibrarian.evalset import io as jeu_io
+from wavelibrarian.evalset.freeze import PARTICIPANTES, empreinte
 from wavelibrarian.llm.gateway import Providers
 from wavelibrarian.runner.context import Context
 from wavelibrarian.runner.execute import (
@@ -32,6 +37,7 @@ from wavelibrarian.runner.execute import (
     RunOutcome,
     RunStatus,
     _Runner,  # pyright: ignore[reportPrivateUsage]
+    load_questions,
     panels_de,
 )
 from wavelibrarian.runner.resume import (
@@ -54,9 +60,16 @@ log = logging.getLogger(__name__)
 
 # Seules sections de l'Expérience qui peuvent différer de la source (AC 2 de la story 9.6).
 MODIFIABLES = ("judges", "budget", "max_error_rate")
-# Empreintes d'entrée comparées à la source ; le Catalogue peut changer (tarif ou nouveau Juge) :
-# les coûts de génération copiés sont ceux écrits dans les spans de la source.
-_ENTREES = {"corpus_fingerprint": "le Corpus", "scenario_fingerprint": "le Scénario"}
+# Le Catalogue peut changer (tarif, nouveau Juge, date de gel des modèles) : les coûts de
+# génération copiés sont ceux écrits dans les spans de la source.
+_CATALOGUE = ("catalog", "catalog_date", "models_frozen_at")
+# Chemins comparés par leur contenu dans `verifier_source` (empreintes `inputs`, Gel du Jeu).
+_PAR_CONTENU = ("corpus", "questions", "scenario")
+_IGNOREES = MODIFIABLES + _CATALOGUE + _PAR_CONTENU
+_ENTREES = {
+    "corpus_fingerprint": ("corpus", "le Corpus"),
+    "scenario_fingerprint": ("scenario", "le Scénario"),
+}
 _SOURCES_ADMISES = ("completed", "completed_with_errors")
 
 
@@ -88,12 +101,17 @@ def _manifeste(dossier: Path, champ: str) -> dict[str, Any]:
 
 
 def differences(source: ResolvedExperiment, demandee: ResolvedExperiment) -> list[str]:
-    """Sections de l'Expérience résolue qui diffèrent, hors `MODIFIABLES` ; une Configuration
-    différente est nommée avec ses champs (`configurations.bm25.generator`)."""
+    """Sections de l'Expérience résolue qui diffèrent, hors `MODIFIABLES`, Catalogue et chemins
+    comparés par contenu ; une Configuration différente est nommée avec ses champs
+    (`configurations.bm25.generator`), une autre section avec ses clés (`costs.pue`)."""
     a, b = source.model_dump(mode="json"), demandee.model_dump(mode="json")
     ecarts: list[str] = []
     for cle in sorted(set(a) | set(b)):
-        if cle in MODIFIABLES or a.get(cle) == b.get(cle):
+        if cle in _IGNOREES or a.get(cle) == b.get(cle):
+            continue
+        va, vb = a.get(cle), b.get(cle)
+        if isinstance(va, dict) and isinstance(vb, dict):
+            ecarts += [f"{cle}.{k}" for k in sorted(set(va) | set(vb)) if va.get(k) != vb.get(k)]
             continue
         if cle != "configurations":
             ecarts.append(cle)
@@ -113,11 +131,37 @@ def differences(source: ResolvedExperiment, demandee: ResolvedExperiment) -> lis
     return ecarts
 
 
+def _jeu_conforme(experience: ResolvedExperiment, gel_source: object, posees: set[str]) -> bool:
+    """Le Jeu courant ne diffère-t-il du Gel `gel_source` que par le `split` des Questions ?
+
+    La source ne garde que l'empreinte de son Gel (contenu et `split` mêlés) : on rend aux
+    Questions le `split` qu'elles avaient pour la source (`posees`, celles qu'elle a posées, dans
+    `experience.split` ; les autres Questions participantes de ce split, dans l'autre) et on
+    recalcule l'empreinte. Avec `max_questions`, les Questions non posées gardent leur `split`."""
+    doc = jeu_io.load(Path(experience.questions))
+    if doc.freeze is not None and doc.freeze.sha256 == gel_source:
+        return True
+    autre = "test" if experience.split == "dev" else "dev"
+    remises = tuple(
+        q.model_copy(update={"split": experience.split})
+        if q.id in posees
+        else q.model_copy(update={"split": autre})
+        if experience.max_questions is None
+        and q.split == experience.split
+        and q.status in PARTICIPANTES
+        else q
+        for q in doc.questions
+    )
+    return empreinte(doc.model_copy(update={"questions": remises})) == gel_source
+
+
 def verifier_source(experience: ResolvedExperiment, wl_home: Path, source_id: str) -> Source:
     """Contrôles avant tout appel ; `ConfigError` (code 2) sinon. `experience` a ses parsers
-    résolus. La source doit être terminée (`completed` ou `completed_with_errors`) ; l'Expérience
-    ne peut différer que par `judges`, `budget` et `max_error_rate` ; le Corpus et le Scénario
-    (contenu) doivent être ceux de la source."""
+    résolus. La source doit être terminée (`completed` ou `completed_with_errors`) et avoir des
+    Réponses ; l'Expérience ne peut différer que par `judges`, `budget`, `max_error_rate` et le
+    Catalogue ; le Corpus et le Scénario (contenu) doivent être ceux de la source ; le Jeu courant
+    ne peut différer du Gel de la source que par le `split`, et chaque Question du split courant
+    doit avoir une Réponse dans la source."""
     dossier = _dossier(wl_home, source_id, "rejuger")
     manifeste = _manifeste(dossier, "rejuger")
     statut = manifeste.get("status")
@@ -125,21 +169,45 @@ def verifier_source(experience: ResolvedExperiment, wl_home: Path, source_id: st
         raise ConfigError(
             "rejuger", f"Exécution {source_id} non terminée (statut {statut}) : rien à rejuger"
         )
-    ecarts = differences(charger_resolue(dossier), experience)
+    resolue = charger_resolue(dossier)
+    ecarts = differences(resolue, experience)
+    brutes = manifeste.get("inputs")
+    stockees: dict[str, Any] = brutes if isinstance(brutes, dict) else {}
+    if (resolue.scenario is None) != (experience.scenario is None):
+        ecarts.append("scenario")
+    for cle, (champ, _) in _ENTREES.items():  # sans empreinte stockée : le chemin
+        if cle not in stockees and getattr(resolue, champ) != getattr(experience, champ):
+            ecarts.append(champ)
     if ecarts:
         raise ConfigError(
             "rejuger",
-            f"l'Expérience diffère de celle de l'Exécution {source_id} : {', '.join(ecarts)} "
-            f"(seuls {', '.join(MODIFIABLES)} peuvent changer)",
+            f"l'Expérience diffère de celle de l'Exécution {source_id} : "
+            f"{', '.join(sorted(set(ecarts)))} (seuls {', '.join(MODIFIABLES)} peuvent changer)",
         )
-    stockees = manifeste.get("inputs")
-    if isinstance(stockees, dict):
+    if stockees:
         actuelles = empreintes_entrees(experience, wl_home)
-        for cle, quoi in _ENTREES.items():
+        for cle, (_, quoi) in _ENTREES.items():
             if stockees.get(cle) != actuelles.get(cle):
                 raise ConfigError(
                     "rejuger", f"{quoi} n'est plus celui de l'Exécution {source_id} ({cle})"
                 )
+    posees = {o["question_id"] for _, o in reponses_source(dossier).values()}
+    if not posees:
+        raise ConfigError("rejuger", f"Exécution {source_id} sans Réponse : rien à rejuger")
+    courantes = {q.id for q in load_questions(experience).questions}
+    if manquantes := sorted(courantes - posees):
+        raise ConfigError(
+            "rejuger",
+            f"Questions du split {experience.split} courant sans Réponse dans l'Exécution "
+            f"{source_id} (wl run les pose) : {', '.join(manquantes)}",
+        )
+    if not _jeu_conforme(experience, manifeste.get("freeze_sha256"), posees):
+        raise ConfigError(
+            "rejuger",
+            f"le Jeu {experience.questions} diffère du Gel de l'Exécution {source_id} au-delà "
+            "du split des Questions (texte, référence, Ancrages…) : ses Réponses ne se "
+            "rejugent pas",
+        )
     return Source(source_id, dossier, manifeste)
 
 
