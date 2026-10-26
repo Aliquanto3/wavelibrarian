@@ -137,7 +137,7 @@ development_status:
   9-8-énergie-méthode-mixte-poste-judging-et-gpu-du-profil-gpu: done
   9-9-calibration-réelle-d-opus-avec-le-prompt-du-lot: done
   9-10-rejugement-réel-du-run-mini-cpu-par-opus: done
-  9-11-balayage-réel-de-relevance_threshold: backlog  # reportée par Anaël le 2026-10-26 (Ollama CPU ~1 h) ; code 9.7 et Expérience prêts
+  9-11-balayage-réel-de-relevance_threshold: done  # balayage réel fait le 2026-10-26 (run 20261026-132701-5609d1) ; seuils équivalents, 0,1 conservé sauf décision d’Anaël
   9-12-double-annotation-partielle-humaine-hors-run: ready-for-dev  # humaine, préparée (corpora/minicorpus/annotations-a-faire)
   epic-9-retrospective: optional
 action_items:

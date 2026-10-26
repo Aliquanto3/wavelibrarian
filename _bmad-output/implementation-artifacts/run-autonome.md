@@ -121,3 +121,6 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 - 2026-10-26 10:51 · 9.12 · attente humaine · second annotateur · 
 - 2026-10-26 11:02 · 9.11 · report · reportée par Anaël (Ollama non utilisé) ; code (9.7) et Expérience prêts · 
 - 2026-10-26 11:02 · lot · décision · run clos : 10 stories sur 11 du périmètre livrées, 9.11 reportée, 9.12 préparée ; guide de recette recette-v0.3.0.md ; main poussé · 
+- 2026-10-26 14:26 · 9.11 · décision · feu vert d'Anaël (Ollama CPU, sans GPU) ; modèles présents, ollama ps vide, RAM libre 15,8 Go ; run lancé · 
+- 2026-10-26 14:46 · 9.11 · dev · fini : run 20261026-132701-5609d1 completed, 54 Réponses (4 error Generator), 19 min, CPU sans GPU, RAM jamais sous 3 Go, 0,32 USD · 
+- 2026-10-26 14:49 · 9.11 · décision · seuils 0,1 / 0,3 / 0,5 équivalents (Decider granite bimodal) ; recommandation garder 0,1, valeur non modifiée ; série (c) consignée, recette point 5 mis à jour ; lot à 4,07 USD · 
