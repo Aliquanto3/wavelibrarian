@@ -5,8 +5,9 @@ Chaque Juge du réservoir admissible note chaque Réponse annotée `passes` fois
 verdicts vont dans `<sortie>_verdicts.jsonl` (`calibration_verdicts.jsonl` de l'Exécution par
 défaut) ; `verdicts.jsonl` n'est pas touché. Chaque appel de Juge est écrit et vidé sur disque
 (`flush` + `os.fsync`) dès sa réception : une ligne par (Juge, Réponse, passe), qui porte
-l'empreinte de l'Expérience, de l'Exécution et des annotations ; `--reprendre` ne rappelle que les
-triplets absents (story 9.1). `calibration.json` résume kappa juge-humain,
+l'empreinte de l'Expérience, de l'Exécution, des annotations et des requêtes des Juges, et
+l'identifiant de Registre ; `--reprendre` ne rappelle que les triplets absents, dans le même plafond
+`per_run` (story 9.1). `calibration.json` résume kappa juge-humain,
 instabilité et exclusion par Juge.
 """
 
@@ -134,64 +135,77 @@ def calibrer(
     tous: list[str] = [*pool, *([juge_cal] if juge_cal else [])]
     modeles: tuple[str, ...] = tuple(m for i, m in enumerate(tous) if m not in tous[:i])
 
-    id_cal = f"calibration-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
+    lu = _lire_verdicts(chemin_verdicts, reprendre, ecraser)  # avant tout appel payé
+    # Reprise : même Registre (plafond `per_run`) et mêmes Traces que la tentative interrompue.
+    id_cal = lu.id_cal or f"calibration-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
     corpus = _Corpus(experience, wl_home)
     verdicts_de: dict[str, dict[cal.Passe, bool]] = {m: {} for m in modeles}
     admises: dict[str, set[str]] = {m: set() for m in modeles}
-    empreinte = _empreinte(experience, run_id, annotations, modeles)
-    faits = _preparer_verdicts(chemin_verdicts, empreinte, reprendre, ecraser)
-    for (modele, aid, passe), notes in faits.items():
-        for c, (oui, _) in notes.items():
-            verdicts_de[modele][(aid, c, passe)] = oui
     tentes: set[str] = set()  # Juges appelés au moins une fois
     appels = 0
-    ecrivain = _Ecrivain(chemin_verdicts, len(faits))
     with Context.from_experiment(
         experience, wl_home=wl_home, run_id=id_cal, providers=providers, execution=False
     ) as ctx:
         juges = construire_juges(ctx, modeles, cache_later_passes=False)
+        # Préparation sans appel : items, Juges concernés et empreinte des requêtes.
+        plan: list[tuple[str, Answer, Question, JudgeInput, list[Criterion], list[str]]] = []
+        for aid, (a, q, conf) in cibles.items():
+            familles = {catalogue.get(m).family for m in conf.answer_producers}
+            criteres: list[Criterion] = [
+                c
+                for c in criteres_juges(q)
+                if any(k[1] == aid and k[2] == c for k in annotations.verdicts)
+            ]
+            if not criteres:
+                continue
+            parse = corpus.de(conf, a)
+            if parse is None:
+                avertissements.append(f"Réponse {aid} ignorée : Corpus de sa phase indisponible")
+                continue
+            ancres = [
+                i
+                for r in q.reference_anchors
+                if (i := parse.resolve(r.doc, r.page, r.headings)) is not None
+            ]
+            item = JudgeInput(
+                question=q.text,
+                reference_answer=q.reference_answer,
+                reference_texts=tuple(parse.anchor_text(i) for i in ancres),
+                answer_text=a.text,
+                context_texts=a.context_texts,
+            )
+            notants: list[str] = []
+            for modele in modeles:
+                est_pool = modele in pool and catalogue.get(modele).family not in familles
+                est_cal = modele == juge_cal and aid in doubles
+                if not (est_pool or est_cal):
+                    continue
+                notants.append(modele)
+                if est_pool:
+                    admises[modele].add(aid)
+            plan.append((aid, a, q, item, criteres, notants))
+        requetes = {
+            f"{m}|{aid}": _empreinte_requete(juges[m], ctx.catalog, item, criteres)
+            for aid, _, _, item, criteres, notants in plan
+            for m in notants
+        }
+        empreinte = _empreinte(experience, run_id, annotations, modeles, requetes)
+        faits = _faits(lu, chemin_verdicts, empreinte)
+        for (modele, aid, passe), notes in faits.items():
+            for c, (oui, _) in notes.items():
+                verdicts_de[modele][(aid, c, passe)] = oui
+        lu.finaliser(chemin_verdicts)  # `--ecraser` ou ligne tronquée, après toute validation
+        ecrivain = _Ecrivain(chemin_verdicts, len(faits))
         try:
-            for aid, (a, q, conf) in cibles.items():
-                familles = {catalogue.get(m).family for m in conf.answer_producers}
-                criteres: list[Criterion] = [
-                    c
-                    for c in criteres_juges(q)
-                    if any(k[1] == aid and k[2] == c for k in annotations.verdicts)
-                ]
-                if not criteres:
-                    continue
-                parse = corpus.de(conf, a)
-                if parse is None:
-                    avertissements.append(
-                        f"Réponse {aid} ignorée : Corpus de sa phase indisponible"
-                    )
-                    continue
-                ancres = [
-                    i
-                    for r in q.reference_anchors
-                    if (i := parse.resolve(r.doc, r.page, r.headings)) is not None
-                ]
-                item = JudgeInput(
-                    question=q.text,
-                    reference_answer=q.reference_answer,
-                    reference_texts=tuple(parse.anchor_text(i) for i in ancres),
-                    answer_text=a.text,
-                    context_texts=a.context_texts,
-                )
+            for aid, a, q, item, criteres, notants in plan:
                 ctx.config_id, ctx.condition, ctx.tier, ctx.phase = (
                     a.config_id,
                     a.condition,
                     a.tier,
                     a.phase,
                 )
-                for modele in modeles:
-                    est_pool = modele in pool and catalogue.get(modele).family not in familles
-                    est_cal = modele == juge_cal and aid in doubles
-                    if not (est_pool or est_cal):
-                        continue
+                for modele in notants:
                     tentes.add(modele)
-                    if est_pool:
-                        admises[modele].add(aid)
                     for passe in range(passes):
                         if (modele, aid, passe) in faits:
                             continue
@@ -200,6 +214,7 @@ def calibrer(
                             "judge_model": modele,
                             "pass_id": passe,
                             "empreinte": empreinte,
+                            "calibration_id": id_cal,
                         }
                         try:
                             with ctx.scope(post="judging", question_id=q.id):
@@ -220,7 +235,7 @@ def calibrer(
                             for c, (oui, justification) in notes.items()
                         }
                         ecrivain.ecrire({**base, "verdicts": corps}, True)
-        except (BudgetExceeded, ProviderError) as erreur:
+        except (BudgetExceeded, ProviderError, KeyboardInterrupt) as erreur:
             setattr(erreur, "verdicts_recus", ecrivain.n)  # noqa: B010
             setattr(erreur, "fichier_verdicts", chemin_verdicts)  # noqa: B010
             raise
@@ -373,14 +388,32 @@ class _Corpus:
 Triplet = tuple[str, str, int]  # (Juge, answer_id, pass_id)
 
 
+def _empreinte_requete(
+    juge: Any, catalogue: Any, item: JudgeInput, criteres: list[Criterion]
+) -> str:
+    """Empreinte de la requête d'un Juge (passe 0) : prompt système, message, budget de sortie,
+    schéma et entrée de Catalogue du modèle (que la passerelle applique à la requête)."""
+    requete, schema = juge.requete(item, criteres, 0)
+    corps = {
+        "requete": requete.model_dump(mode="json"),
+        "schema": schema.model_json_schema(),
+        "catalogue": catalogue.get(requete.model_id).model_dump(mode="json"),
+    }
+    texte = json.dumps(corps, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(texte.encode("utf-8")).hexdigest()
+
+
 def _empreinte(
     experience: ResolvedExperiment,
     run_id: str,
     annotations: cal.Annotations,
     modeles: tuple[str, ...],
+    requetes: Mapping[str, str],
 ) -> str:
     """Empreinte de ce qui rend deux fichiers de verdicts combinables : Expérience, Exécution,
-    Juges, nombre de passes et annotations (clé, verdict). Portée par chaque ligne."""
+    Juges, nombre de passes, annotations (clé, verdict) et requêtes des Juges (`requetes` :
+    empreinte par Juge et Réponse ; un prompt, une Réponse ou un Catalogue modifié la change).
+    Portée par chaque ligne."""
     cles = sorted([*k, v] for k, v in annotations.verdicts.items())
     corps = {
         "experiment_id": experience.experiment_id,
@@ -388,50 +421,88 @@ def _empreinte(
         "judges": list(modeles),
         "passes": experience.judges.calibration_passes,
         "annotations": cles,
+        "requests": dict(sorted(requetes.items())),
     }
     texte = json.dumps(corps, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(texte.encode("utf-8")).hexdigest()[:16]
 
 
-def _preparer_verdicts(
-    chemin: Path, empreinte: str, reprendre: bool, ecraser: bool
-) -> dict[Triplet, dict[str, tuple[bool, str]]]:
-    """Fichier de verdicts avant les appels : refuse un fichier existant sans `reprendre` ni
-    `ecraser` ; `ecraser` le supprime ; `reprendre` rend les triplets déjà notés (un triplet
-    `missing` est rappelé), après contrôle de l'empreinte. Une dernière ligne tronquée par un arrêt
-    brutal est écartée."""
+@dataclass
+class _Lu:
+    """Fichier de verdicts relu avant les appels. `garder` : octets à conserver (`None` : tout) ;
+    `supprimer` : `--ecraser` sur un fichier existant."""
+
+    lignes: list[tuple[int, dict[str, Any]]] = field(default_factory=list)
+    id_cal: str | None = None
+    garder: int | None = None
+    supprimer: bool = False
+
+    def finaliser(self, chemin: Path) -> None:
+        """Juste avant le premier appel : supprime (`--ecraser`) ou retire la ligne tronquée
+        (écriture temporaire puis remplacement atomique)."""
+        if self.supprimer:
+            chemin.unlink(missing_ok=True)
+        elif self.garder is not None:
+            temporaire = chemin.with_name(chemin.name + ".tmp")
+            temporaire.write_bytes(chemin.read_bytes()[: self.garder])
+            os.replace(temporaire, chemin)
+
+
+def _lire_verdicts(chemin: Path, reprendre: bool, ecraser: bool) -> _Lu:
+    """Refuse un fichier existant sans `reprendre` ni `ecraser` ; `reprendre` relit les lignes
+    complètes (terminées par un saut de ligne ; la dernière, sans saut, vient d'un arrêt brutal et
+    sera retirée). Une ligne complète illisible, d'un ancien format ou d'une autre calibration est
+    refusée (code 2), jamais supprimée."""
     if not chemin.exists():
-        return {}
+        return _Lu()
     if ecraser:
-        chemin.unlink()
-        return {}
+        return _Lu(supprimer=True)
     if not reprendre:
         raise ConfigError(
             "--reprendre",
             f"{chemin} existe déjà : relancer avec --reprendre (verdicts conservés) ou "
             "--ecraser (recommencer)",
         )
-    lignes = chemin.read_text(encoding="utf-8").split("\n")
-    if lignes and lignes[-1] == "":
-        lignes.pop()
-    faits: dict[Triplet, dict[str, tuple[bool, str]]] = {}
-    for i, ligne in enumerate(lignes):
+    brut = chemin.read_bytes()
+    complet = brut.rfind(b"\n") + 1
+    lu = _Lu(garder=complet if complet < len(brut) else None)
+    for i, ligne in enumerate(brut[:complet].decode("utf-8").split("\n")[:-1], start=1):
+        ident = ""
         try:
             x = json.loads(ligne)
-            cle = (x["judge_model"], x["answer_id"], int(x["pass_id"]))
-            lu = x["empreinte"]
-        except (ValueError, KeyError, TypeError):
-            if i == len(lignes) - 1:  # ligne tronquée : retirée du fichier
-                reste = "".join(f"{x}\n" for x in lignes[:i])
-                chemin.write_text(reste, encoding="utf-8", newline="\n")
-                break
-            raise ConfigError("--reprendre", f"{chemin} ligne {i + 1} illisible") from None
-        if lu != empreinte:
+            ancien = isinstance(x, dict) and "criterion" in x and "empreinte" not in x
+            if not ancien:
+                _ = (str(x["judge_model"]), str(x["answer_id"]), int(x["pass_id"]))
+                ident, _ = str(x["calibration_id"]), str(x["empreinte"])
+                if not x.get("missing"):
+                    _ = [bool(v["verdict"]) for v in x["verdicts"].values()]
+        except (ValueError, KeyError, TypeError, AttributeError):
+            raise ConfigError("--reprendre", f"{chemin} ligne {i} illisible") from None
+        if ancien:
             raise ConfigError(
                 "--reprendre",
-                f"{chemin} vient d'une autre Expérience, Exécution ou annotation "
-                "(empreinte différente) : --ecraser pour recommencer",
+                f"{chemin} est à l'ancien format (une ligne par Critère, avant la story 9.1) : "
+                "le renommer pour le garder, ou --ecraser pour recommencer",
             )
+        if lu.id_cal not in (None, ident):
+            raise ConfigError("--reprendre", f"{chemin} mêle deux calibrations (ligne {i})")
+        lu.id_cal = ident
+        lu.lignes.append((i, x))
+    return lu
+
+
+def _faits(lu: _Lu, chemin: Path, empreinte: str) -> dict[Triplet, dict[str, tuple[bool, str]]]:
+    """Triplets déjà notés du fichier relu, après contrôle de l'empreinte de chaque ligne ; un
+    triplet `missing` est rappelé."""
+    faits: dict[Triplet, dict[str, tuple[bool, str]]] = {}
+    for i, x in lu.lignes:
+        if x["empreinte"] != empreinte:
+            raise ConfigError(
+                "--reprendre",
+                f"{chemin} ligne {i} vient d'une autre Expérience, Exécution, annotation ou "
+                "requête de Juge (empreinte différente) : --ecraser pour recommencer",
+            )
+        cle = (x["judge_model"], x["answer_id"], int(x["pass_id"]))
         if x.get("missing"):
             faits.pop(cle, None)
         else:

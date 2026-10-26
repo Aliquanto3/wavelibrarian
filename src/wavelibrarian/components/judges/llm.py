@@ -60,10 +60,10 @@ class LLMJudge:
         self.model_id: str = params.model or ctx.profile.defaults.judge_pool[0]
         self._cache_later_passes = params.cache_later_passes
 
-    def judge(
+    def requete(
         self, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int
-    ) -> dict[Criterion, tuple[bool, str]]:
-        """Verdict booléen et justification par Critère ; `NonConformantOutput` après un essai."""
+    ) -> tuple[LLMRequest, type[BaseModel]]:
+        """Requête et schéma de sortie d'un appel, sans l'envoyer (empreinte de `wl calibrer`)."""
         criteres = list(dict.fromkeys(criteria))
         corps: dict[str, Any] = {
             "question": item.question,
@@ -90,8 +90,16 @@ class LLMJudge:
             pass_id=pass_id,
             inputs=inputs,
         )
+        return requete, _schema(criteres)
+
+    def judge(
+        self, item: JudgeInput, criteria: Sequence[Criterion], pass_id: int
+    ) -> dict[Criterion, tuple[bool, str]]:
+        """Verdict booléen et justification par Critère ; `NonConformantOutput` après un essai."""
+        criteres = list(dict.fromkeys(criteria))
+        requete, schema = self.requete(item, criteres, pass_id)
         sortie, _ = self._ctx.gateway.complete_structured(
-            requete, _schema(criteres), use_cache=pass_id == 0 or self._cache_later_passes
+            requete, schema, use_cache=pass_id == 0 or self._cache_later_passes
         )
         verdicts: Any = getattr(sortie, "verdicts")  # noqa: B009
         resultat: dict[Criterion, tuple[bool, str]] = {}

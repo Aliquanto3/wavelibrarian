@@ -237,7 +237,7 @@ def rapport(
 
 
 def _reprise_calibration(
-    erreur: Exception, experience: Path, annotations: Path, run: str, sortie: Path | None
+    erreur: BaseException, experience: Path, annotations: Path, run: str, sortie: Path | None
 ) -> str:
     """Phrase de fin d'une calibration interrompue : verdicts conservés et commande de reprise."""
     n = getattr(erreur, "verdicts_recus", 0)
@@ -267,8 +267,10 @@ def calibrer(
         bool,
         typer.Option(
             "--reprendre",
-            help="Reprend un fichier de verdicts partiel (même Expérience, Exécution et "
-            "annotations) : seuls les triplets (Juge, Réponse, passe) absents sont appelés.",
+            help="Reprend un fichier de verdicts partiel : seuls les triplets (Juge, Réponse, "
+            "passe) absents ou manquants sont appelés, dans le même plafond par Exécution. "
+            "Refusé (code 2) si l'Expérience, l'Exécution, les annotations ou les requêtes des "
+            "Juges (prompt, Réponses, Catalogue) ont changé.",
         ),
     ] = False,
     ecraser: Annotated[
@@ -282,9 +284,11 @@ def calibrer(
     Un Juge dont le kappa est sous `judges.kappa_threshold` est exclu : renseigner
     `judges.excluded_from` dans l'Expérience suivante. Chaque verdict est écrit dans
     `<sortie>_verdicts.jsonl` dès sa réception ; un fichier existant est refusé (code 2) sans
-    `--reprendre` ni `--ecraser`. Codes de sortie : 0 succès, 1 erreur,
-    2 configuration invalide (Exécution inconnue, aucune annotation valide), 3 plafond atteint,
-    4 préflight échoué.
+    `--reprendre` ni `--ecraser`. Codes de sortie : 0 succès, 1 erreur (dont interruption
+    clavier), 2 configuration invalide (Exécution inconnue, aucune annotation valide, fichier de
+    verdicts existant ou d'une autre calibration), 3 plafond atteint, 4 préflight échoué ou
+    erreur non réessayable du fournisseur. Codes 1 (interruption), 3 et 4 : le message donne le
+    nombre de verdicts conservés et la commande de reprise.
     """
     wl_home = Path(os.environ.get("WL_HOME") or ".wl")
     try:
@@ -339,6 +343,15 @@ def calibrer(
         raise typer.Exit(4) from erreur
     except WlError as erreur:
         typer.echo(f"Erreur : {erreur}", err=True)
+        raise typer.Exit(1) from erreur
+    except KeyboardInterrupt as erreur:
+        if getattr(erreur, "fichier_verdicts", None) is None:
+            raise
+        typer.echo(
+            "Interrompu ; calibration non écrite. "
+            f"{_reprise_calibration(erreur, experience, annotations, run, sortie)}",
+            err=True,
+        )
         raise typer.Exit(1) from erreur
     d = res.donnees
     typer.echo(

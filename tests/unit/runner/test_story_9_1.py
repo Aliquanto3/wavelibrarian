@@ -12,7 +12,9 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+import wavelibrarian.runner.calibrer as module_calibrer
 from wavelibrarian.cli import app
+from wavelibrarian.components.judges import llm as juge_llm
 from wavelibrarian.config.validate import validate_file
 from wavelibrarian.core.errors import ConfigError, ProviderError
 from wavelibrarian.evalset import io
@@ -65,14 +67,17 @@ class _Sdk:
     """Remplace `anthropic.Anthropic` : `yes` à tout Critère ; HTTP 400 (non réessayable) au
     `echec_au`-ième appel (1 pour le premier)."""
 
-    def __init__(self, echec_au: int | None = None) -> None:
+    def __init__(self, echec_au: int | None = None, interrompre: bool = False) -> None:
         self.appels: list[dict[str, Any]] = []
         self.messages = SimpleNamespace(create=self._create)
         self._echec_au = echec_au
+        self._interrompre = interrompre
 
     def _create(self, **corps: Any) -> Any:
         self.appels.append(corps)
         if self._echec_au is not None and len(self.appels) == self._echec_au:
+            if self._interrompre:
+                raise KeyboardInterrupt
             requete = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
             raise anthropic.BadRequestError(
                 "requête refusée", response=httpx2.Response(400, request=requete), body=None
@@ -157,7 +162,14 @@ def test_verdicts_ecrits_et_vides_a_chaque_appel(
     assert len(lignes) == n  # une ligne par (Juge, Réponse, passe)
     assert len({(x["judge_model"], x["answer_id"], x["pass_id"]) for x in lignes}) == n
     premiere = lignes[0]
-    assert set(premiere) == {"answer_id", "judge_model", "pass_id", "empreinte", "verdicts"}
+    assert set(premiere) == {
+        "answer_id",
+        "judge_model",
+        "pass_id",
+        "empreinte",
+        "calibration_id",
+        "verdicts",
+    }
     assert all(
         set(v) == {"verdict", "justification"} and v["verdict"] is True
         for v in premiere["verdicts"].values()
@@ -313,3 +325,122 @@ def test_exception_porte_le_nombre_de_verdicts_recus(
         )
     assert getattr(e.value, "verdicts_recus") == 5  # noqa: B009
     assert getattr(e.value, "fichier_verdicts") == dossier / "calibration_verdicts.jsonl"  # noqa: B009
+
+
+def test_reprise_refusee_si_le_prompt_des_juges_a_change(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un prompt modifié entre deux tentatives mêlerait deux prompts : reprise refusée (code 2)."""
+    exp, dossier = execution
+    fichier = dossier / "calibration_verdicts.jsonl"
+    res = _cli(monkeypatch, _Sdk(echec_au=3), exp, tmp_path, dossier.name)
+    assert res.exit_code == 4
+    avant = fichier.read_bytes()
+    monkeypatch.setattr(juge_llm, "_SYSTEM", juge_llm._SYSTEM + " Sois bref.")
+    sdk = _Sdk()
+    res = _cli(monkeypatch, sdk, exp, tmp_path, dossier.name, "--reprendre")
+    assert res.exit_code == 2 and "requête de Juge" in res.output, res.output
+    assert not sdk.appels and fichier.read_bytes() == avant
+
+
+def test_reprise_comptee_dans_le_meme_plafond_par_execution(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La reprise garde l'identifiant de Registre : le plafond `per_run` déjà consommé compte."""
+    exp, dossier = execution
+    fichier = dossier / "calibration_verdicts.jsonl"
+    complet = _Sdk()
+    res = _cli(monkeypatch, complet, exp, tmp_path, dossier.name)
+    assert res.exit_code == 0, res.output
+    fichier.unlink()
+    (dossier / "calibration.json").unlink()
+    donnees = yaml.safe_load(exp.read_text("utf-8"))
+    donnees["experiment_id"] = "exp-9-1-plafond"  # hors Cache de réponses de la 1re calibration
+    donnees["budget"]["per_run"]["anthropic"]["amount"] = "0.02"
+    serre = tmp_path / "serre.yaml"
+    serre.write_text(yaml.safe_dump(donnees), encoding="utf-8")
+    res = _cli(monkeypatch, _Sdk(), serre, tmp_path, dossier.name, "--ecraser")
+    assert res.exit_code == 3, res.output
+    avant = _lire(fichier)
+    assert 0 < len(avant) < len(complet.appels)
+    assert len({x["calibration_id"] for x in avant}) == 1
+    sdk = _Sdk()
+    res = _cli(monkeypatch, sdk, serre, tmp_path, dossier.name, "--reprendre")
+    assert res.exit_code == 3, res.output  # plafond déjà atteint par la tentative interrompue
+    assert not sdk.appels and _lire(fichier) == avant
+
+
+def test_derniere_ligne_complete_sans_saut_de_ligne_est_rappelee(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Une ligne sans saut de ligne final (arrêt pendant l'écriture) est retirée, son triplet
+    rappelé : l'ajout suivant ne se colle pas à elle."""
+    exp, dossier = execution
+    fichier = dossier / "calibration_verdicts.jsonl"
+    res = _cli(monkeypatch, _Sdk(echec_au=4), exp, tmp_path, dossier.name)
+    assert res.exit_code == 4
+    lignes = _lire(fichier)
+    fichier.write_bytes(fichier.read_bytes().rstrip(b"\n"))
+    res = _cli(monkeypatch, _Sdk(), exp, tmp_path, dossier.name, "--reprendre")
+    assert res.exit_code == 0, res.output
+    relu = _lire(fichier)  # chaque ligne se relit seule
+    assert relu[:2] == lignes[:2]
+    total = len(read_answers(dossier)) * len(JUGES) * PASSES
+    assert len(relu) == total
+    assert len({(x["judge_model"], x["answer_id"], x["pass_id"]) for x in relu}) == total
+    assert not fichier.with_name(fichier.name + ".tmp").exists()
+
+
+@pytest.mark.parametrize(
+    ("contenu", "message"),
+    [
+        (
+            '{"answer_id": "a", "judge_model": "m", "pass_id": 0, "empreinte": "e", '
+            '"calibration_id": "c"}\n',
+            "ligne 1 illisible",
+        ),
+        (
+            '{"answer_id": "a", "judge_model": "m", "criterion": "correctness", "pass_id": 0, '
+            '"verdict": true, "justification": "ok"}\n',
+            "ancien format",
+        ),
+    ],
+)
+def test_ligne_complete_invalide_refusee_sans_suppression(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path, contenu: str, message: str
+) -> None:
+    _, dossier = execution
+    fichier = dossier / "calibration_verdicts.jsonl"
+    fichier.write_text(contenu, encoding="utf-8", newline="\n")
+    exp = validate_file(_experience(tmp_path)).resolved
+    with pytest.raises(ConfigError, match=message):
+        calibrer(exp, tmp_path / "ann", dossier.name, wl_home=wl_home, reprendre=True)
+    assert fichier.read_text("utf-8") == contenu
+
+
+def test_ecraser_ne_supprime_rien_si_la_preparation_echoue(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, dossier = execution
+    fichier = dossier / "calibration_verdicts.jsonl"
+    fichier.write_text("{}\n", encoding="utf-8")
+    exp = validate_file(_experience(tmp_path)).resolved
+
+    def panne(*_a: Any, **_k: Any) -> Any:  # injection de panne avant le premier appel
+        raise ConfigError("judges", "Juge impossible à construire")
+
+    monkeypatch.setattr(module_calibrer, "construire_juges", panne)
+    with pytest.raises(ConfigError, match="impossible"):
+        calibrer(exp, tmp_path / "ann", dossier.name, wl_home=wl_home, ecraser=True)
+    assert fichier.read_text("utf-8") == "{}\n"
+
+
+def test_interruption_clavier_donne_la_commande_de_reprise(
+    execution: tuple[Path, Path], tmp_path: Path, wl_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exp, dossier = execution
+    res = _cli(monkeypatch, _Sdk(echec_au=3, interrompre=True), exp, tmp_path, dossier.name)
+    assert res.exit_code == 1, res.output
+    assert "Interrompu" in res.output and "2 verdict(s) conservé(s)" in res.output
+    assert f"--run {dossier.name} --reprendre" in res.output
+    assert len(_lire(dossier / "calibration_verdicts.jsonl")) == 2
