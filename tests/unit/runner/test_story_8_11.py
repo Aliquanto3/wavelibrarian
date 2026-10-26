@@ -199,7 +199,7 @@ def test_plafond_anthropic_atteint_leve_budget_exceeded_et_n_ecrit_rien(
     _annoter(dossier, tmp_path / "ann")
     sdk = _SdkFactice()
     exp = validate_file(_exp_claude(tmp_path, "0.01")).resolved
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceeded) as plafond:
         calibrer(
             exp,
             tmp_path / "ann",
@@ -208,7 +208,10 @@ def test_plafond_anthropic_atteint_leve_budget_exceeded_et_n_ecrit_rien(
             providers={"anthropic": AnthropicProvider(client=sdk)},  # type: ignore[arg-type]
         )
     assert not (dossier / "calibration.json").exists()
-    assert not (dossier / "calibration_verdicts.jsonl").exists()
+    # Story 9.1 : les verdicts reçus avant le plafond restent dans le fichier.
+    fichier = dossier / "calibration_verdicts.jsonl"
+    recus = fichier.read_text("utf-8").splitlines() if fichier.exists() else []
+    assert getattr(plafond.value, "verdicts_recus") == len(recus)  # noqa: B009
 
 
 def test_experience_livree_calibration_claude() -> None:
@@ -245,8 +248,13 @@ def test_reponse_opus_sans_outil_verdict_manquant_cout_trace_calibration_ecrite(
     echecs = [a for a in res.avertissements if "claude-opus-5-5 en échec" in a]
     assert len(echecs) == 2 and all(cible.answer_id in a for a in echecs)  # 2 passes
     lignes = [json.loads(x) for x in fichier_verdicts(chemin).read_text("utf-8").splitlines()]
-    par_juge = {(x["judge_model"], x["answer_id"]) for x in lignes}
+    par_juge = {(x["judge_model"], x["answer_id"]) for x in lignes if not x.get("missing")}
     assert ("claude-opus-5-5", cible.answer_id) not in par_juge
+    manquants = {(x["judge_model"], x["answer_id"], x["pass_id"]) for x in lignes if "missing" in x}
+    assert manquants == {  # verdict manquant consigné (story 9.1)
+        ("claude-opus-5-5", cible.answer_id, 0),
+        ("claude-opus-5-5", cible.answer_id, 1),
+    }
     assert ("claude-haiku-5-5", cible.answer_id) in par_juge
     # Appels sans outil payés et comptés : 2 passes x (essai + nouvel essai) au lieu de 2.
     n = len(reponses) * 2

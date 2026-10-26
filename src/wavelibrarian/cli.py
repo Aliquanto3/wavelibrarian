@@ -236,6 +236,18 @@ def rapport(
         raise typer.Exit(1) from erreur
 
 
+def _reprise_calibration(
+    erreur: Exception, experience: Path, annotations: Path, run: str, sortie: Path | None
+) -> str:
+    """Phrase de fin d'une calibration interrompue : verdicts conservés et commande de reprise."""
+    n = getattr(erreur, "verdicts_recus", 0)
+    fichier = getattr(erreur, "fichier_verdicts", None)
+    cmd = f"wl calibrer {experience} --annotations {annotations} --run {run}"
+    if sortie is not None:
+        cmd += f" --sortie {sortie}"
+    return f"{n} verdict(s) conservé(s) dans {fichier} ; reprise : {cmd} --reprendre"
+
+
 @app.command("calibrer")
 def calibrer(
     experience: Annotated[Path, typer.Argument(help="Fichier YAML de l'Expérience (Juges).")],
@@ -251,12 +263,26 @@ def calibrer(
             "bruts à côté, dans `<nom>_verdicts.jsonl`.",
         ),
     ] = None,
+    reprendre: Annotated[
+        bool,
+        typer.Option(
+            "--reprendre",
+            help="Reprend un fichier de verdicts partiel (même Expérience, Exécution et "
+            "annotations) : seuls les triplets (Juge, Réponse, passe) absents sont appelés.",
+        ),
+    ] = False,
+    ecraser: Annotated[
+        bool,
+        typer.Option("--ecraser", help="Recommence : supprime le fichier de verdicts existant."),
+    ] = False,
 ) -> None:
     """Calibre les Juges du réservoir sur des annotations humaines et écrit `calibration.json`.
 
     Chaque Juge note chaque Réponse annotée `judges.calibration_passes` fois (Poste judging).
     Un Juge dont le kappa est sous `judges.kappa_threshold` est exclu : renseigner
-    `judges.excluded_from` dans l'Expérience suivante. Codes de sortie : 0 succès, 1 erreur,
+    `judges.excluded_from` dans l'Expérience suivante. Chaque verdict est écrit dans
+    `<sortie>_verdicts.jsonl` dès sa réception ; un fichier existant est refusé (code 2) sans
+    `--reprendre` ni `--ecraser`. Codes de sortie : 0 succès, 1 erreur,
     2 configuration invalide (Exécution inconnue, aucune annotation valide), 3 plafond atteint,
     4 préflight échoué.
     """
@@ -285,15 +311,31 @@ def calibrer(
             typer.echo(f"  - {e}", err=True)
         raise typer.Exit(4)
     try:
-        res, chemin = calibration(exp, annotations, run, wl_home=wl_home, sortie=sortie)
+        res, chemin = calibration(
+            exp,
+            annotations,
+            run,
+            wl_home=wl_home,
+            sortie=sortie,
+            reprendre=reprendre,
+            ecraser=ecraser,
+        )
     except BudgetExceeded as erreur:
-        typer.echo(f"Plafond atteint : {erreur} ; calibration non écrite.", err=True)
+        typer.echo(
+            f"Plafond atteint : {erreur} ; calibration non écrite. "
+            f"{_reprise_calibration(erreur, experience, annotations, run, sortie)}",
+            err=True,
+        )
         raise typer.Exit(3) from erreur
     except ConfigError as erreur:
         typer.echo(f"Configuration invalide : {erreur}", err=True)
         raise typer.Exit(2) from erreur
     except ProviderError as erreur:
-        typer.echo(f"Erreur : {erreur}", err=True)
+        typer.echo(
+            f"Erreur : {erreur} ; calibration non écrite. "
+            f"{_reprise_calibration(erreur, experience, annotations, run, sortie)}",
+            err=True,
+        )
         raise typer.Exit(4) from erreur
     except WlError as erreur:
         typer.echo(f"Erreur : {erreur}", err=True)

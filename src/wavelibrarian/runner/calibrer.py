@@ -3,12 +3,17 @@
 Chaque Juge du réservoir admissible note chaque Réponse annotée `passes` fois (`pass_id` 0 à
 `passes - 1`, les passes au-delà de 0 contournent le Cache de réponses), au Poste `judging`. Les
 verdicts vont dans `<sortie>_verdicts.jsonl` (`calibration_verdicts.jsonl` de l'Exécution par
-défaut) ; `verdicts.jsonl` n'est pas touché. `calibration.json` résume kappa juge-humain,
+défaut) ; `verdicts.jsonl` n'est pas touché. Chaque appel de Juge est écrit et vidé sur disque
+(`flush` + `os.fsync`) dès sa réception : une ligne par (Juge, Réponse, passe), qui porte
+l'empreinte de l'Expérience, de l'Exécution et des annotations ; `--reprendre` ne rappelle que les
+triplets absents (story 9.1). `calibration.json` résume kappa juge-humain,
 instabilité et exclusion par Juge.
 """
 
+import hashlib
 import json
 import logging
+import os
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -20,7 +25,13 @@ from typing import Any
 from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.experiment import ResolvedConfiguration, ResolvedExperiment
 from wavelibrarian.config.panel import closed_book_judge
-from wavelibrarian.core.errors import ConfigError, NonConformantOutput, WlError
+from wavelibrarian.core.errors import (
+    BudgetExceeded,
+    ConfigError,
+    NonConformantOutput,
+    ProviderError,
+    WlError,
+)
 from wavelibrarian.core.types import Answer, Criterion, ParsedCorpus, Question
 from wavelibrarian.corpus.declare import declare
 from wavelibrarian.corpus.ingest import ingest
@@ -63,12 +74,19 @@ def calibrer(
     wl_home: Path,
     sortie: Path | None = None,
     providers: Any = None,
+    reprendre: bool = False,
+    ecraser: bool = False,
 ) -> tuple[Calibration, Path]:
     """Calibre les Juges ; écrit `calibration.json` (par défaut dans le dossier de l'Exécution,
     sinon `sortie`) et ses verdicts bruts à côté (`fichier_verdicts`). `ConfigError` (code 2) :
     Exécution inconnue, dossier sans annotation valide, aucune annotation sur une Réponse de
-    l'Exécution, dossier de `sortie` impossible à créer. `BudgetExceeded` (code 3) : rien n'est
-    écrit."""
+    l'Exécution, dossier de `sortie` impossible à créer, fichier de verdicts déjà présent sans
+    `reprendre` ni `ecraser`, ou partiel d'une autre Expérience, Exécution ou annotation.
+    `BudgetExceeded` (code 3) et `ProviderError` (code 4) : `calibration.json` n'est pas écrit, les
+    verdicts déjà reçus restent dans `fichier_verdicts` ; l'exception porte `verdicts_recus` et
+    `fichier_verdicts` (`reprendre=True` rappelle seulement les triplets absents)."""
+    if reprendre and ecraser:
+        raise ConfigError("--reprendre", "incompatible avec --ecraser")
     dossier = wl_home / "runs" / run_id
     if not dossier.is_dir() or not (dossier / "answers.jsonl").is_file():
         raise ConfigError("--run", f"Exécution {run_id} introuvable dans {wl_home / 'runs'}")
@@ -120,9 +138,14 @@ def calibrer(
     corpus = _Corpus(experience, wl_home)
     verdicts_de: dict[str, dict[cal.Passe, bool]] = {m: {} for m in modeles}
     admises: dict[str, set[str]] = {m: set() for m in modeles}
-    lignes: list[dict[str, Any]] = []
+    empreinte = _empreinte(experience, run_id, annotations, modeles)
+    faits = _preparer_verdicts(chemin_verdicts, empreinte, reprendre, ecraser)
+    for (modele, aid, passe), notes in faits.items():
+        for c, (oui, _) in notes.items():
+            verdicts_de[modele][(aid, c, passe)] = oui
     tentes: set[str] = set()  # Juges appelés au moins une fois
     appels = 0
+    ecrivain = _Ecrivain(chemin_verdicts, len(faits))
     with Context.from_experiment(
         experience, wl_home=wl_home, run_id=id_cal, providers=providers, execution=False
     ) as ctx:
@@ -170,6 +193,14 @@ def calibrer(
                     if est_pool:
                         admises[modele].add(aid)
                     for passe in range(passes):
+                        if (modele, aid, passe) in faits:
+                            continue
+                        base = {
+                            "answer_id": aid,
+                            "judge_model": modele,
+                            "pass_id": passe,
+                            "empreinte": empreinte,
+                        }
                         try:
                             with ctx.scope(post="judging", question_id=q.id):
                                 notes = juges[modele].judge(item, criteres, passe)
@@ -180,21 +211,22 @@ def calibrer(
                             avertissements.append(
                                 f"Juge {modele} en échec sur {aid} (passe {passe}) : {erreur}"
                             )
+                            ecrivain.ecrire({**base, "missing": True, "error": str(erreur)}, False)
                             continue
-                        for c, (oui, justification) in notes.items():
+                        for c, (oui, _) in notes.items():
                             verdicts_de[modele][(aid, c, passe)] = oui
-                            lignes.append(
-                                {
-                                    "answer_id": aid,
-                                    "judge_model": modele,
-                                    "criterion": c,
-                                    "pass_id": passe,
-                                    "verdict": oui,
-                                    "justification": justification,
-                                }
-                            )
+                        corps = {
+                            c: {"verdict": oui, "justification": justification}
+                            for c, (oui, justification) in notes.items()
+                        }
+                        ecrivain.ecrire({**base, "verdicts": corps}, True)
+        except (BudgetExceeded, ProviderError) as erreur:
+            setattr(erreur, "verdicts_recus", ecrivain.n)  # noqa: B010
+            setattr(erreur, "fichier_verdicts", chemin_verdicts)  # noqa: B010
+            raise
         finally:
             ctx.condition, ctx.tier, ctx.phase = "standard", None, "base"
+            ecrivain.fermer()
         trace = ctx.run_dir / "traces.jsonl"
     sans_verdict = sorted(m for m in tentes if not verdicts_de[m])
     if sans_verdict:  # toutes ses passes ont échoué : rien n'est écrit
@@ -219,7 +251,6 @@ def calibrer(
     avertissements.extend(
         avertissements_closed_book(experience, resultat.exclus, jeu.questions, catalogue)
     )
-    _ecrire(chemin_verdicts, "".join(_ligne(x) for x in lignes))
     _ecrire(chemin, json.dumps(donnees, ensure_ascii=False, indent=2) + "\n")
     return resultat, chemin
 
@@ -339,8 +370,99 @@ class _Corpus:
         return self._cache[cle]
 
 
-def _ligne(objet: dict[str, Any]) -> str:
-    return json.dumps(objet, ensure_ascii=False, sort_keys=True) + "\n"
+Triplet = tuple[str, str, int]  # (Juge, answer_id, pass_id)
+
+
+def _empreinte(
+    experience: ResolvedExperiment,
+    run_id: str,
+    annotations: cal.Annotations,
+    modeles: tuple[str, ...],
+) -> str:
+    """Empreinte de ce qui rend deux fichiers de verdicts combinables : Expérience, Exécution,
+    Juges, nombre de passes et annotations (clé, verdict). Portée par chaque ligne."""
+    cles = sorted([*k, v] for k, v in annotations.verdicts.items())
+    corps = {
+        "experiment_id": experience.experiment_id,
+        "run_id": run_id,
+        "judges": list(modeles),
+        "passes": experience.judges.calibration_passes,
+        "annotations": cles,
+    }
+    texte = json.dumps(corps, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(texte.encode("utf-8")).hexdigest()[:16]
+
+
+def _preparer_verdicts(
+    chemin: Path, empreinte: str, reprendre: bool, ecraser: bool
+) -> dict[Triplet, dict[str, tuple[bool, str]]]:
+    """Fichier de verdicts avant les appels : refuse un fichier existant sans `reprendre` ni
+    `ecraser` ; `ecraser` le supprime ; `reprendre` rend les triplets déjà notés (un triplet
+    `missing` est rappelé), après contrôle de l'empreinte. Une dernière ligne tronquée par un arrêt
+    brutal est écartée."""
+    if not chemin.exists():
+        return {}
+    if ecraser:
+        chemin.unlink()
+        return {}
+    if not reprendre:
+        raise ConfigError(
+            "--reprendre",
+            f"{chemin} existe déjà : relancer avec --reprendre (verdicts conservés) ou "
+            "--ecraser (recommencer)",
+        )
+    lignes = chemin.read_text(encoding="utf-8").split("\n")
+    if lignes and lignes[-1] == "":
+        lignes.pop()
+    faits: dict[Triplet, dict[str, tuple[bool, str]]] = {}
+    for i, ligne in enumerate(lignes):
+        try:
+            x = json.loads(ligne)
+            cle = (x["judge_model"], x["answer_id"], int(x["pass_id"]))
+            lu = x["empreinte"]
+        except (ValueError, KeyError, TypeError):
+            if i == len(lignes) - 1:  # ligne tronquée : retirée du fichier
+                reste = "".join(f"{x}\n" for x in lignes[:i])
+                chemin.write_text(reste, encoding="utf-8", newline="\n")
+                break
+            raise ConfigError("--reprendre", f"{chemin} ligne {i + 1} illisible") from None
+        if lu != empreinte:
+            raise ConfigError(
+                "--reprendre",
+                f"{chemin} vient d'une autre Expérience, Exécution ou annotation "
+                "(empreinte différente) : --ecraser pour recommencer",
+            )
+        if x.get("missing"):
+            faits.pop(cle, None)
+        else:
+            faits[cle] = {
+                c: (bool(v["verdict"]), str(v.get("justification", "")))
+                for c, v in x["verdicts"].items()
+            }
+    return faits
+
+
+class _Ecrivain:
+    """Ajoute une ligne JSON par appel de Juge, vidée sur disque (`flush` + `os.fsync`) aussitôt.
+    `n` : verdicts reçus présents dans le fichier (hors verdicts manquants)."""
+
+    def __init__(self, chemin: Path, deja: int) -> None:
+        self._chemin = chemin
+        self._f: Any = None
+        self.n = deja
+
+    def ecrire(self, objet: dict[str, Any], recu: bool) -> None:
+        if self._f is None:
+            self._f = self._chemin.open("a", encoding="utf-8", newline="\n")
+        self._f.write(json.dumps(objet, ensure_ascii=False, sort_keys=True) + "\n")
+        self._f.flush()
+        os.fsync(self._f.fileno())
+        self.n += int(recu)
+
+    def fermer(self) -> None:
+        if self._f is not None:
+            self._f.close()
+            self._f = None
 
 
 def _ecrire(chemin: Path, texte: str) -> None:

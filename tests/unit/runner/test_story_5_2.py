@@ -339,7 +339,7 @@ def test_seconde_calibration_rappelle_les_passes_1_a_4_hors_cache(
     _annoter(dossier, tmp_path / "ann")
     _calibrer(exp, tmp_path / "ann", dossier.name)
     (premiere,) = list((wl_home / "hors-execution").iterdir())
-    _calibrer(exp, tmp_path / "ann", dossier.name)
+    _calibrer(exp, tmp_path / "ann", dossier.name, "--ecraser")
     (seconde,) = [d for d in (wl_home / "hors-execution").iterdir() if d != premiere]
     spans = _spans_judging(seconde)
     assert spans and len(spans) % 5 == 0
