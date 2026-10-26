@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from wavelibrarian.config.catalog import load_catalog
 from wavelibrarian.config.panel import excluded_judges
 from wavelibrarian.core.bilan import decrire_cause
 from wavelibrarian.core.errors import ConfigError
@@ -266,6 +267,7 @@ def _juges(ex: Execution) -> list[str]:
         ]
         for c in ex.experience.configurations
     ]
+    tous = {j for ensemble in admissibles.values() for j in ensemble}
     return [
         "## Juges",
         "",
@@ -273,6 +275,59 @@ def _juges(ex: Execution) -> list[str]:
         "Juges exclus par la calibration : "
         + (", ".join(f"`{j}`" for j in exclus) if exclus else "aucun")
         + f"{note}.",
+        "",
+        *_juge_unique(ex, tous),
+        *_juges_factices(ex, tous),
+    ]
+
+
+def _donnees_calibration(ex: Execution) -> dict[str, Any] | None:
+    """`calibration.json` de l'Exécution, sinon celui de `judges.excluded_from`."""
+    chemins = [ex.run_dir / "calibration.json"]
+    if ex.experience.judges.excluded_from:
+        chemins.append(Path(ex.experience.judges.excluded_from))
+    return next((d for c in chemins if isinstance(d := lire_json(c), dict)), None)
+
+
+def _juge_unique(ex: Execution, juges: set[str]) -> list[str]:
+    """Mention « Juge unique calibré » avec ses kappas, à la place de la règle de majorité
+    (`judges.panel_size: 1`, story 9.5). Verdict du Panel = verdict de ce Juge, `na` compris."""
+    if ex.experience.judges.panel_size != 1 or len(juges) != 1:
+        return []
+    (juge,) = juges
+    donnees = _donnees_calibration(ex)
+    fiches = (donnees or {}).get("judges")
+    fiche = fiches.get(juge) if isinstance(fiches, dict) else None
+    criteres = (fiche.get("criteria") or {}) if isinstance(fiche, dict) else {}
+    kappas = ", ".join(
+        f"{c} {_kappa(f.get('kappa'))}" for c, f in sorted(criteres.items()) if isinstance(f, dict)
+    )
+    return [
+        f"Juge unique calibré : `{juge}` ; le verdict du Panel est le verdict de ce Juge "
+        "(`na` compris), sans règle de majorité ni égalité. "
+        f"Kappas juge-humain : {kappas or 'calibration absente'}.",
+        "",
+    ]
+
+
+def _juges_factices(ex: Execution, juges: set[str]) -> list[str]:
+    """Avertissement quand un Generator réel est noté par des Juges tous factices (`fake`)."""
+    exp = ex.experience
+    try:
+        catalogue = load_catalog(Path(exp.catalog) if exp.catalog else None)
+        factice = {j: catalogue.get(j).provider == "fake" for j in juges}
+        reel = any(
+            catalogue.get(m).provider != "fake"
+            for c in exp.configurations
+            for m in c.answer_producers
+        )
+    except ConfigError:
+        return []
+    if not juges or not all(factice.values()) or not reel:
+        return []
+    return [
+        "**Qualité non interprétable : Juges factices.** Les scores de qualité de cette "
+        "Exécution viennent de Juges `fake`, pas d'un modèle qui lit les Réponses.",
         "",
     ]
 
@@ -291,10 +346,7 @@ def _accords_na(f: dict[str, Any]) -> str:
 def _calibration(ex: Execution) -> list[str]:
     """Section « Calibration des Juges » : lit `calibration.json` (Exécution, sinon
     `judges.excluded_from`), sans rien recalculer."""
-    chemins = [ex.run_dir / "calibration.json"]
-    if ex.experience.judges.excluded_from:
-        chemins.append(Path(ex.experience.judges.excluded_from))
-    donnees = next((d for c in chemins if isinstance(d := lire_json(c), dict)), None)
+    donnees = _donnees_calibration(ex)
     titre = ["## Calibration des Juges", ""]
     if donnees is None or not isinstance(donnees.get("judges"), dict):
         return [*titre, "Calibration absente : aucun `calibration.json` (`wl calibrer`).", ""]

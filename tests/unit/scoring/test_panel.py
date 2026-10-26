@@ -120,6 +120,19 @@ def test_panel_de_deux_juges_en_desaccord_egalite_donne_non_et_tie() -> None:
     }
 
 
+def test_juge_unique_verdict_du_panel_est_celui_du_juge_na_compris() -> None:
+    for vote in (True, False):
+        _, panel = _juger([_Juge("j1", vote)])
+        for critere in ("correctness", "completeness", "faithfulness"):
+            assert panel[critere]["verdict"] == ("yes" if vote else "no")
+            assert panel[critere]["tie"] is False
+            assert panel[critere]["judges"] == ["j1"]
+    # `na` n'est admis que sur la fidélité (une sortie `na` ailleurs est non conforme).
+    _, panel = _juger([_Juge("j1", "na")])
+    assert panel["faithfulness"]["verdict"] == "na" and panel["faithfulness"]["tie"] is False
+    assert "correctness" not in panel
+
+
 def test_trois_juges_majorite_un_appel_chacun_tous_les_criteres() -> None:
     juges = [_Juge("j1", True), _Juge("j2", True), _Juge("j3", False)]
     _, panel = _juger(juges)

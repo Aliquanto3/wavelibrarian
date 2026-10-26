@@ -349,6 +349,109 @@ def test_panel_refuse_par_la_validation(
     assert "'a'" in refus.errors[0].message
 
 
+# --- Story 9.5 : Juge unique calibré ---
+
+TROIS = ("correctness", "completeness", "faithfulness")
+
+
+def _calibration_unique(
+    chemin: Path,
+    juge: str = "fake-llm-c",
+    *,
+    excluded: bool = False,
+    kappas: dict[str, float | None] | None = None,
+) -> Path:
+    kappas = kappas if kappas is not None else dict.fromkeys(TROIS, 0.8)
+    fiche = {"excluded": excluded, "criteria": {c: {"kappa": k} for c, k in kappas.items()}}
+    chemin.write_text(json.dumps({"judges": {juge: fiche}}), encoding="utf-8")
+    return chemin
+
+
+def _unique(ecrire: Callable[..., Path], **juges: Any) -> Path:
+    return ecrire(
+        {**BASE, "judges": {"pool": ["fake-llm-c"], "panel_size": 1, **juges}}, "unique.yaml"
+    )
+
+
+def test_juge_unique_calibre_admis(
+    ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
+) -> None:
+    _calibration_unique(tmp_path / "cal.json", kappas={c: 0.6 for c in TROIS})  # égal au seuil
+    res = validate_file(_unique(ecrire, excluded_from="cal.json"), wl_home)
+    assert res.panels == {"a": ("fake-llm-c",)}
+
+
+def test_juge_unique_sans_calibration_refuse(ecrire: Callable[..., Path], wl_home: Path) -> None:
+    echec = _echec(_unique(ecrire), wl_home)
+    assert _chemins(echec) == ["judges.panel_size"]
+    assert "excluded_from" in echec.errors[0].message
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "attendu"),
+    [
+        ({"kappas": {**dict.fromkeys(TROIS, 0.9), "faithfulness": 0.59}}, "'faithfulness'"),
+        ({"kappas": {"correctness": 0.9, "completeness": 0.9}}, "'faithfulness'"),
+        ({"kappas": {**dict.fromkeys(TROIS, 0.9), "completeness": None}}, "'completeness'"),
+        ({"excluded": True}, "exclu"),
+        ({"juge": "fake-llm-b"}, "absent"),
+    ],
+)
+def test_juge_unique_refuse_si_calibration_insuffisante(
+    ecrire: Callable[..., Path],
+    tmp_path: Path,
+    wl_home: Path,
+    kwargs: dict[str, Any],
+    attendu: str,
+) -> None:
+    _calibration_unique(tmp_path / "cal.json", **kwargs)
+    echec = _echec(_unique(ecrire, excluded_from="cal.json"), wl_home)
+    messages = " ".join(e.message for e in echec.errors)
+    assert "'fake-llm-c'" in messages and attendu in messages
+
+
+def test_juge_unique_respecte_le_seuil_de_l_experience(
+    ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
+) -> None:
+    _calibration_unique(tmp_path / "cal.json", kappas=dict.fromkeys(TROIS, 0.7))
+    validate_file(_unique(ecrire, excluded_from="cal.json"), wl_home)
+    echec = _echec(_unique(ecrire, excluded_from="cal.json", kappa_threshold=0.75), wl_home)
+    assert "0.7 sur le Critère 'correctness'" in echec.errors[0].message
+
+
+def test_juge_unique_de_la_famille_du_generator_refuse(
+    ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
+) -> None:
+    _calibration_unique(tmp_path / "cal.json", juge="claude-opus-5-5")
+    claude = _conf("a", generator={"name": "llm_test", "params": {"model": "claude-haiku-5-5"}})
+    chemin = ecrire(
+        {
+            **BASE,
+            "configurations": [claude],
+            "judges": {
+                "pool": ["claude-opus-5-5"],
+                "panel_size": 1,
+                "excluded_from": "cal.json",
+            },
+        }
+    )
+    echec = _echec(chemin, wl_home)
+    assert _chemins(echec) == ["judges.pool"]
+    assert "Juge d'une autre Famille" in echec.errors[0].message
+    assert "'a'" in echec.errors[0].message
+
+
+def test_panel_de_deux_inchange_avec_calibration(
+    ecrire: Callable[..., Path], tmp_path: Path, wl_home: Path
+) -> None:
+    (tmp_path / "cal.json").write_text(
+        json.dumps({"judges": {"fake-llm-c": {"excluded": False}}}), encoding="utf-8"
+    )
+    juges = {"pool": POOL, "panel_size": 2, "excluded_from": "cal.json"}
+    res = validate_file(ecrire({**BASE, "judges": juges}), wl_home)
+    assert res.panels == {"a": ("fake-llm-b", "fake-llm-c")}
+
+
 def test_calibration_illisible(tmp_path: Path) -> None:
     (tmp_path / "c.json").write_text("{pas du json", encoding="utf-8")
     with pytest.raises(ConfigError, match="illisible"):

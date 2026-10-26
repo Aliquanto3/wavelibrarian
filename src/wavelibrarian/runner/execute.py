@@ -202,8 +202,17 @@ def panels_de(experience: ResolvedExperiment) -> dict[str, tuple[str, ...]]:
     j = experience.judges
     catalogue = load_catalog(Path(experience.catalog) if experience.catalog else None)
     exclus = excluded_judges(Path(j.excluded_from)) if j.excluded_from else frozenset[str]()
+    calibration = Path(j.excluded_from) if j.excluded_from else None
     return {
-        c.id: form_panel(j.pool or (), j.panel_size or 0, c.answer_producers, catalogue, exclus)
+        c.id: form_panel(
+            j.pool or (),
+            j.panel_size or 0,
+            c.answer_producers,
+            catalogue,
+            exclus,
+            calibration,
+            j.kappa_threshold,
+        )
         for c in experience.configurations
     }
 

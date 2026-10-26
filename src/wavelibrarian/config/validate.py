@@ -141,7 +141,13 @@ def _verifier_juges(
     j = resolved.judges
     try:
         panels[col.config_id] = form_panel(
-            j.pool or (), j.panel_size or 0, producteurs, catalog, excluded
+            j.pool or (),
+            j.panel_size or 0,
+            producteurs,
+            catalog,
+            excluded,
+            Path(j.excluded_from) if j.excluded_from else None,
+            j.kappa_threshold,
         )
     except ConfigError as exc:
         erreurs.append(ConfigError(exc.path, f"Configuration {col.config_id!r} : {exc.message}"))

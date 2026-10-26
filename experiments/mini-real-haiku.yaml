@@ -2,6 +2,9 @@
 # `claude-haiku-5-5`, 5 Questions, plafond de 5,00 USD. Aucun modèle local : Juges factices
 # `[fake-llm-b, fake-llm-c]`, embedder `fake`, pas de Filtre closed-book (`wl run` ne le lance
 # pas). Seule l'API Anthropic est sollicitée, ce qui laisse l'Ollama local à un autre banc.
+# AD-14 : Opus (Juge principal des autres Expériences livrées) ne juge pas un Generator Claude ;
+# les Juges restent donc factices, et le Rapport l'affiche : « qualité non interprétable : Juges
+# factices ». Cette Expérience mesure la plomberie réelle (coûts, latences), pas la qualité.
 experiment_id: mini-real-haiku
 seed: 42
 profile: cpu
