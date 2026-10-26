@@ -126,15 +126,15 @@ development_status:
   8-11-juges-claude-calibration: done
   epic-8-retrospective: optional
 
-  epic-9: backlog
-  9-1-wl-calibrer-écrit-ses-verdicts-au-fil-de-l-eau: backlog
-  9-2-justification-courte-des-juges: backlog
+  epic-9: in-progress
+  9-1-wl-calibrer-écrit-ses-verdicts-au-fil-de-l-eau: review
+  9-2-justification-courte-des-juges: done
   9-3-modalité-sans-objet: backlog
   9-4-paquet-et-page-d-annotation-dans-le-code: backlog
   9-5-juge-unique-calibré-et-opus-juge-principal-des-expériences-l: backlog
-  9-6-commande-wl-rejuger: backlog
-  9-7-decider-de-lazygraphrag-et-cache-isolé-par-configuration: backlog
-  9-8-énergie-méthode-mixte-poste-judging-et-gpu-du-profil-gpu: backlog
+  9-6-commande-wl-rejuger: review
+  9-7-decider-de-lazygraphrag-et-cache-isolé-par-configuration: review
+  9-8-énergie-méthode-mixte-poste-judging-et-gpu-du-profil-gpu: review
   9-9-calibration-réelle-d-opus-avec-le-prompt-du-lot: backlog
   9-10-rejugement-réel-du-run-mini-cpu-par-opus: backlog
   9-11-balayage-réel-de-relevance_threshold: backlog

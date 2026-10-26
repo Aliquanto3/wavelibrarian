@@ -43,3 +43,32 @@ Fichiers par vague : V0 `scoring/calibration.py` + `cli.py` (calibrer) / `compon
 
 - 2026-10-26 08:16 · lot · décision · Anaël : Opus Juge principal (série du 26/10)
 - 2026-10-26 08:45 · lot · décision · proposition epic 9 approuvée (« OK en bloc », A1 à A10) ; PRD (FR-32, FR-36, FR-37, FR-38) et AD-14, AD-17 amendés ; sprint-status à jour
+- 2026-10-26 08:47 · 9.1 · dev · lancé (Sonnet, story/9-1) · 
+- 2026-10-26 08:47 · 9.7 · dev · lancé (Sonnet, story/9-7) · 
+- 2026-10-26 08:57 · 9.7 · dev · fini · 2c7529d
+- 2026-10-26 08:57 · 9.2 · dev · lancé (Sonnet, story/9-2) · 
+- 2026-10-26 08:57 · 9.1 · dev · fini · 15d2d1c
+- 2026-10-26 08:57 · 9.8 · dev · lancé (Sonnet, story/9-8) · 
+- 2026-10-26 08:57 · 9.7 · second-avis · 1 medium (empreinte changée par llm_cache à false), 9 low · 
+- 2026-10-26 08:57 · 9.7 · décision · isolation du Cache limitée aux appels de la Configuration (pas Juges, calibration, closed-book) · 
+- 2026-10-26 08:58 · 9.7 · review · lancé (Opus) · 
+- 2026-10-26 08:58 · 9.2 · dev · fini · 31b08db
+- 2026-10-26 08:58 · 9.6 · dev · lancé (Opus, story/9-6, en avance sur V2 : aucune dépendance de code) · 
+- 2026-10-26 08:59 · 9.1 · second-avis · 2 medium (empreinte sans prompt des Juges ; per_run neuf à la reprise), 8 low · 
+- 2026-10-26 08:59 · 9.1 · review · lancé (Opus) · 
+- 2026-10-26 09:01 · 9.2 · second-avis · 2 medium (test ne reproduit pas la coupure réelle ; délibération hors outil chez Opus), 6 low · 
+- 2026-10-26 09:01 · 9.2 · review · lancé (Opus) · 
+- 2026-10-26 09:08 · 9.2 · review · 1 medium corrigé (test honnête + borne de budget), troncature mesurable (wl.justification_truncated) · 3436cb7
+- 2026-10-26 09:11 · 9.7 · review · 1 medium corrigé (llm_cache par défaut hors empreinte), isolation limitée au poste query · 51cf87a
+- 2026-10-26 09:15 · 9.6 · dev · fini · 51a38f7
+- 2026-10-26 09:15 · 9.6 · second-avis · lancé (vérifie le cas réel de la 9.10 : Catalogue et date différents de la source) · 
+- 2026-10-26 09:16 · 9.8 · dev · fini · d3a5ed1
+- 2026-10-26 09:16 · 9.8 · second-avis · lancé · 
+- 2026-10-26 09:17 · 9.1 · review · 2 medium corrigés (empreinte = requêtes des Juges ; calibration_id réutilisé à la reprise), 8 low · c151fbc
+- 2026-10-26 09:19 · 9.6 · second-avis · 1 high confirmé (cas 9.10 refusé : catalog_date, models_frozen_at), 2 medium, 6 low · 
+- 2026-10-26 09:19 · 9.6 · review · lancé (Opus) · 
+- 2026-10-26 09:21 · 9.8 · second-avis · 4 medium (règle measured/mixed incohérente avec GPU, GPU 0 en dur, judging couvre les attentes d'API, énergie répartie sur des hits), 6 low · 
+- 2026-10-26 09:21 · 9.8 · décision · measured seulement si toutes les parts suivies sont mesurées, sinon mixed (cohérence A8) ; AC 3 réécrit · 
+- 2026-10-26 09:21 · 9.8 · review · lancé (Opus) · 
+- 2026-10-26 09:22 · 9.2 · fusion · suite complète 1260 passed (13 min 45), fast-forward sur main · 3436cb7
+- 2026-10-26 09:22 · 9.7+9.1 · décision · pile 9.7 puis 9.1 rebasée sur main, une suite complète pour la pile · 
