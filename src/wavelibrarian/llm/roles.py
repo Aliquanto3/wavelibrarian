@@ -6,7 +6,14 @@ Ajouter un rôle modifie ce module et `llm/providers/fake.py` dans la même stor
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    model_validator,
+)
 
 from wavelibrarian.core.errors import WlError
 from wavelibrarian.ports.gateway import LLMRequest, LLMRole
@@ -23,11 +30,17 @@ class GenerateOutput(_Sortie):
 
 
 JUSTIFICATION_MAX = 200  # caractères (story 9.2) ; au-delà, troncature avec « … »
+# Clé du contexte de validation (`model_validate_json(..., context=...)`) où la passerelle compte
+# les justifications tronquées ; elle en fait l'attribut de span `wl.justification_truncated`.
+TRONQUEES = "justifications_tronquees"
 
 
-def tronquer_justification(texte: Any) -> Any:
-    """Tronque une justification à `JUSTIFICATION_MAX` caractères au plus, « … » compris."""
+def tronquer_justification(texte: Any, info: ValidationInfo) -> Any:
+    """Tronque une justification à `JUSTIFICATION_MAX` caractères au plus, « … » compris, et la
+    compte dans le contexte de validation s'il en porte un (troncature mesurable)."""
     if isinstance(texte, str) and len(texte) > JUSTIFICATION_MAX:
+        if isinstance(info.context, dict) and TRONQUEES in info.context:
+            info.context[TRONQUEES] += 1
         return texte[: JUSTIFICATION_MAX - 1].rstrip() + "…"
     return texte
 

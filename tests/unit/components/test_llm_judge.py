@@ -143,9 +143,14 @@ def _sortie_longue(criteres: list[str], longueur: int) -> str:
         ("q-017", "pageindex", ["correctness", "completeness"]),
     ],
 )
-def test_sorties_tronquees_de_la_8_8_rejouees_ne_sont_plus_non_conformes(
+def test_rejeu_8_8_justification_longue_complete_tronquee_et_conforme(
     env: Env, cas: tuple[str, str, list[str]]
 ) -> None:
+    """Rejeu des 3 cas 8.8 au sens de l'AC : un JSON complet à justification longue est tronqué,
+    conforme, et la troncature est comptée sur le span. La panne réelle de la 8.8 était une
+    coupure au budget (JSON incomplet) : ce test ne la rejoue pas ; il prouve la troncature (cas
+    Anthropic, sans grammaire). Côté Ollama, la grammaire `maxLength` empêche la justification de
+    s'étendre (borne ci-dessous) ; la preuve réelle viendra des runs du lot (9.9, 9.10)."""
     question_id, _config, criteres = cas
     env.sortie = _sortie_longue(criteres, 100)  # ~1300 caractères par justification
     with env.ctx.scope(post="judging", question_id=question_id):
@@ -156,6 +161,33 @@ def test_sorties_tronquees_de_la_8_8_rejouees_ne_sont_plus_non_conformes(
         assert verdict is False
         assert len(justification) == 200 and justification.endswith("…")
         assert justification.startswith("Hmm, voyons. Hmm")
+    traces = env.ctx.run_dir / "traces.jsonl"
+    spans = [json.loads(x) for x in traces.read_text(encoding="utf-8").splitlines()]
+    (span,) = [s for s in spans if s.get("wl.kind") == "llm"]
+    assert span["wl.status"] == "ok" and span["wl.justification_truncated"] == len(criteres)
+
+
+def test_justification_courte_sans_attribut_de_troncature(env: Env) -> None:
+    with env.ctx.scope(post="judging", question_id="q-001"):
+        env.juge().judge(ITEM, CRITERES, pass_id=0)
+    traces = env.ctx.run_dir / "traces.jsonl"
+    spans = [json.loads(x) for x in traces.read_text(encoding="utf-8").splitlines()]
+    assert spans and all("wl.justification_truncated" not in s for s in spans)
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_borne_la_justification_bornee_ne_peut_plus_atteindre_le_budget(n: int) -> None:
+    """Calcul de borne (Ollama, grammaire `maxLength`) : la plus longue sortie conforme compacte,
+    justifications de 200 caractères comprises, tient dans `200 × n + 100` tokens même à 1,5
+    caractère par token (le français tokenisé en BPE est plutôt à 3-4). Hypothèses : sans
+    échappements JSON ni blancs de mise en forme. La coupure de la 8.8 (délibération sans fin
+    dans `justification`) n'est donc plus atteignable par la justification seule."""
+    from wavelibrarian.components.judges.llm import budget_sortie
+
+    criteres = ["completeness", "faithfulness", "correctness"][:n]
+    pire = {"verdicts": {c: {"verdict": "yes", "justification": "x" * 200} for c in criteres}}
+    caracteres = len(json.dumps(pire, ensure_ascii=False))
+    assert caracteres / 1.5 < budget_sortie(n)
 
 
 def test_troncature_bornes_exactes() -> None:

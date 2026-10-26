@@ -563,6 +563,36 @@ def test_anthropic_outil_des_juges_porte_maxlength() -> None:
     assert defs["justification"]["maxLength"] == 200 and list(defs) == ["verdict", "justification"]
 
 
+def test_anthropic_tool_use_a_justification_longue_tronque_et_conforme() -> None:
+    """Bout en bout sans réseau : `tool_use.input` d'Opus trop long → texte du provider → validation
+    de la passerelle (même contexte) : sortie conforme, justification de 200 caractères au plus,
+    comptée."""
+    from wavelibrarian.components.judges.llm import _schema
+    from wavelibrarian.llm.roles import TRONQUEES
+
+    longue = "Voyons, la réponse cite 1412 mais " * 20
+    entree = {"verdicts": {"correctness": {"verdict": "yes", "justification": longue}}}
+    usage = SimpleNamespace(
+        input_tokens=10, output_tokens=5, cache_read_input_tokens=0, cache_creation_input_tokens=0
+    )
+    msg = SimpleNamespace(
+        content=[SimpleNamespace(type="tool_use", input=entree)],
+        usage=usage,
+        stop_reason="tool_use",
+    )
+    client = anthropic.Anthropic(api_key=CLE, http_client=Transport(_ok()).client(httpx2))
+    client.messages.create = lambda **_: msg  # type: ignore[method-assign,assignment]
+    schema = _schema(["correctness"])
+    rep = AnthropicProvider(client=client).complete(
+        _req(), timeout_s=1, output_schema=schema.model_json_schema()
+    )
+    contexte = {TRONQUEES: 0}
+    sortie: Any = schema.model_validate_json(rep.text, context=contexte)
+    justification = sortie.verdicts.correctness.justification
+    assert len(justification) <= 200 and justification.endswith("1412…")  # blanc final retiré
+    assert contexte[TRONQUEES] == 1
+
+
 def test_ollama_retire_les_blocs_think_et_la_cloture_markdown() -> None:
     schema = Sortie.model_json_schema()
     brut = '<think>\nje réfléchis {"x": 1}\n</think>\n```json\n{"reponse": "Paris"}\n```'

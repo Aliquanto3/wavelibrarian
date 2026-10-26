@@ -26,7 +26,7 @@ from wavelibrarian.llm.providers.base import Provider, ProviderResponse
 from wavelibrarian.llm.providers.logs import (  # réexport pour run.log (AD-3)
     limiter_journaux as limiter_journaux,
 )
-from wavelibrarian.llm.roles import check_inputs
+from wavelibrarian.llm.roles import TRONQUEES, check_inputs
 from wavelibrarian.ports.gateway import LLMRequest, LLMResult
 from wavelibrarian.ports.measure import EnergyEstimator, Tokenizer, Tracer
 
@@ -176,9 +176,12 @@ class MeteredGateway:
         energie: bool = False,
         energy_kwh: float | None = None,
         raw_output: str | None = None,
+        tronquees: int = 0,
     ) -> None:
         usage = usage or Usage()
         extra: dict[str, str | int | float | bool] = {}
+        if tronquees:  # story 9.2 : justifications de Juge ramenées à 200 caractères
+            extra["wl.justification_truncated"] = tronquees
         if request.temperature is None:
             extra["wl.temperature_omitted"] = True
         if provider == "ollama" and request.think is None:
@@ -346,15 +349,17 @@ class MeteredGateway:
         """
         valeur: T | None = None
         statut: _Statut = "ok"
+        contexte = {TRONQUEES: 0}
         if schema is not None:
             try:
-                valeur = schema.model_validate_json(texte)
+                valeur = schema.model_validate_json(texte, context=contexte)
             except ValidationError:
                 statut = "non_conformant"
         self._trace(
             request, nom, devise, statut, usage=usage, cost=cost, cost_uncached=cost_uncached,
             latency_s=latency_s, from_cache=from_cache, energie=not from_cache,
             energy_kwh=energy_kwh, raw_output=texte if statut == "non_conformant" else None,
+            tronquees=contexte[TRONQUEES] if statut == "ok" else 0,
         )  # fmt: skip
         if statut == "ok" and stocker is not None:
             self._cache.put(stocker, texte, usage, replace=remplacer, latency_s=latency_s)
