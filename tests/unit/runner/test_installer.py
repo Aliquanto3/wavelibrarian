@@ -117,6 +117,7 @@ def _resultat(modeles: list[str], profil: str = "cpu", juge_calibration: str | N
         configurations=(conf,),
         judges=SimpleNamespace(pool=None, calibration_judge=juge_calibration),
         profile_settings=load_profile(profil),
+        max_error_rate=0.2,
     )
     return SimpleNamespace(resolved=resolu, catalog=load_catalog())
 
